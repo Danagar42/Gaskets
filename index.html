@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#edf1f6">
+  <meta name="description" content="Персональний робочий простір для підготовки розрахунків ущільнень фланцевих з’єднань.">
+  <title>Прокладки — робочий простір</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23245ed0'/%3E%3Ccircle cx='20' cy='20' r='12' fill='none' stroke='white' stroke-width='2'/%3E%3Ccircle cx='20' cy='20' r='5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script src="data.js" defer></script>
+  <script src="standards.js" defer></script>
+  <script src="core.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">До вмісту</a>
+  <header class="app-header">
+    <button class="brand" data-action="home" aria-label="Прокладки. На робочий стіл">
+      <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect width="40" height="40" rx="11" fill="#245ed0"/><circle cx="20" cy="20" r="12" stroke="white" stroke-width="1.7"/><circle cx="20" cy="20" r="5.4" stroke="white" stroke-width="1.7"/><g fill="white"><circle cx="20" cy="10.8" r="1.5"/><circle cx="28" cy="15.4" r="1.5"/><circle cx="28" cy="24.6" r="1.5"/><circle cx="20" cy="29.2" r="1.5"/><circle cx="12" cy="24.6" r="1.5"/><circle cx="12" cy="15.4" r="1.5"/></g></svg>
+      <span>Прокладки<small>Робочий простір</small></span>
+    </button>
+    <nav id="breadcrumbs" class="breadcrumbs" aria-label="Навігація"></nav>
+    <div class="header-status"><span class="status-dot"></span><span id="save-status" role="status">Персональний простір</span></div>
+  </header>
+  <main id="main" tabindex="-1"></main>
+  <dialog id="edit-dialog" class="dialog edit-dialog" aria-labelledby="edit-title"></dialog>
+  <dialog id="material-dialog" class="dialog material-dialog" aria-labelledby="material-title"></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <noscript>Для роботи опитувальника потрібно увімкнути JavaScript.</noscript>
+</body>
+</html>
