@@ -13,7 +13,7 @@
       gasket: { mode: 'ring', thickness: '', outerDiameter: '', innerDiameter: '', hasHoles: false, holeDiameter: '', effectiveArea: '', pressureArea: '' },
       fastener: { type: 'stud', nominalDiameter: '', count: '', lubricated: true, material: null },
       connection: { kind, sideA: { name: kind === 'flange-flange' ? 'Фланець 1' : 'Кришка', material: null }, sideB: { name: kind === 'flange-flange' ? 'Фланець 2' : 'Корпус', material: null } },
-      nut: { material: null }, washers: { placement: 'none', material: null }, extras: []
+      nut: { material: null }, washers: { placement: 'none', material: null, standardId: 'gost-11371-78', accuracyClass: 'A', execution: '1' }, extras: []
     };
   }
   function number(value) {
@@ -65,7 +65,17 @@
     const parent = keys.reduce((part, key) => part[key], object);
     parent[last] = value;
   }
-  function sectionStatus(node, materials) {
+  function washerDimensions(catalog, standardId, nominalDiameter, accuracyClass = 'A', execution = '1') {
+    const standard = catalog?.washers?.[standardId];
+    const diameter = number(nominalDiameter);
+    if (!standard || diameter === null || !standard.executions?.[execution]?.includes(accuracyClass)) return null;
+    if (diameter < (standard.minDiameterByExecutionMm?.[execution] ?? Infinity)) return null;
+    const row = standard.sizes?.[String(diameter)];
+    const inner = row?.innerDiameterByClassMm?.[accuracyClass];
+    if (typeof inner !== 'number' || inner <= 0 || !positive(row?.outerDiameterMm) || !positive(row?.thicknessMm)) return null;
+    return { document: standard.document, nominalDiameterMm: diameter, accuracyClass, execution, innerDiameterMm: inner, outerDiameterMm: row.outerDiameterMm, thicknessMm: row.thicknessMm };
+  }
+  function sectionStatus(node, materials, standardsDb) {
     const validMaterial = (ref, properties = ['RTm','RTp','E','Alpha']) => !!resolveMaterial(materials, ref) && !missingProperties(materials, ref, node.operating, properties).length;
     const result = {};
     const cases = Object.values(node.operating);
@@ -77,12 +87,12 @@
     result.fastener = positive(node.fastener.nominalDiameter) && positive(node.fastener.count) && Number.isInteger(number(node.fastener.count)) && validMaterial(node.fastener.material);
     result.connection = !!node.connection.sideA.name.trim() && !!node.connection.sideB.name.trim() && validMaterial(node.connection.sideA.material) && validMaterial(node.connection.sideB.material);
     result.nut = validMaterial(node.nut.material, ['RTm','RTp']);
-    result.washers = node.washers.placement === 'none' || validMaterial(node.washers.material, ['E','Alpha']);
+    result.washers = node.washers.placement === 'none' || (validMaterial(node.washers.material, ['E','Alpha']) && (!standardsDb || !!washerDimensions(standardsDb, node.washers.standardId || 'gost-11371-78', node.fastener.nominalDiameter, node.washers.accuracyClass || 'A', node.washers.execution || '1')));
     result.extras = node.extras.every(item => !!item.name.trim() && positive(item.thickness) && positive(item.area) && validMaterial(item.material, ['E','Alpha']));
     return result;
   }
-  function progress(node, materials) {
-    const statuses = sectionStatus(node, materials);
+  function progress(node, materials, standardsDb) {
+    const statuses = sectionStatus(node, materials, standardsDb);
     const done = Object.values(statuses).filter(Boolean).length;
     return { done, total: sections.length, percent: Math.round(done / sections.length * 100), statuses };
   }
@@ -100,10 +110,10 @@
       if (!['ring','area'].includes(node.gasket.mode) || !['stud','bolt'].includes(node.fastener.type) || !['body-cover','flange-flange','custom'].includes(node.connection.kind) || !['none','a','b','both'].includes(node.washers.placement)) return false;
       return ['normal','hydro'].every(key => node.operating[key] && ['pressure','temperature','medium'].every(field => isText(node.operating[key][field]))) && typeof node.gasket.hasHoles === 'boolean' && typeof node.fastener.lubricated === 'boolean'
         && ['fastener.material','connection.sideA.material','connection.sideB.material','nut.material','washers.material'].every(path => isRef(get(node, path)))
-        && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));
+        && ['standardId','accuracyClass','execution'].every(key => node.washers[key] === undefined || isText(node.washers[key])) && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));
     }));
   }
-  const api = { id, timestamp, sections, createEquipment, createNode, number, positive, canonical, materialRef, resolveMaterial, propertyAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace };
+  const api = { id, timestamp, sections, createEquipment, createNode, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlangeCore = api;
 })(globalThis);
