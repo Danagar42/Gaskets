@@ -1,0 +1,64 @@
+{
+  "id": "graphite-annex-b1-b2-unidentified",
+  "name": "Графітові прокладки — таблиці Б.1, Б.2",
+  "document": null,
+  "source": {
+    "kind": "user_supplied_screenshot",
+    "documentId": null,
+    "verificationStatus": "screenshot_only",
+    "tables": [
+      "Б.1",
+      "Б.2"
+    ],
+    "note": "Номер ТУ та редакцію документа не видно на наданому фрагменті. Значення перенесено зі скриншота; зв'язок із певною маркою прокладки не підтверджено."
+  },
+  "units": {
+    "elasticModulus": "MPa",
+    "pressure": "MPa",
+    "expansion": "10^-6/°C"
+  },
+  "elasticModulusMPa": 100,
+  "effectiveWidth": {
+    "symbol": "b",
+    "rule": "equalsSealingBandWidth",
+    "description": "Дорівнює ширині поля прокладки; не є сталою величиною"
+  },
+  "mediumCoefficients": {
+    "liquid": 1.6,
+    "airSteamGas": 2.5,
+    "highPermeabilityGas": 3.2
+  },
+  "mediumGroups": {
+    "liquid": [
+      "Рідина",
+      "Вода",
+      "Мастило",
+      "Олива",
+      "Розчин"
+    ],
+    "airSteamGas": [
+      "Повітря",
+      "Пар",
+      "Газ"
+    ],
+    "highPermeabilityGas": [
+      "Водень",
+      "Гелій",
+      "Газ з високою проникною властивістю"
+    ]
+  },
+  "seatingPressureMPa": 5,
+  "minimumPressureMPa": 3.5,
+  "maximumPressureMPa": 200,
+  "expansionMicroPerCByTemperatureC": {
+    "50": 0.21,
+    "100": 0.43,
+    "150": 0.5,
+    "200": 0.69,
+    "250": 1,
+    "300": 1.33,
+    "350": 1.5,
+    "400": 1.61
+  },
+  "expansionTemperatureSelection": "exact_only"
+}

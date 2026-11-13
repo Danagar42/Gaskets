@@ -108,9 +108,53 @@ def validate_thread(record, filename):
             raise ValueError(f"{filename}: invalid nonpreferred pitch for M{nominal}")
 
 
+
+def validate_gasket(record, filename):
+    if record.get("id") != filename.stem or not record.get("name"):
+        raise ValueError(f"{filename}: missing gasket identifier/name")
+    source = record.get("source", {})
+    if source.get("verificationStatus") == "screenshot_only":
+        if source.get("documentId") is not None or record.get("document") is not None:
+            raise ValueError(f"{filename}: unidentified TU must not claim an official number")
+    elif not source.get("documentId"):
+        raise ValueError(f"{filename}: confirmed TU must have a document identifier")
+    for field in ("elasticModulusMPa", "seatingPressureMPa", "minimumPressureMPa", "maximumPressureMPa"):
+        value = record.get(field)
+        if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
+            raise ValueError(f"{filename}: invalid {field}")
+    if not (record["minimumPressureMPa"] <= record["seatingPressureMPa"] <= record["maximumPressureMPa"]):
+        raise ValueError(f"{filename}: inconsistent pressures")
+    width = record.get("effectiveWidth", {})
+    if width.get("symbol") != "b" or width.get("rule") != "equalsSealingBandWidth":
+        raise ValueError(f"{filename}: expected sealing-band width rule, not a constant")
+    groups = record.get("mediumGroups", {})
+    coefficients = record.get("mediumCoefficients", {})
+    if not groups or set(groups) != set(coefficients):
+        raise ValueError(f"{filename}: medium group mappings must match coefficients")
+    labels = []
+    for group, names in groups.items():
+        coefficient = coefficients[group]
+        if type(coefficient) not in (int, float) or not math.isfinite(coefficient) or coefficient <= 0:
+            raise ValueError(f"{filename}: bad medium coefficient for {group}")
+        if not names or any(not isinstance(name, str) or not name for name in names):
+            raise ValueError(f"{filename}: invalid medium labels for {group}")
+        labels.extend(names)
+    if len(set(labels)) != len(labels):
+        raise ValueError(f"{filename}: duplicate medium categories")
+    values = record.get("expansionMicroPerCByTemperatureC", {})
+    if not values or record.get("expansionTemperatureSelection") != "exact_only":
+        raise ValueError(f"{filename}: alpha must use explicit table values with exact lookup")
+    for temp, alpha in values.items():
+        t = float(temp)
+        if not math.isfinite(t) or type(alpha) not in (int, float) or not math.isfinite(alpha) or alpha <= 0:
+            raise ValueError(f"{filename}: invalid expansion data at {temp}")
+    if record.get("units", {}).get("expansion") != "10^-6/°C":
+        raise ValueError(f"{filename}: expansion unit mismatch")
+
+
 def main():
-    catalog = {"version": 1, "washers": {}, "nuts": {}, "threads": {}}
-    for category, validate in (("washers", validate_washer), ("nuts", validate_nut), ("threads", validate_thread)):
+    catalog = {"version": 1, "washers": {}, "nuts": {}, "threads": {}, "gaskets": {}}
+    for category, validate in (("washers", validate_washer), ("nuts", validate_nut), ("threads", validate_thread), ("gaskets", validate_gasket)):
         for filename in sorted((SOURCE / category).glob("*.json")):
             record = json.loads(filename.read_text(encoding="utf-8"))
             validate(record, filename)
@@ -123,7 +167,7 @@ def main():
         + "globalThis.FlangeStandardsDB = " + body + ";\n",
         encoding="utf-8",
     )
-    print(f"Built {OUTPUT.name}: {len(catalog['washers'])} washers, {len(catalog['nuts'])} nuts, {len(catalog['threads'])} threads")
+    print(f"Built {OUTPUT.name}: {len(catalog['washers'])} washers, {len(catalog['nuts'])} nuts, {len(catalog['threads'])} threads, {len(catalog['gaskets'])} gaskets")
 
 
 if __name__ == "__main__":
