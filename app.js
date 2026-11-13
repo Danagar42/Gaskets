@@ -3,6 +3,7 @@
   const C = window.FlangeCore;
   const materials = typeof materialsDB === 'undefined' ? [] : materialsDB;
   const standards = window.FlangeStandards;
+  const standardsDb = window.FlangeStandardsDB || {washers: {}};
   const STORAGE_KEY = 'flange-workspace-v1';
   const main = document.querySelector('#main');
   const editDialog = document.querySelector('#edit-dialog');
@@ -43,6 +44,12 @@
   } catch (error) { storageError = error.message; }
   workspace.preferences ||= {};
   for (const key of ['recent','favorites']) if (!Array.isArray(workspace.preferences[key])) workspace.preferences[key] = [];
+  // Preserve old localStorage workspaces without requiring manual migration.
+  workspace.equipment.forEach(equipment => equipment.nodes.forEach(node => {
+    node.washers.standardId ??= 'gost-11371-78';
+    node.washers.accuracyClass ??= 'A';
+    node.washers.execution ??= '1';
+  }));
   let currentEquipment = null;
   let currentNode = null;
   let editContext = null;
@@ -136,7 +143,7 @@
     if (!filtered.length) { target.innerHTML = '<div class="no-results">Нічого не знайдено. Спробуйте іншу назву.</div>'; return; }
     if (currentEquipment) {
       target.innerHTML = `<div class="nodes-list"><div class="node-table-head"><span>Вузол</span><span>Тип з’єднання</span><span>Анкета</span><span>Змінено</span><span></span></div>${filtered.map(node => {
-        const p = C.progress(node,materials);
+        const p = C.progress(node,materials,standardsDb);
         return `<div class="node-row"><button class="node-open" data-action="open-node" data-id="${node.id}"><span class="file-icon">${icon('file')}</span><span><strong>${esc(node.name)}</strong><small>${esc(node.fastener.nominalDiameter ? `М${node.fastener.nominalDiameter} · ` : '')}${node.fastener.type === 'bolt' ? 'Болтове з’єднання' : 'Шпилькове з’єднання'}</small></span></button><span class="node-kind">${kindName(node.connection.kind)}</span><div class="mini-progress ${p.done === p.total ? 'complete' : ''}"><span class="mini-track"><span style="width:${p.percent}%"></span></span><span>${p.done}/${p.total} блоків</span></div><span class="node-date">${date(node.updatedAt)}</span><div class="card-actions"><button class="icon-button" data-action="edit-node" data-id="${node.id}" aria-label="Перейменувати ${esc(node.name)}" title="Перейменувати">${icon('edit')}</button><button class="icon-button" data-action="copy-node" data-id="${node.id}" aria-label="Дублювати ${esc(node.name)}" title="Дублювати">${icon('copy')}</button><button class="icon-button danger" data-action="delete-node" data-id="${node.id}" aria-label="Видалити ${esc(node.name)}" title="Видалити">${icon('trash')}</button></div></div>`;
       }).join('')}</div>`;
     } else {
@@ -180,6 +187,16 @@
     return `<details class="settings-section" data-section="${key}" ${open ? 'open' : ''}><summary>${icon(key)}${sectionNames[key]}${statusMarkup(key,statuses[key])}${icon('down','section-chevron')}</summary><div class="section-body">${body}</div></details>`;
   }
   function standardBox(kind) {
+    if (kind === 'washers') {
+      const selection = currentNode.washers;
+      const record = standardsDb.washers?.[selection.standardId];
+      const diameter = C.number(currentNode.fastener.nominalDiameter);
+      const dimensions = C.washerDimensions(standardsDb, selection.standardId, diameter, selection.accuracyClass, selection.execution);
+      const label = record?.document || 'Стандарт шайб не знайдено';
+      const rows = dimensions ? [['Товщина',dimensions.thicknessMm],['Зовнішній діаметр',dimensions.outerDiameterMm],['Внутрішній діаметр',dimensions.innerDiameterMm]] : [];
+      const note = diameter === null ? 'Спочатку вкажіть номінальний діаметр різьби.' : !record ? 'Відсутні дані вибраного стандарту.' : `Немає нормативних розмірів для М${displayNumber(diameter)}, виконання ${esc(selection.execution)}, класу ${esc(selection.accuracyClass)}.`;
+      return `<div class="standard-box"><span>${icon('file')}${esc(label)} · виконання ${esc(selection.execution)}, клас ${esc(selection.accuracyClass)}</span>${rows.length ? rows.map(([name,value]) => `<div class="readonly-line"><span>${name}</span><strong>${displayNumber(value)} мм</strong></div>`).join('') : note}</div>`;
+    }
     const table = standards[kind];
     const diameter = C.number(currentNode.fastener.nominalDiameter);
     const size = diameter === null ? null : table.sizes[String(diameter)];
@@ -196,13 +213,14 @@
   }
   function settingsContent(openSections) {
     const node = currentNode;
-    const statuses = C.sectionStatus(node,materials);
+    const statuses = C.sectionStatus(node,materials,standardsDb);
     const operating = `<div class="case-grid">${[['normal','НУЕ'],['hydro','ГВ']].map(([key,label]) => `<div><p class="case-title ${key === 'hydro' ? 'hydro' : ''}"><span></span>${label}</p>${field(`operating.${key}.pressure`,'Тиск','МПа',{positive:false})}${field(`operating.${key}.temperature`,'Температура','°C',{min:-273.15,positive:false})}${selectField(`operating.${key}.medium`,'Середовище',[['','Оберіть…'],...media.map(item => [item,item])])}</div>`).join('')}</div>`;
     const gasket = `<p class="section-intro">${esc(standards.gasket.name)}${standards.gasket.document ? ` · ${esc(standards.gasket.document)}` : ' · характеристики за ТУ'}</p><div class="choice-group" role="group" aria-label="Спосіб задання прокладки"><button data-action="gasket-mode" data-value="ring" aria-pressed="${node.gasket.mode === 'ring'}">Кільцева</button><button data-action="gasket-mode" data-value="area" aria-pressed="${node.gasket.mode === 'area'}">Задати площі</button></div>${field('gasket.thickness','Товщина прокладки','мм')}${node.gasket.mode === 'ring' ? `<div class="field-row">${field('gasket.outerDiameter','Зовнішній Ø','мм')}${field('gasket.innerDiameter','Внутрішній Ø','мм')}</div><label class="check-label"><input type="checkbox" data-field="gasket.hasHoles" ${node.gasket.hasHoles ? 'checked' : ''}>Отвори під кріплення</label>${node.gasket.hasHoles ? field('gasket.holeDiameter','Діаметр отвору','мм',{help:'Кількість отворів дорівнює кількості кріплень.'}) : ''}` : `${field('gasket.effectiveArea','Ефективна площа перерізу Aпр','мм²')}${field('gasket.pressureArea','Площа дії гідростатичного зусилля A','мм²')}<div class="gasket-help">${gasketSketch()}<span>Це дві різні площі. Введіть готові значення для нестандартної форми прокладки.</span></div>`}<p class="small-note">${icon('lock')}Характеристики матеріалу прокладки задаються за ТУ.</p>`;
     const fastener = `${selectField('fastener.type','Виконання',[['stud','Шпилька в корпусі'],['bolt','Наскрізний болт із гайкою']])}${materialField('fastener.material','Матеріал кріплення')}<div class="field-row">${field('fastener.nominalDiameter','Діаметр різьби','М')}${field('fastener.count','Кількість','шт.',{integer:true})}</div><label class="check-label"><input type="checkbox" data-field="fastener.lubricated" ${node.fastener.lubricated ? 'checked' : ''}>Мащення є</label><p class="small-note">${icon('info')}Крок різьби та похідні розміри визначатимуться за погодженими формулами.</p>`;
     const connection = `${selectField('connection.kind','Тип з’єднання',[['body-cover','Корпус — кришка'],['flange-flange','Фланець — фланець'],['custom','Інше з’єднання']])}${['sideA','sideB'].map((key,index) => `<div class="side-title"><span class="side-letter">${index ? 'Б' : 'А'}</span>Деталь ${index + 1}</div>${field(`connection.${key}.name`,'Назва деталі')}${materialField(`connection.${key}.material`,`Матеріал деталі ${index + 1}`)}`).join('')}<p class="small-note">${icon('info')}Геометричні розміри фланців додаємо на наступному етапі.</p>`;
     const nut = `${materialField('nut.material','Матеріал гайки')}<div class="readonly-line"><span>Номінальний діаметр</span><strong>${node.fastener.nominalDiameter ? `М${displayNumber(node.fastener.nominalDiameter)}` : '—'}</strong></div>${standardBox('nuts')}`;
-    const washers = `${selectField('washers.placement','Розташування',[['none','Шайб немає'],['a','Тільки з боку А'],['b','Тільки з боку Б'],['both','З обох боків']])}${node.washers.placement !== 'none' ? `${materialField('washers.material','Матеріал шайб')}${node.washers.placement === 'both' ? '<p class="section-intro">З обох боків використовуються однакові шайби.</p>' : ''}${standardBox('washers')}` : '<p class="section-intro">У цьому з’єднанні шайби не використовуються.</p>'}`;
+    const washerStandardOptions = Object.values(standardsDb.washers || {}).map(item => [item.id, `${item.document} — ${item.scope}`]);
+    const washers = `${selectField('washers.placement','Розташування',[['none','Шайб немає'],['a','Тільки з боку А'],['b','Тільки з боку Б'],['both','З обох боків']])}${node.washers.placement !== 'none' ? `${selectField('washers.standardId','Стандарт',washerStandardOptions)}<div class="field-row">${selectField('washers.execution','Виконання',[['1','Виконання 1'],['2','Виконання 2']])}${selectField('washers.accuracyClass','Клас точності',[['A','А'],['C','С']])}</div>${materialField('washers.material','Матеріал шайб')}${node.washers.placement === 'both' ? '<p class="section-intro">З обох боків використовуються однакові шайби.</p>' : ''}${standardBox('washers')}` : '<p class="section-intro">У цьому з’єднанні шайби не використовуються.</p>'}`;
     const extras = `<p class="section-intro">Проставки та інші деталі, що впливають на податливість з’єднання.</p>${node.extras.map((item,index) => `<div class="extra-card"><div class="extra-card-heading"><span>Елемент ${index + 1}</span><button class="icon-button danger" data-action="remove-extra" data-id="${item.id}" aria-label="Видалити додатковий елемент ${index + 1}">${icon('close')}</button></div>${field(`extras.${index}.name`,'Назва')}${materialField(`extras.${index}.material`,'Матеріал елемента')}<div class="field-row">${field(`extras.${index}.thickness`,'Товщина','мм')}${field(`extras.${index}.area`,'Площа перерізу','мм²')}</div></div>`).join('')}<button class="add-extra" data-action="add-extra">${icon('plus')}Додати елемент</button>`;
     return Object.entries({operating,gasket:gasket + gasketReference(),fastener,connection,nut,washers,extras}).map(([key,body]) => section(key,body,openSections.includes(key),statuses)).join('');
   }
@@ -225,7 +243,7 @@
     const target = document.querySelector('#results');
     if (!target) return;
     const node = currentNode;
-    const p = C.progress(node,materials);
+    const p = C.progress(node,materials,standardsDb);
     const washerA = ['a','both'].includes(node.washers.placement);
     const washerB = ['b','both'].includes(node.washers.placement);
     const piece = (type,text,title) => `<span class="stack-piece ${type}" title="${esc(title)}">${text}</span>`;
@@ -476,6 +494,9 @@
       ['sideA','sideB'].forEach((side,index) => { if (currentNode.connection[side].name === previous[index]) currentNode.connection[side].name = next[index]; });
     }
     C.set(currentNode,input.dataset.field,input.type === 'checkbox' ? input.checked : input.value);
+    // Execution 2 exists only for class A; keep selections compatible.
+    if (input.dataset.field === 'washers.execution' && input.value === '2') currentNode.washers.accuracyClass = 'A';
+    if (input.dataset.field === 'washers.accuracyClass' && input.value === 'C') currentNode.washers.execution = '1';
     changed(); renderEditor(true);
   });
   document.addEventListener('keydown', event => {
