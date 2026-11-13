@@ -46,6 +46,7 @@
   for (const key of ['recent','favorites']) if (!Array.isArray(workspace.preferences[key])) workspace.preferences[key] = [];
   // Preserve old localStorage workspaces without requiring manual migration.
   workspace.equipment.forEach(equipment => equipment.nodes.forEach(node => {
+    node.nut.standardId ??= 'gost-5915-70';
     node.washers.standardId ??= 'gost-11371-78';
     node.washers.accuracyClass ??= 'A';
     node.washers.execution ??= '1';
@@ -197,11 +198,18 @@
       const note = diameter === null ? 'Спочатку вкажіть номінальний діаметр різьби.' : !record ? 'Відсутні дані вибраного стандарту.' : `Немає нормативних розмірів для М${displayNumber(diameter)}, виконання ${esc(selection.execution)}, класу ${esc(selection.accuracyClass)}.`;
       return `<div class="standard-box"><span>${icon('file')}${esc(label)} · виконання ${esc(selection.execution)}, клас ${esc(selection.accuracyClass)}</span>${rows.length ? rows.map(([name,value]) => `<div class="readonly-line"><span>${name}</span><strong>${displayNumber(value)} мм</strong></div>`).join('') : note}</div>`;
     }
-    const table = standards[kind];
-    const diameter = C.number(currentNode.fastener.nominalDiameter);
-    const size = diameter === null ? null : table.sizes[String(diameter)];
-    const fields = kind === 'nuts' ? [['heightMm','Висота','мм'],['threadEngagementMm','Довжина різьбового з’єднання','мм']] : [['thicknessMm','Товщина','мм'],['outerDiameterMm','Зовнішній діаметр','мм'],['innerDiameterMm','Внутрішній діаметр','мм']];
-    return `<div class="standard-box" data-standard-kind="${kind}"><span>${icon('file')}${esc(table.document || 'Розміри за ГОСТ')}</span>${size ? fields.map(([key,label,unit]) => `<div class="readonly-line"><span>${label}</span><strong>${displayNumber(size[key])} ${unit}</strong></div>`).join('') : diameter === null ? 'Вкажіть номінальний діаметр кріплення.' : `Таблицю розмірів для М${displayNumber(diameter)} ще не додано.`}</div>`;
+    if (kind === 'nuts') {
+      const selection = currentNode.nut;
+      const record = standardsDb.nuts?.[selection.standardId];
+      const diameter = C.number(currentNode.fastener.nominalDiameter);
+      const dimensions = C.nutDimensions(standardsDb, selection.standardId, diameter);
+      const label = record?.document || 'Стандарт гайок не знайдено';
+      const note = diameter === null ? 'Спочатку вкажіть номінальний діаметр різьби.' : !record ? 'Відсутні дані вибраного стандарту.' : `Для М${displayNumber(diameter)} в цьому ГОСТ немає висоти гайки.`;
+      return `<div class="standard-box"><span>${icon('file')}${esc(label)}</span>${dimensions
+        ? `<div class="readonly-line"><span>Висота гайки m</span><strong>${displayNumber(dimensions.heightMm)} мм</strong></div>${dimensions.nonPreferred ? '<p class="field-help">Розмір наведено в дужках: застосування не рекомендується за ГОСТ.</p>' : ''}`
+        : note}</div>`;
+    }
+    return '';
   }
   function gasketReference() {
     const properties = [['seatingPressureMPa','Тиск обтиснення q₀','МПа'],['minimumPressureMPa','Мінімальний тиск qmin','МПа'],['maximumPressureMPa','Максимальний тиск qmax','МПа'],['elasticModulusMPa','Модуль пружності E','МПа'],['expansionMicroPerK','Коефіцієнт розширення α','10⁻⁶/К']];
@@ -218,7 +226,8 @@
     const gasket = `<p class="section-intro">${esc(standards.gasket.name)}${standards.gasket.document ? ` · ${esc(standards.gasket.document)}` : ' · характеристики за ТУ'}</p><div class="choice-group" role="group" aria-label="Спосіб задання прокладки"><button data-action="gasket-mode" data-value="ring" aria-pressed="${node.gasket.mode === 'ring'}">Кільцева</button><button data-action="gasket-mode" data-value="area" aria-pressed="${node.gasket.mode === 'area'}">Задати площі</button></div>${field('gasket.thickness','Товщина прокладки','мм')}${node.gasket.mode === 'ring' ? `<div class="field-row">${field('gasket.outerDiameter','Зовнішній Ø','мм')}${field('gasket.innerDiameter','Внутрішній Ø','мм')}</div><label class="check-label"><input type="checkbox" data-field="gasket.hasHoles" ${node.gasket.hasHoles ? 'checked' : ''}>Отвори під кріплення</label>${node.gasket.hasHoles ? field('gasket.holeDiameter','Діаметр отвору','мм',{help:'Кількість отворів дорівнює кількості кріплень.'}) : ''}` : `${field('gasket.effectiveArea','Ефективна площа перерізу Aпр','мм²')}${field('gasket.pressureArea','Площа дії гідростатичного зусилля A','мм²')}<div class="gasket-help">${gasketSketch()}<span>Це дві різні площі. Введіть готові значення для нестандартної форми прокладки.</span></div>`}<p class="small-note">${icon('lock')}Характеристики матеріалу прокладки задаються за ТУ.</p>`;
     const fastener = `${selectField('fastener.type','Виконання',[['stud','Шпилька в корпусі'],['bolt','Наскрізний болт із гайкою']])}${materialField('fastener.material','Матеріал кріплення')}<div class="field-row">${field('fastener.nominalDiameter','Діаметр різьби','М')}${field('fastener.count','Кількість','шт.',{integer:true})}</div><label class="check-label"><input type="checkbox" data-field="fastener.lubricated" ${node.fastener.lubricated ? 'checked' : ''}>Мащення є</label><p class="small-note">${icon('info')}Крок різьби та похідні розміри визначатимуться за погодженими формулами.</p>`;
     const connection = `${selectField('connection.kind','Тип з’єднання',[['body-cover','Корпус — кришка'],['flange-flange','Фланець — фланець'],['custom','Інше з’єднання']])}${['sideA','sideB'].map((key,index) => `<div class="side-title"><span class="side-letter">${index ? 'Б' : 'А'}</span>Деталь ${index + 1}</div>${field(`connection.${key}.name`,'Назва деталі')}${materialField(`connection.${key}.material`,`Матеріал деталі ${index + 1}`)}`).join('')}<p class="small-note">${icon('info')}Геометричні розміри фланців додаємо на наступному етапі.</p>`;
-    const nut = `${materialField('nut.material','Матеріал гайки')}<div class="readonly-line"><span>Номінальний діаметр</span><strong>${node.fastener.nominalDiameter ? `М${displayNumber(node.fastener.nominalDiameter)}` : '—'}</strong></div>${standardBox('nuts')}`;
+    const nutStandardOptions = Object.values(standardsDb.nuts || {}).map(item => [item.id, `${item.document} — ${item.title}`]);
+    const nut = `${materialField('nut.material','Матеріал гайки')}${selectField('nut.standardId','Стандарт',nutStandardOptions)}<div class="readonly-line"><span>Номінальний діаметр</span><strong>${node.fastener.nominalDiameter ? `М${displayNumber(node.fastener.nominalDiameter)}` : '—'}</strong></div>${standardBox('nuts')}`;
     const washerStandardOptions = Object.values(standardsDb.washers || {}).map(item => [item.id, `${item.document} — ${item.scope}`]);
     const washers = `${selectField('washers.placement','Розташування',[['none','Шайб немає'],['a','Тільки з боку А'],['b','Тільки з боку Б'],['both','З обох боків']])}${node.washers.placement !== 'none' ? `${selectField('washers.standardId','Стандарт',washerStandardOptions)}<div class="field-row">${selectField('washers.execution','Виконання',[['1','Виконання 1'],['2','Виконання 2']])}${selectField('washers.accuracyClass','Клас точності',[['A','А'],['C','С']])}</div>${materialField('washers.material','Матеріал шайб')}${node.washers.placement === 'both' ? '<p class="section-intro">З обох боків використовуються однакові шайби.</p>' : ''}${standardBox('washers')}` : '<p class="section-intro">У цьому з’єднанні шайби не використовуються.</p>'}`;
     const extras = `<p class="section-intro">Проставки та інші деталі, що впливають на податливість з’єднання.</p>${node.extras.map((item,index) => `<div class="extra-card"><div class="extra-card-heading"><span>Елемент ${index + 1}</span><button class="icon-button danger" data-action="remove-extra" data-id="${item.id}" aria-label="Видалити додатковий елемент ${index + 1}">${icon('close')}</button></div>${field(`extras.${index}.name`,'Назва')}${materialField(`extras.${index}.material`,'Матеріал елемента')}<div class="field-row">${field(`extras.${index}.thickness`,'Товщина','мм')}${field(`extras.${index}.area`,'Площа перерізу','мм²')}</div></div>`).join('')}<button class="add-extra" data-action="add-extra">${icon('plus')}Додати елемент</button>`;

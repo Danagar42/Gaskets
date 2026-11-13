@@ -1,0 +1,96 @@
+{
+  "id": "gost-5915-70",
+  "document": "ГОСТ 5915-70",
+  "title": "Гайки шестигранні класу точності В. Конструкція та розміри",
+  "type": "hex_nut",
+  "accuracyClass": "B",
+  "unit": "mm",
+  "fields": {
+    "heightMm": {
+      "symbol": "m",
+      "description": "Номінальна висота гайки",
+      "unit": "mm"
+    }
+  },
+  "source": {
+    "url": "https://meganorm.ru/mega_doc/norm/gost_gosudarstvennyj-standart/2/gost_5915-70_mezhgosudarstvennyy_standart_gayki.html",
+    "section": "Пункт 2, таблиця «Висота m»",
+    "verification": "Звірено із наданим зображенням і текстовими таблицями ГОСТ 5915-70",
+    "notes": "Розміри в дужках наведено у стандарті, але їх застосування не рекомендується. Збережено тільки висоту m, без помилкового ототожнення з довжиною зачеплення різьби."
+  },
+  "nonPreferredDiametersMm": [
+    3.5,
+    14,
+    18,
+    22,
+    27
+  ],
+  "sizes": {
+    "2": {
+      "heightMm": 1.6
+    },
+    "3": {
+      "heightMm": 2.4
+    },
+    "4": {
+      "heightMm": 3.2
+    },
+    "5": {
+      "heightMm": 4.7
+    },
+    "6": {
+      "heightMm": 5.2
+    },
+    "8": {
+      "heightMm": 6.8
+    },
+    "10": {
+      "heightMm": 8.4
+    },
+    "12": {
+      "heightMm": 10.8
+    },
+    "14": {
+      "heightMm": 12.8
+    },
+    "16": {
+      "heightMm": 14.8
+    },
+    "18": {
+      "heightMm": 16.4
+    },
+    "20": {
+      "heightMm": 18
+    },
+    "22": {
+      "heightMm": 19.8
+    },
+    "24": {
+      "heightMm": 21.5
+    },
+    "27": {
+      "heightMm": 23.6
+    },
+    "30": {
+      "heightMm": 25.6
+    },
+    "36": {
+      "heightMm": 31
+    },
+    "42": {
+      "heightMm": 34
+    },
+    "48": {
+      "heightMm": 38
+    },
+    "1.6": {
+      "heightMm": 1.3
+    },
+    "2.5": {
+      "heightMm": 2
+    },
+    "3.5": {
+      "heightMm": 2.8
+    }
+  }
+}
