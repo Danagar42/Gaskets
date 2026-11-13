@@ -49,16 +49,32 @@ def validate_nut(record, filename):
         raise ValueError(f"{filename}: source URL is required")
     if not record.get("sizes"):
         raise ValueError(f"{filename}: no nut sizes")
+    for type_id, info in record.get("types", {}).items():
+        if not type_id or not info.get("label") or not info.get("heightSymbol") or not info.get("heightLabel"):
+            raise ValueError(f"{filename}: nut type metadata missing for {type_id}")
     diameters = set()
     for designation, row in record["sizes"].items():
         nominal = float(designation)
         if not math.isfinite(nominal) or nominal <= 0:
             raise ValueError(f"{filename}: invalid nominal diameter {designation}")
-        height = row.get("heightMm")
-        if type(height) not in (float, int) or not math.isfinite(height) or height <= 0:
-            raise ValueError(f"{filename}: invalid nut height at M{designation}")
-        if set(row) != {"heightMm"}:
-            raise ValueError(f"{filename}: nut catalog stores only heightMm, found extra fields at M{designation}")
+        if record.get("types"):
+            kinds = record["types"]
+            if set(row) != {"heightsByTypeMm"}:
+                raise ValueError(f"{filename}: typed nut rows must hold only heightsByTypeMm at M{designation}")
+            heights = row.get("heightsByTypeMm", {})
+            if set(heights) != set(kinds):
+                raise ValueError(f"{filename}: expected exact nut types {list(kinds)} at M{designation}")
+            if not any(type(v) in (float, int) and math.isfinite(v) and v > 0 for v in heights.values()):
+                raise ValueError(f"{filename}: no usable height at M{designation}")
+            for type_id, height in heights.items():
+                if height is not None and (type(height) not in (float, int) or not math.isfinite(height) or height <= 0):
+                    raise ValueError(f"{filename}: invalid nut height for type {type_id} at M{designation}")
+        else:
+            height = row.get("heightMm")
+            if type(height) not in (float, int) or not math.isfinite(height) or height <= 0:
+                raise ValueError(f"{filename}: invalid nut height at M{designation}")
+            if set(row) != {"heightMm"}:
+                raise ValueError(f"{filename}: nut catalog stores only heightMm at M{designation}")
         diameters.add(nominal)
     nonpreferred = record.get("nonPreferredDiametersMm", [])
     if any(d not in diameters for d in nonpreferred) or len(set(nonpreferred)) != len(nonpreferred):
