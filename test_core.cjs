@@ -113,4 +113,25 @@ node.fastener.nominalDiameter = '24';
 assert.equal(C.sectionStatus(node,db,catalog).washers,true);
 node.washers.accuracyClass = 'C'; node.fastener.nominalDiameter = '33';
 assert.equal(C.sectionStatus(node,db,catalog).washers,false);
-console.log('OK: матеріали, анкети та нормативні розміри ГОСТ 11371-78.');
+
+// ГОСТ 5915-70: 22 hex nut nominal heights, with non-preferred sizes preserved.
+const nuts = catalog.nuts['gost-5915-70'];
+assert.equal(Object.keys(nuts.sizes).length, 22);
+assert.equal(nuts.sizes['5'].heightMm, 4.7);
+assert.equal(nuts.sizes['24'].heightMm, 21.5);
+assert.equal(nuts.sizes['48'].heightMm, 38);
+assert.deepEqual(Array.from(nuts.nonPreferredDiametersMm), [3.5,14,18,22,27]);
+const nut24 = C.nutDimensions(catalog, 'gost-5915-70', '24');
+assert.equal(nut24.heightMm, 21.5);
+assert.equal(nut24.nonPreferred, false);
+assert.equal(C.nutDimensions(catalog, 'gost-5915-70', '14').nonPreferred, true);
+assert.equal(C.nutDimensions(catalog, 'gost-5915-70', '26'), null);
+assert.equal(C.nutDimensions(catalog, 'gost-5915-70', ''), null);
+assert.equal(Object.hasOwn(nut24, 'threadEngagementMm'), false, 'Nut height is not thread engagement length');
+node.nut.standardId = 'gost-5915-70';
+node.fastener.nominalDiameter = '24';
+assert.equal(C.sectionStatus(node, db, catalog).nut, true);
+node.fastener.nominalDiameter = '26';
+assert.equal(C.sectionStatus(node, db, catalog).nut, false);
+assert.equal(C.validateWorkspace(JSON.parse(JSON.stringify(state))), true);
+console.log('OK: матеріали, анкети й нормативні розміри ГОСТ 11371-78 та 5915-70.');
