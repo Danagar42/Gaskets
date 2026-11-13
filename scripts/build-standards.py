@@ -65,9 +65,36 @@ def validate_nut(record, filename):
         raise ValueError(f"{filename}: nonpreferred list must reference distinct known sizes")
 
 
+def validate_thread(record, filename):
+    if record.get("unit") != "mm" or record.get("id") != filename.stem:
+        raise ValueError(f"{filename}: wrong id or units")
+    if not record.get("document") or not record.get("pitchDocument"):
+        raise ValueError(f"{filename}: thread and pitch source documents required")
+    if not record.get("source", {}).get("pitchUrl") or not record.get("source", {}).get("dimensionsUrl"):
+        raise ValueError(f"{filename}: source URLs required")
+    sizes = record.get("sizes", {})
+    if not sizes:
+        raise ValueError(f"{filename}: empty thread catalog")
+    for nominal, row in sizes.items():
+        d = float(nominal)
+        if not math.isfinite(d) or d <= 0:
+            raise ValueError(f"{filename}: invalid nominal diameter {nominal}")
+        pitches = row.get("pitchesMm", [])
+        if not pitches or any(type(p) not in (float, int) or not math.isfinite(p) or p <= 0 for p in pitches):
+            raise ValueError(f"{filename}: invalid pitches at M{nominal}")
+        if len(set(pitches)) != len(pitches) or pitches != sorted(pitches, reverse=True):
+            raise ValueError(f"{filename}: pitches must be unique descending values at M{nominal}")
+        coarse = row.get("coarsePitchMm")
+        if coarse is not None and (type(coarse) not in (float, int) or coarse not in pitches):
+            raise ValueError(f"{filename}: invalid coarse pitch for M{nominal}")
+        nonpreferred = row.get("nonPreferredPitchesMm", [])
+        if any(p not in pitches for p in nonpreferred):
+            raise ValueError(f"{filename}: invalid nonpreferred pitch for M{nominal}")
+
+
 def main():
-    catalog = {"version": 1, "washers": {}, "nuts": {}}
-    for category, validate in (("washers", validate_washer), ("nuts", validate_nut)):
+    catalog = {"version": 1, "washers": {}, "nuts": {}, "threads": {}}
+    for category, validate in (("washers", validate_washer), ("nuts", validate_nut), ("threads", validate_thread)):
         for filename in sorted((SOURCE / category).glob("*.json")):
             record = json.loads(filename.read_text(encoding="utf-8"))
             validate(record, filename)
@@ -80,7 +107,7 @@ def main():
         + "globalThis.FlangeStandardsDB = " + body + ";\n",
         encoding="utf-8",
     )
-    print(f"Built {OUTPUT.name}: {len(catalog['washers'])} washer and {len(catalog['nuts'])} nut standards")
+    print(f"Built {OUTPUT.name}: {len(catalog['washers'])} washers, {len(catalog['nuts'])} nuts, {len(catalog['threads'])} threads")
 
 
 if __name__ == "__main__":

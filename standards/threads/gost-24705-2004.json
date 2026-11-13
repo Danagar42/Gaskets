@@ -1,0 +1,365 @@
+{
+  "id": "gost-24705-2004",
+  "document": "ГОСТ 24705-2004",
+  "title": "Різьба метрична. Основні розміри",
+  "pitchDocument": "ГОСТ 8724-2002",
+  "pitchTitle": "Різьба метрична. Діаметри та кроки",
+  "unit": "mm",
+  "coverage": {
+    "minNominalDiameterMm": 6,
+    "maxNominalDiameterMm": 60
+  },
+  "properties": {
+    "pitchMm": "Крок метричної різьби P"
+  },
+  "source": {
+    "dimensionsUrl": "https://rosgosts.ru/file/gost/21/040/gost_24705-2004.pdf",
+    "pitchUrl": "https://meganorm.ru/mega_doc/norm/gost_gosudarstvennyj-standart/4/gost_8724-2002_iso_261-98_mezhgosudarstvennyy_standart.html",
+    "section": "ГОСТ 24705-2004, таблиця 1; ГОСТ 8724-2002, таблиця 1",
+    "verification": "Список кроків зіставлено з наданими сторінками 4–7 ГОСТ 24705-2004 і таблицею ГОСТ 8724-2002",
+    "notes": "Для деяких номінальних діаметрів великий крок не встановлено. Такі позиції потребують явного вибору. Кроки М30×3 та М33×3 у ГОСТ 8724-2002 наведені в дужках."
+  },
+  "sizes": {
+    "6": {
+      "coarsePitchMm": 1,
+      "pitchesMm": [
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "7": {
+      "coarsePitchMm": 1,
+      "pitchesMm": [
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "8": {
+      "coarsePitchMm": 1.25,
+      "pitchesMm": [
+        1.25,
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "9": {
+      "coarsePitchMm": 1.25,
+      "pitchesMm": [
+        1.25,
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "10": {
+      "coarsePitchMm": 1.5,
+      "pitchesMm": [
+        1.5,
+        1.25,
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "11": {
+      "coarsePitchMm": 1.5,
+      "pitchesMm": [
+        1.5,
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "12": {
+      "coarsePitchMm": 1.75,
+      "pitchesMm": [
+        1.75,
+        1.5,
+        1.25,
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "14": {
+      "coarsePitchMm": 2,
+      "pitchesMm": [
+        2,
+        1.5,
+        1.25,
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "15": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        1.5,
+        1
+      ]
+    },
+    "16": {
+      "coarsePitchMm": 2,
+      "pitchesMm": [
+        2,
+        1.5,
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "17": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        1.5,
+        1
+      ]
+    },
+    "18": {
+      "coarsePitchMm": 2.5,
+      "pitchesMm": [
+        2.5,
+        2,
+        1.5,
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "20": {
+      "coarsePitchMm": 2.5,
+      "pitchesMm": [
+        2.5,
+        2,
+        1.5,
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "22": {
+      "coarsePitchMm": 2.5,
+      "pitchesMm": [
+        2.5,
+        2,
+        1.5,
+        1,
+        0.75,
+        0.5
+      ]
+    },
+    "24": {
+      "coarsePitchMm": 3,
+      "pitchesMm": [
+        3,
+        2,
+        1.5,
+        1,
+        0.75
+      ]
+    },
+    "25": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        2,
+        1.5,
+        1
+      ]
+    },
+    "26": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        1.5
+      ]
+    },
+    "27": {
+      "coarsePitchMm": 3,
+      "pitchesMm": [
+        3,
+        2,
+        1.5,
+        1,
+        0.75
+      ]
+    },
+    "28": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        2,
+        1.5,
+        1
+      ]
+    },
+    "30": {
+      "coarsePitchMm": 3.5,
+      "pitchesMm": [
+        3.5,
+        3,
+        2,
+        1.5,
+        1,
+        0.75
+      ],
+      "nonPreferredPitchesMm": [
+        3
+      ]
+    },
+    "32": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        2,
+        1.5
+      ]
+    },
+    "33": {
+      "coarsePitchMm": 3.5,
+      "pitchesMm": [
+        3.5,
+        3,
+        2,
+        1.5,
+        1,
+        0.75
+      ],
+      "nonPreferredPitchesMm": [
+        3
+      ]
+    },
+    "35": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        1.5
+      ]
+    },
+    "36": {
+      "coarsePitchMm": 4,
+      "pitchesMm": [
+        4,
+        3,
+        2,
+        1.5,
+        1
+      ]
+    },
+    "38": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        1.5
+      ]
+    },
+    "39": {
+      "coarsePitchMm": 4,
+      "pitchesMm": [
+        4,
+        3,
+        2,
+        1.5,
+        1
+      ]
+    },
+    "40": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        3,
+        2,
+        1.5
+      ]
+    },
+    "42": {
+      "coarsePitchMm": 4.5,
+      "pitchesMm": [
+        4.5,
+        4,
+        3,
+        2,
+        1.5,
+        1
+      ]
+    },
+    "45": {
+      "coarsePitchMm": 4.5,
+      "pitchesMm": [
+        4.5,
+        4,
+        3,
+        2,
+        1.5,
+        1
+      ]
+    },
+    "48": {
+      "coarsePitchMm": 5,
+      "pitchesMm": [
+        5,
+        4,
+        3,
+        2,
+        1.5,
+        1
+      ]
+    },
+    "50": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        3,
+        2,
+        1.5
+      ]
+    },
+    "52": {
+      "coarsePitchMm": 5,
+      "pitchesMm": [
+        5,
+        4,
+        3,
+        2,
+        1.5,
+        1
+      ]
+    },
+    "55": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        4,
+        3,
+        2,
+        1.5
+      ]
+    },
+    "56": {
+      "coarsePitchMm": 5.5,
+      "pitchesMm": [
+        5.5,
+        4,
+        3,
+        2,
+        1.5,
+        1
+      ]
+    },
+    "58": {
+      "coarsePitchMm": null,
+      "pitchesMm": [
+        4,
+        3,
+        2,
+        1.5
+      ]
+    },
+    "60": {
+      "coarsePitchMm": 5.5,
+      "pitchesMm": [
+        5.5,
+        4,
+        3,
+        2,
+        1.5,
+        1
+      ]
+    }
+  }
+}
