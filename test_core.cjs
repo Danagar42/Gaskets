@@ -163,4 +163,31 @@ assert.equal(C.sectionStatus(node,db,catalog).fastener,false);
 node.fastener.pitch = '3';
 assert.equal(C.sectionStatus(node,db,catalog).fastener,true);
 assert.equal(C.validateWorkspace(JSON.parse(JSON.stringify(state))),true);
-console.log('OK: матеріали, анкети, шайби, гайки та кроки метричної різьби до М60.');
+
+// ГОСТ 9064-75: тип А (H) і ковпачковий тип Б (l₁), лише до М60.
+const flangeNuts = catalog.nuts['gost-9064-75'];
+assert.equal(Object.keys(flangeNuts.sizes).length, 14);
+assert.equal(flangeNuts.sizes['10'].heightsByTypeMm.B, null, 'M10 cap nut is unavailable');
+assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '24', 'A').heightMm, 24);
+assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '24', 'A').heightSymbol, 'H');
+const cap24 = C.nutDimensions(catalog, 'gost-9064-75', '24', 'B');
+assert.equal(cap24.heightMm, 65);
+assert.equal(cap24.heightSymbol, 'l₁');
+assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '60', 'A').heightMm, 60);
+assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '60', 'B').heightMm, 135);
+assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '22', 'B').nonPreferred, true);
+assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '10', 'B'), null);
+assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '14', 'A'), null);
+assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '64', 'A'), null); // beyond imported range
+assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '24', 'C'), null);
+assert.equal(C.nutDimensions(catalog, 'gost-5915-70', '24', 'A').heightMm, 21.5); // old catalog still works
+node.nut.standardId = 'gost-9064-75';
+node.nut.typeId = 'A';
+node.fastener.nominalDiameter = '24';
+assert.equal(C.sectionStatus(node, db, catalog).nut, true);
+node.nut.typeId = 'B'; node.fastener.nominalDiameter = '10';
+assert.equal(C.sectionStatus(node, db, catalog).nut, false);
+node.fastener.nominalDiameter = '24';
+assert.equal(C.sectionStatus(node, db, catalog).nut, true);
+assert.equal(C.validateWorkspace(JSON.parse(JSON.stringify(state))), true);
+console.log('OK: матеріали, анкети, шайби, гайки ГОСТ 5915-70/9064-75 і кроки різьби до М60.');

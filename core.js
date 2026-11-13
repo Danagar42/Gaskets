@@ -13,7 +13,7 @@
       gasket: { mode: 'ring', thickness: '', outerDiameter: '', innerDiameter: '', hasHoles: false, holeDiameter: '', effectiveArea: '', pressureArea: '' },
       fastener: { type: 'stud', nominalDiameter: '', count: '', lubricated: true, material: null, threadStandardId: 'gost-24705-2004', pitch: '' },
       connection: { kind, sideA: { name: kind === 'flange-flange' ? 'Фланець 1' : 'Кришка', material: null }, sideB: { name: kind === 'flange-flange' ? 'Фланець 2' : 'Корпус', material: null } },
-      nut: { material: null, standardId: 'gost-5915-70' }, washers: { placement: 'none', material: null, standardId: 'gost-11371-78', accuracyClass: 'A', execution: '1' }, extras: []
+      nut: { material: null, standardId: 'gost-5915-70', typeId: 'A' }, washers: { placement: 'none', material: null, standardId: 'gost-11371-78', accuracyClass: 'A', execution: '1' }, extras: []
     };
   }
   function number(value) {
@@ -84,16 +84,24 @@
       nonPreferred: (row.nonPreferredPitchesMm || []).includes(pitch)
     };
   }
-  function nutDimensions(catalog, standardId, nominalDiameter) {
+  function nutDimensions(catalog, standardId, nominalDiameter, nutType = 'A') {
     const standard = catalog?.nuts?.[standardId];
     const diameter = number(nominalDiameter);
     if (!standard || diameter === null || diameter <= 0) return null;
     const row = standard.sizes?.[String(diameter)];
-    if (!positive(row?.heightMm)) return null;
+    if (!row) return null;
+    const hasTypes = !!standard.types;
+    const type = hasTypes ? standard.types[nutType] : null;
+    if (hasTypes && !type) return null;
+    const height = hasTypes ? row.heightsByTypeMm?.[nutType] : row.heightMm;
+    if (!positive(height)) return null;
     return {
       document: standard.document,
       nominalDiameterMm: diameter,
-      heightMm: row.heightMm,
+      heightMm: height,
+      heightSymbol: hasTypes ? type.heightSymbol : 'm',
+      heightLabel: hasTypes ? type.heightLabel : 'Висота гайки',
+      typeId: hasTypes ? nutType : null,
       nonPreferred: (standard.nonPreferredDiametersMm || []).includes(diameter)
     };
   }
@@ -118,7 +126,7 @@
       : positive(gasket.outerDiameter) && positive(gasket.innerDiameter) && number(gasket.outerDiameter) > number(gasket.innerDiameter) && (!gasket.hasHoles || positive(gasket.holeDiameter)));
     result.fastener = positive(node.fastener.nominalDiameter) && positive(node.fastener.count) && Number.isInteger(number(node.fastener.count)) && validMaterial(node.fastener.material) && (!standardsDb?.threads || !!threadPitch(standardsDb, node.fastener.threadStandardId || 'gost-24705-2004', node.fastener.nominalDiameter, node.fastener.pitch || ''));
     result.connection = !!node.connection.sideA.name.trim() && !!node.connection.sideB.name.trim() && validMaterial(node.connection.sideA.material) && validMaterial(node.connection.sideB.material);
-    result.nut = validMaterial(node.nut.material, ['RTm','RTp']) && (!standardsDb || !!nutDimensions(standardsDb, node.nut.standardId || 'gost-5915-70', node.fastener.nominalDiameter));
+    result.nut = validMaterial(node.nut.material, ['RTm','RTp']) && (!standardsDb || !!nutDimensions(standardsDb, node.nut.standardId || 'gost-5915-70', node.fastener.nominalDiameter, node.nut.typeId || 'A'));
     result.washers = node.washers.placement === 'none' || (validMaterial(node.washers.material, ['E','Alpha']) && (!standardsDb || !!washerDimensions(standardsDb, node.washers.standardId || 'gost-11371-78', node.fastener.nominalDiameter, node.washers.accuracyClass || 'A', node.washers.execution || '1')));
     result.extras = node.extras.every(item => !!item.name.trim() && positive(item.thickness) && positive(item.area) && validMaterial(item.material, ['E','Alpha']));
     return result;
@@ -142,7 +150,7 @@
       if (!['ring','area'].includes(node.gasket.mode) || !['stud','bolt'].includes(node.fastener.type) || !['body-cover','flange-flange','custom'].includes(node.connection.kind) || !['none','a','b','both'].includes(node.washers.placement)) return false;
       return ['normal','hydro'].every(key => node.operating[key] && ['pressure','temperature','medium'].every(field => isText(node.operating[key][field]))) && typeof node.gasket.hasHoles === 'boolean' && typeof node.fastener.lubricated === 'boolean'
         && ['fastener.material','connection.sideA.material','connection.sideB.material','nut.material','washers.material'].every(path => isRef(get(node, path)))
-        && ['threadStandardId','pitch'].every(key => node.fastener[key] === undefined || isText(node.fastener[key])) && (node.nut.standardId === undefined || isText(node.nut.standardId)) && ['standardId','accuracyClass','execution'].every(key => node.washers[key] === undefined || isText(node.washers[key])) && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));
+        && ['threadStandardId','pitch'].every(key => node.fastener[key] === undefined || isText(node.fastener[key])) && ['standardId','typeId'].every(key => node.nut[key] === undefined || isText(node.nut[key])) && ['standardId','accuracyClass','execution'].every(key => node.washers[key] === undefined || isText(node.washers[key])) && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));
     }));
   }
   const api = { id, timestamp, sections, createEquipment, createNode, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace };

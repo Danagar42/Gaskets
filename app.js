@@ -49,6 +49,7 @@
     node.fastener.threadStandardId ??= 'gost-24705-2004';
     node.fastener.pitch ??= '';
     node.nut.standardId ??= 'gost-5915-70';
+    node.nut.typeId ??= 'A';
     node.washers.standardId ??= 'gost-11371-78';
     node.washers.accuracyClass ??= 'A';
     node.washers.execution ??= '1';
@@ -204,11 +205,11 @@
       const selection = currentNode.nut;
       const record = standardsDb.nuts?.[selection.standardId];
       const diameter = C.number(currentNode.fastener.nominalDiameter);
-      const dimensions = C.nutDimensions(standardsDb, selection.standardId, diameter);
+      const dimensions = C.nutDimensions(standardsDb, selection.standardId, diameter, selection.typeId || 'A');
       const label = record?.document || 'Стандарт гайок не знайдено';
-      const note = diameter === null ? 'Спочатку вкажіть номінальний діаметр різьби.' : !record ? 'Відсутні дані вибраного стандарту.' : `Для М${displayNumber(diameter)} в цьому ГОСТ немає висоти гайки.`;
+      const note = diameter === null ? 'Спочатку вкажіть номінальний діаметр різьби.' : !record ? 'Відсутні дані вибраного стандарту.' : `Для М${displayNumber(diameter)} й обраного типу немає оцифрованої нормативної висоти.`;
       return `<div class="standard-box"><span>${icon('file')}${esc(label)}</span>${dimensions
-        ? `<div class="readonly-line"><span>Висота гайки m</span><strong>${displayNumber(dimensions.heightMm)} мм</strong></div>${dimensions.nonPreferred ? '<p class="field-help">Розмір наведено в дужках: застосування не рекомендується за ГОСТ.</p>' : ''}`
+        ? `<div class="readonly-line"><span>${esc(dimensions.heightLabel)} ${esc(dimensions.heightSymbol)}</span><strong>${displayNumber(dimensions.heightMm)} мм</strong></div>${dimensions.nonPreferred ? '<p class="field-help">Розмір у ГОСТ наведено в дужках; за можливості не застосовувати.</p>' : ''}${dimensions.typeId === 'B' ? '<p class="field-help">Для ковпачкової гайки l₁ — загальна висота, а не довжина зачеплення різьби чи висота опорної частини.</p>' : ''}`
         : note}</div>`;
     }
     return '';
@@ -239,7 +240,9 @@
     const fastener = `${selectField('fastener.type','Виконання',[['stud','Шпилька в корпусі'],['bolt','Наскрізний болт із гайкою']])}${materialField('fastener.material','Матеріал кріплення')}<div class="field-row">${field('fastener.nominalDiameter','Діаметр різьби','М')}${field('fastener.count','Кількість','шт.',{integer:true})}</div>${selectField('fastener.threadStandardId','Стандарт різьби',threadStandardOptions)}${selectField('fastener.pitch','Крок різьби P',pitchOptions)}<p class="field-help">${esc(pitchReference)}</p><label class="check-label"><input type="checkbox" data-field="fastener.lubricated" ${node.fastener.lubricated ? 'checked' : ''}>Мащення є</label><p class="small-note">${icon('info')}Великі й дрібні кроки — за ГОСТ 8724-2002; розміри різьби — за ГОСТ 24705-2004. Розрахунок похідних розмірів буде додано окремо.</p>`;
     const connection = `${selectField('connection.kind','Тип з’єднання',[['body-cover','Корпус — кришка'],['flange-flange','Фланець — фланець'],['custom','Інше з’єднання']])}${['sideA','sideB'].map((key,index) => `<div class="side-title"><span class="side-letter">${index ? 'Б' : 'А'}</span>Деталь ${index + 1}</div>${field(`connection.${key}.name`,'Назва деталі')}${materialField(`connection.${key}.material`,`Матеріал деталі ${index + 1}`)}`).join('')}<p class="small-note">${icon('info')}Геометричні розміри фланців додаємо на наступному етапі.</p>`;
     const nutStandardOptions = Object.values(standardsDb.nuts || {}).map(item => [item.id, `${item.document} — ${item.title}`]);
-    const nut = `${materialField('nut.material','Матеріал гайки')}${selectField('nut.standardId','Стандарт',nutStandardOptions)}<div class="readonly-line"><span>Номінальний діаметр</span><strong>${node.fastener.nominalDiameter ? `М${displayNumber(node.fastener.nominalDiameter)}` : '—'}</strong></div>${standardBox('nuts')}`;
+    const currentNutStandard = standardsDb.nuts?.[node.nut.standardId];
+    const nutTypeField = currentNutStandard?.types ? selectField('nut.typeId','Тип гайки',Object.entries(currentNutStandard.types).map(([id,type]) => [id,type.label])) : '';
+    const nut = `${materialField('nut.material','Матеріал гайки')}${selectField('nut.standardId','Стандарт',nutStandardOptions)}${nutTypeField}<div class="readonly-line"><span>Номінальний діаметр</span><strong>${node.fastener.nominalDiameter ? `М${displayNumber(node.fastener.nominalDiameter)}` : '—'}</strong></div>${standardBox('nuts')}`;
     const washerStandardOptions = Object.values(standardsDb.washers || {}).map(item => [item.id, `${item.document} — ${item.scope}`]);
     const washers = `${selectField('washers.placement','Розташування',[['none','Шайб немає'],['a','Тільки з боку А'],['b','Тільки з боку Б'],['both','З обох боків']])}${node.washers.placement !== 'none' ? `${selectField('washers.standardId','Стандарт',washerStandardOptions)}<div class="field-row">${selectField('washers.execution','Виконання',[['1','Виконання 1'],['2','Виконання 2']])}${selectField('washers.accuracyClass','Клас точності',[['A','А'],['C','С']])}</div>${materialField('washers.material','Матеріал шайб')}${node.washers.placement === 'both' ? '<p class="section-intro">З обох боків використовуються однакові шайби.</p>' : ''}${standardBox('washers')}` : '<p class="section-intro">У цьому з’єднанні шайби не використовуються.</p>'}`;
     const extras = `<p class="section-intro">Проставки та інші деталі, що впливають на податливість з’єднання.</p>${node.extras.map((item,index) => `<div class="extra-card"><div class="extra-card-heading"><span>Елемент ${index + 1}</span><button class="icon-button danger" data-action="remove-extra" data-id="${item.id}" aria-label="Видалити додатковий елемент ${index + 1}">${icon('close')}</button></div>${field(`extras.${index}.name`,'Назва')}${materialField(`extras.${index}.material`,'Матеріал елемента')}<div class="field-row">${field(`extras.${index}.thickness`,'Товщина','мм')}${field(`extras.${index}.area`,'Площа перерізу','мм²')}</div></div>`).join('')}<button class="add-extra" data-action="add-extra">${icon('plus')}Додати елемент</button>`;
@@ -518,6 +521,7 @@
     }
     C.set(currentNode,input.dataset.field,input.type === 'checkbox' ? input.checked : input.value);
     if (input.dataset.field === 'fastener.threadStandardId') currentNode.fastener.pitch = '';
+    if (input.dataset.field === 'nut.standardId') currentNode.nut.typeId = 'A';
     // Execution 2 exists only for class A; keep selections compatible.
     if (input.dataset.field === 'washers.execution' && input.value === '2') currentNode.washers.accuracyClass = 'A';
     if (input.dataset.field === 'washers.accuracyClass' && input.value === 'C') currentNode.washers.execution = '1';
