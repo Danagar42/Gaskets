@@ -61,3 +61,11 @@
 - `core.js::nutDimensions` — необов’язковий аргумент `nutType`; підтримує таблиці одного типу і типізовані таблиці.
 - `app.js::standardBox('nuts')` — вибір типу для ГОСТ 9064-75, пояснення різниці між `H` та `l₁`.
 - `scripts/build-standards.py` — валідація обох форматів JSON-гайок і регенерація bundle.
+
+## Графітові прокладки (Б.1–Б.2)
+
+- `standards/gaskets/graphite-annex-b1-b2-unidentified.json` — табличні параметри графітової прокладки, непідтверджене позначення ТУ.
+- `core.js::gasketMediumCoefficient` — відповідний коефіцієнт `m` за назвою робочого середовища.
+- `core.js::gasketExpansionAt` — `α` **тільки** за наявної точної температури.
+- `app.js::gasketReference` — довідкові параметри, попередження про непідтверджене ТУ, реакція на зміни НУЕ/ГВ.
+- `scripts/build-standards.py::validate_gasket` — перевірка одиниць, джерела та числових параметрів.
