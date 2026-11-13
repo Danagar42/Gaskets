@@ -46,6 +46,8 @@
   for (const key of ['recent','favorites']) if (!Array.isArray(workspace.preferences[key])) workspace.preferences[key] = [];
   // Preserve old localStorage workspaces without requiring manual migration.
   workspace.equipment.forEach(equipment => equipment.nodes.forEach(node => {
+    node.fastener.threadStandardId ??= 'gost-24705-2004';
+    node.fastener.pitch ??= '';
     node.nut.standardId ??= 'gost-5915-70';
     node.washers.standardId ??= 'gost-11371-78';
     node.washers.accuracyClass ??= 'A';
@@ -224,7 +226,17 @@
     const statuses = C.sectionStatus(node,materials,standardsDb);
     const operating = `<div class="case-grid">${[['normal','НУЕ'],['hydro','ГВ']].map(([key,label]) => `<div><p class="case-title ${key === 'hydro' ? 'hydro' : ''}"><span></span>${label}</p>${field(`operating.${key}.pressure`,'Тиск','МПа',{positive:false})}${field(`operating.${key}.temperature`,'Температура','°C',{min:-273.15,positive:false})}${selectField(`operating.${key}.medium`,'Середовище',[['','Оберіть…'],...media.map(item => [item,item])])}</div>`).join('')}</div>`;
     const gasket = `<p class="section-intro">${esc(standards.gasket.name)}${standards.gasket.document ? ` · ${esc(standards.gasket.document)}` : ' · характеристики за ТУ'}</p><div class="choice-group" role="group" aria-label="Спосіб задання прокладки"><button data-action="gasket-mode" data-value="ring" aria-pressed="${node.gasket.mode === 'ring'}">Кільцева</button><button data-action="gasket-mode" data-value="area" aria-pressed="${node.gasket.mode === 'area'}">Задати площі</button></div>${field('gasket.thickness','Товщина прокладки','мм')}${node.gasket.mode === 'ring' ? `<div class="field-row">${field('gasket.outerDiameter','Зовнішній Ø','мм')}${field('gasket.innerDiameter','Внутрішній Ø','мм')}</div><label class="check-label"><input type="checkbox" data-field="gasket.hasHoles" ${node.gasket.hasHoles ? 'checked' : ''}>Отвори під кріплення</label>${node.gasket.hasHoles ? field('gasket.holeDiameter','Діаметр отвору','мм',{help:'Кількість отворів дорівнює кількості кріплень.'}) : ''}` : `${field('gasket.effectiveArea','Ефективна площа перерізу Aпр','мм²')}${field('gasket.pressureArea','Площа дії гідростатичного зусилля A','мм²')}<div class="gasket-help">${gasketSketch()}<span>Це дві різні площі. Введіть готові значення для нестандартної форми прокладки.</span></div>`}<p class="small-note">${icon('lock')}Характеристики матеріалу прокладки задаються за ТУ.</p>`;
-    const fastener = `${selectField('fastener.type','Виконання',[['stud','Шпилька в корпусі'],['bolt','Наскрізний болт із гайкою']])}${materialField('fastener.material','Матеріал кріплення')}<div class="field-row">${field('fastener.nominalDiameter','Діаметр різьби','М')}${field('fastener.count','Кількість','шт.',{integer:true})}</div><label class="check-label"><input type="checkbox" data-field="fastener.lubricated" ${node.fastener.lubricated ? 'checked' : ''}>Мащення є</label><p class="small-note">${icon('info')}Крок різьби та похідні розміри визначатимуться за погодженими формулами.</p>`;
+    const threadStandardOptions = Object.values(standardsDb.threads || {}).map(item => [item.id, `${item.document} — ${item.title}`]);
+    const selectedThreadStandard = standardsDb.threads?.[node.fastener.threadStandardId];
+    const nominalThreadDiameter = C.number(node.fastener.nominalDiameter);
+    const threadSize = nominalThreadDiameter === null ? null : selectedThreadStandard?.sizes?.[String(nominalThreadDiameter)];
+    const pitchOptions = threadSize ? [
+      ['', threadSize.coarsePitchMm === null ? 'Оберіть крок різьби…' : `Великий крок (авто): ${displayNumber(threadSize.coarsePitchMm)} мм`],
+      ...threadSize.pitchesMm.map(pitch => [String(pitch), `P = ${displayNumber(pitch)} мм${pitch === threadSize.coarsePitchMm ? ' · великий' : ''}${threadSize.nonPreferredPitchesMm?.includes(pitch) ? ' · нерекомендований' : ''}`])
+    ] : [['','Спочатку вкажіть діаметр з довідника']];
+    const resolvedPitch = C.threadPitch(standardsDb,node.fastener.threadStandardId,nominalThreadDiameter,node.fastener.pitch);
+    const pitchReference = resolvedPitch ? `Крок різьби: P = ${displayNumber(resolvedPitch.pitchMm)} мм${resolvedPitch.automatic ? ' (автоматично)' : ''}${resolvedPitch.nonPreferred ? ' · у ГОСТ 8724 наведений у дужках' : ''}.` : threadSize ? 'Для цього діаметра немає великого кроку. Оберіть допустимий крок вручну.' : 'Крок буде доступний після введення стандартного номінального діаметра.';
+    const fastener = `${selectField('fastener.type','Виконання',[['stud','Шпилька в корпусі'],['bolt','Наскрізний болт із гайкою']])}${materialField('fastener.material','Матеріал кріплення')}<div class="field-row">${field('fastener.nominalDiameter','Діаметр різьби','М')}${field('fastener.count','Кількість','шт.',{integer:true})}</div>${selectField('fastener.threadStandardId','Стандарт різьби',threadStandardOptions)}${selectField('fastener.pitch','Крок різьби P',pitchOptions)}<p class="field-help">${esc(pitchReference)}</p><label class="check-label"><input type="checkbox" data-field="fastener.lubricated" ${node.fastener.lubricated ? 'checked' : ''}>Мащення є</label><p class="small-note">${icon('info')}Великі й дрібні кроки — за ГОСТ 8724-2002; розміри різьби — за ГОСТ 24705-2004. Розрахунок похідних розмірів буде додано окремо.</p>`;
     const connection = `${selectField('connection.kind','Тип з’єднання',[['body-cover','Корпус — кришка'],['flange-flange','Фланець — фланець'],['custom','Інше з’єднання']])}${['sideA','sideB'].map((key,index) => `<div class="side-title"><span class="side-letter">${index ? 'Б' : 'А'}</span>Деталь ${index + 1}</div>${field(`connection.${key}.name`,'Назва деталі')}${materialField(`connection.${key}.material`,`Матеріал деталі ${index + 1}`)}`).join('')}<p class="small-note">${icon('info')}Геометричні розміри фланців додаємо на наступному етапі.</p>`;
     const nutStandardOptions = Object.values(standardsDb.nuts || {}).map(item => [item.id, `${item.document} — ${item.title}`]);
     const nut = `${materialField('nut.material','Матеріал гайки')}${selectField('nut.standardId','Стандарт',nutStandardOptions)}<div class="readonly-line"><span>Номінальний діаметр</span><strong>${node.fastener.nominalDiameter ? `М${displayNumber(node.fastener.nominalDiameter)}` : '—'}</strong></div>${standardBox('nuts')}`;
@@ -486,6 +498,7 @@
     if (input.id === 'material-search') { picker.query = input.value; updateMaterialList(); return; }
     if (!currentNode || !input.dataset.field || input.type === 'checkbox' || input.tagName === 'SELECT') return;
     C.set(currentNode,input.dataset.field,input.value);
+    if (input.dataset.field === 'fastener.nominalDiameter') currentNode.fastener.pitch = '';
     changed();
     if (input.dataset.number) validateInput(input);
     if (input.dataset.field.startsWith('gasket.') && ['outerDiameter','innerDiameter'].some(key => input.dataset.field.endsWith(key))) document.querySelector('[data-field="gasket.innerDiameter"]') && validateInput(document.querySelector('[data-field="gasket.innerDiameter"]'));
@@ -495,6 +508,7 @@
     const input = event.target;
     if (input.matches('[data-list-sort]')) { sortBy = input.value; renderDesktopContent(); return; }
     if (input.id === 'material-select') { picker.materialIndex = Number(input.value); picker.gradeIndex = 0; renderGradePicker(); return; }
+    if (currentNode && input.dataset.field === 'fastener.nominalDiameter') { renderEditor(true); return; }
     if (!currentNode || !input.dataset.field || (input.tagName !== 'SELECT' && input.type !== 'checkbox')) return;
     if (input.dataset.field === 'connection.kind') {
       const old = currentNode.connection.kind;
@@ -503,6 +517,7 @@
       ['sideA','sideB'].forEach((side,index) => { if (currentNode.connection[side].name === previous[index]) currentNode.connection[side].name = next[index]; });
     }
     C.set(currentNode,input.dataset.field,input.type === 'checkbox' ? input.checked : input.value);
+    if (input.dataset.field === 'fastener.threadStandardId') currentNode.fastener.pitch = '';
     // Execution 2 exists only for class A; keep selections compatible.
     if (input.dataset.field === 'washers.execution' && input.value === '2') currentNode.washers.accuracyClass = 'A';
     if (input.dataset.field === 'washers.accuracyClass' && input.value === 'C') currentNode.washers.execution = '1';
