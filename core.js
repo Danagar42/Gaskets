@@ -1,6 +1,7 @@
 (function (root) {
   'use strict';
   const sections = ['operating', 'gasket', 'fastener', 'connection', 'nut', 'washers', 'extras'];
+  const DEFAULT_GASKET_REFERENCE_ID = 'graphite-annex-b1-b2-unidentified';
   const id = () => root.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   const timestamp = () => new Date().toISOString();
   function createEquipment(name, designation = '') {
@@ -10,7 +11,7 @@
     return {
       id: id(), name: name.trim(), createdAt: timestamp(), updatedAt: timestamp(),
       operating: { normal: { pressure: '', temperature: '', medium: '' }, hydro: { pressure: '', temperature: '', medium: '' } },
-      gasket: { mode: 'ring', thickness: '', outerDiameter: '', innerDiameter: '', hasHoles: false, holeDiameter: '', effectiveArea: '', pressureArea: '', referenceId: '' },
+      gasket: { mode: 'ring', thickness: '', outerDiameter: '', innerDiameter: '', hasHoles: false, holeDiameter: '', effectiveArea: '', pressureArea: '', referenceId: DEFAULT_GASKET_REFERENCE_ID },
       fastener: { type: 'stud', nominalDiameter: '', count: '', lubricated: true, material: null, threadStandardId: 'gost-24705-2004', pitch: '' },
       connection: { kind, sideA: { name: kind === 'flange-flange' ? 'Фланець 1' : 'Кришка', material: null }, sideB: { name: kind === 'flange-flange' ? 'Фланець 2' : 'Корпус', material: null } },
       nut: { material: null, standardId: 'gost-5915-70', typeId: 'A' }, washers: { placement: 'none', material: null, standardId: 'gost-11371-78', accuracyClass: 'A', execution: '1' }, extras: []
@@ -141,7 +142,7 @@
     const gasket = node.gasket;
     result.gasket = positive(gasket.thickness) && (gasket.mode === 'area'
       ? positive(gasket.effectiveArea) && positive(gasket.pressureArea)
-      : positive(gasket.outerDiameter) && positive(gasket.innerDiameter) && number(gasket.outerDiameter) > number(gasket.innerDiameter) && (!gasket.hasHoles || positive(gasket.holeDiameter))) && (!gasket.referenceId || !!standardsDb?.gaskets?.[gasket.referenceId]);
+      : positive(gasket.outerDiameter) && positive(gasket.innerDiameter) && number(gasket.outerDiameter) > number(gasket.innerDiameter) && (!gasket.hasHoles || positive(gasket.holeDiameter))) && (!standardsDb || !!standardsDb.gaskets?.[gasket.referenceId || DEFAULT_GASKET_REFERENCE_ID]);
     result.fastener = positive(node.fastener.nominalDiameter) && positive(node.fastener.count) && Number.isInteger(number(node.fastener.count)) && validMaterial(node.fastener.material) && (!standardsDb?.threads || !!threadPitch(standardsDb, node.fastener.threadStandardId || 'gost-24705-2004', node.fastener.nominalDiameter, node.fastener.pitch || ''));
     result.connection = !!node.connection.sideA.name.trim() && !!node.connection.sideB.name.trim() && validMaterial(node.connection.sideA.material) && validMaterial(node.connection.sideB.material);
     result.nut = validMaterial(node.nut.material, ['RTm','RTp']) && (!standardsDb || !!nutDimensions(standardsDb, node.nut.standardId || 'gost-5915-70', node.fastener.nominalDiameter, node.nut.typeId || 'A'));
@@ -171,7 +172,7 @@
         && (node.gasket.referenceId === undefined || isText(node.gasket.referenceId)) && ['threadStandardId','pitch'].every(key => node.fastener[key] === undefined || isText(node.fastener[key])) && ['standardId','typeId'].every(key => node.nut[key] === undefined || isText(node.nut[key])) && ['standardId','accuracyClass','execution'].every(key => node.washers[key] === undefined || isText(node.washers[key])) && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));
     }));
   }
-  const api = { id, timestamp, sections, createEquipment, createNode, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, gasketMediumCoefficient, gasketExpansionAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace };
+  const api = { DEFAULT_GASKET_REFERENCE_ID, id, timestamp, sections, createEquipment, createNode, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, gasketMediumCoefficient, gasketExpansionAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlangeCore = api;
 })(globalThis);

@@ -48,7 +48,7 @@
   workspace.equipment.forEach(equipment => equipment.nodes.forEach(node => {
     node.fastener.threadStandardId ??= 'gost-24705-2004';
     node.fastener.pitch ??= '';
-    node.gasket.referenceId ??= '';
+    node.gasket.referenceId ||= C.DEFAULT_GASKET_REFERENCE_ID;
     node.nut.standardId ??= 'gost-5915-70';
     node.nut.typeId ??= 'A';
     node.washers.standardId ??= 'gost-11371-78';
@@ -216,9 +216,9 @@
     return '';
   }
   function gasketReference() {
-    const referenceId = currentNode.gasket.referenceId;
+    const referenceId = currentNode.gasket.referenceId || C.DEFAULT_GASKET_REFERENCE_ID;
     const record = standardsDb.gaskets?.[referenceId];
-    if (!record) return `<div class="standard-box" data-gasket-reference><span>${icon('file')}Характеристики графітової прокладки</span>Оберіть таблицю параметрів. Дані не призначаються автоматично до ${esc(standards.gasket.name)} без підтвердження ТУ.</div>`;
+    if (!record) return `<div class="standard-box" data-gasket-reference><span>${icon('file')}Характеристики графітової прокладки</span>Нормативні дані недоступні. Перевірте файл standards.bundle.js.</div>`;
     const scalarRows = [
       ['Модуль Юнга Eпр', record.elasticModulusMPa, 'МПа'],
       ['Питомий тиск обтиснення q₀', record.seatingPressureMPa, 'МПа'],
@@ -244,8 +244,7 @@
     const node = currentNode;
     const statuses = C.sectionStatus(node,materials,standardsDb);
     const operating = `<div class="case-grid">${[['normal','НУЕ'],['hydro','ГВ']].map(([key,label]) => `<div><p class="case-title ${key === 'hydro' ? 'hydro' : ''}"><span></span>${label}</p>${field(`operating.${key}.pressure`,'Тиск','МПа',{positive:false})}${field(`operating.${key}.temperature`,'Температура','°C',{min:-273.15,positive:false})}${selectField(`operating.${key}.medium`,'Середовище',[['','Оберіть…'],...media.map(item => [item,item])])}</div>`).join('')}</div>`;
-    const gasketCatalogOptions = [['','Не вибрано — підтвердження ТУ потрібне'], ...Object.values(standardsDb.gaskets || {}).map(item => [item.id, `${item.document || item.name} (джерело не ідентифіковано)`])];
-    const gasket = `<p class="section-intro">${esc(standards.gasket.name)} · нормативні характеристики обираються окремо</p>${selectField('gasket.referenceId','Довідник характеристик',gasketCatalogOptions)}<div class="choice-group" role="group" aria-label="Спосіб задання прокладки"><button data-action="gasket-mode" data-value="ring" aria-pressed="${node.gasket.mode === 'ring'}">Кільцева</button><button data-action="gasket-mode" data-value="area" aria-pressed="${node.gasket.mode === 'area'}">Задати площі</button></div>${field('gasket.thickness','Товщина прокладки','мм')}${node.gasket.mode === 'ring' ? `<div class="field-row">${field('gasket.outerDiameter','Зовнішній Ø','мм')}${field('gasket.innerDiameter','Внутрішній Ø','мм')}</div><label class="check-label"><input type="checkbox" data-field="gasket.hasHoles" ${node.gasket.hasHoles ? 'checked' : ''}>Отвори під кріплення</label>${node.gasket.hasHoles ? field('gasket.holeDiameter','Діаметр отвору','мм',{help:'Кількість отворів дорівнює кількості кріплень.'}) : ''}` : `${field('gasket.effectiveArea','Ефективна площа перерізу Aпр','мм²')}${field('gasket.pressureArea','Площа дії гідростатичного зусилля A','мм²')}<div class="gasket-help">${gasketSketch()}<span>Це дві різні площі. Введіть готові значення для нестандартної форми прокладки.</span></div>`}<p class="small-note">${icon('lock')}Характеристики матеріалу прокладки задаються за ТУ.</p>`;
+    const gasket = `<p class="section-intro">Графітова прокладка · параметри з таблиць Б.1–Б.2 застосовуються автоматично. Номер ТУ уточнюється.</p><div class="choice-group" role="group" aria-label="Спосіб задання прокладки"><button data-action="gasket-mode" data-value="ring" aria-pressed="${node.gasket.mode === 'ring'}">Кільцева</button><button data-action="gasket-mode" data-value="area" aria-pressed="${node.gasket.mode === 'area'}">Задати площі</button></div>${field('gasket.thickness','Товщина прокладки','мм')}${node.gasket.mode === 'ring' ? `<div class="field-row">${field('gasket.outerDiameter','Зовнішній Ø','мм')}${field('gasket.innerDiameter','Внутрішній Ø','мм')}</div><label class="check-label"><input type="checkbox" data-field="gasket.hasHoles" ${node.gasket.hasHoles ? 'checked' : ''}>Отвори під кріплення</label>${node.gasket.hasHoles ? field('gasket.holeDiameter','Діаметр отвору','мм',{help:'Кількість отворів дорівнює кількості кріплень.'}) : ''}` : `${field('gasket.effectiveArea','Ефективна площа перерізу Aпр','мм²')}${field('gasket.pressureArea','Площа дії гідростатичного зусилля A','мм²')}<div class="gasket-help">${gasketSketch()}<span>Це дві різні площі. Введіть готові значення для нестандартної форми прокладки.</span></div>`}<p class="small-note">${icon('lock')}Характеристики матеріалу прокладки задаються за ТУ.</p>`;
     const threadStandardOptions = Object.values(standardsDb.threads || {}).map(item => [item.id, `${item.document} — ${item.title}`]);
     const selectedThreadStandard = standardsDb.threads?.[node.fastener.threadStandardId];
     const nominalThreadDiameter = C.number(node.fastener.nominalDiameter);
@@ -306,7 +305,7 @@
     target.scrollTop = previous?.scroll || 0;
   }
   function updateStatuses() {
-    const p = C.progress(currentNode,materials);
+    const p = C.progress(currentNode,materials,standardsDb);
     document.querySelector('#progress-count').textContent = `${p.done} / ${p.total} блоків`;
     for (const key of C.sections) {
       const summary = document.querySelector(`[data-section="${key}"] summary .section-status`);
