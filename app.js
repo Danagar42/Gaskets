@@ -211,7 +211,7 @@
     main.innerHTML = `<section class="desktop">
       ${equipment ? `<button class="back-button" data-action="home">${icon('arrow')}Робочий стіл</button>` : ''}
       <div class="page-heading"><div class="${equipment ? 'folder-heading' : ''}">${equipment ? folderArt() : ''}<div><h1>${esc(equipment?.name || 'Моє обладнання')}</h1><p>${equipment ? `${esc(equipment.designation || 'Обладнання')} · ${equipment.nodes.length} ${plural(equipment.nodes.length,['вузол','вузли','вузлів'])}` : 'Обладнання та його фланцеві з’єднання в одному просторі.'}</p></div></div><div class="heading-actions">${equipment ? '<button class="button secondary" data-action="excel-export" data-scope="equipment">Excel обладнання</button>' : ''}<button class="button primary" data-action="${equipment ? 'new-node' : 'new-equipment'}">${icon('plus')}${equipment ? 'Створити вузол' : 'Створити обладнання'}</button></div></div>
-      <div class="toolbar"><div class="search">${icon('search')}<input type="search" id="workspace-search" data-list-search placeholder="${equipment ? 'Знайти вузол…' : 'Знайти обладнання…'}" aria-label="${equipment ? 'Пошук вузла' : 'Пошук обладнання'}"></div><div class="toolbar-right"><span class="item-count">${equipment ? 'Вузли обладнання' : `${workspace.equipment.length} ${plural(workspace.equipment.length,['папка','папки','папок'])}`}</span><select aria-label="Сортування" data-list-sort><option value="recent" ${sortBy === 'recent' ? 'selected' : ''}>Спочатку останні</option><option value="name" ${sortBy === 'name' ? 'selected' : ''}>За назвою</option></select></div></div>
+      ${equipment ? '' : `<div class="toolbar"><div class="search">${icon('search')}<input type="search" id="workspace-search" data-list-search placeholder="Знайти обладнання…" aria-label="Пошук обладнання"></div><div class="toolbar-right"><span class="item-count">${workspace.equipment.length} ${plural(workspace.equipment.length,['папка','папки','папок'])}</span><select aria-label="Сортування" data-list-sort><option value="recent" ${sortBy === 'recent' ? 'selected' : ''}>Спочатку останні</option><option value="name" ${sortBy === 'name' ? 'selected' : ''}>За назвою</option></select></div></div>`}
       <div id="desktop-content"></div><p class="workspace-footer">${icon('lock')}Дані зберігаються в цьому браузері на вашому комп’ютері.</p></section>`;
     renderDesktopContent();
   }
@@ -227,10 +227,10 @@
       targetMax: target?.maxNm
     });
 
-    const fCount = C.positive(node.fastener.count) ? `${C.number(node.fastener.count)} × ` : '';
-    const fDiam = C.positive(node.fastener.nominalDiameter) ? `М${displayNumber(node.fastener.nominalDiameter)}` : 'кріплення не вказано';
-    const fType = node.fastener.type === 'bolt' ? 'болт' : 'шпилька';
-    const fastenerTag = `${fCount}${fDiam} (${fType})`;
+    const fType = node.fastener.type === 'bolt' ? 'Болт' : 'Шпилька';
+    const fastenerTag = C.positive(node.fastener.nominalDiameter)
+      ? `${fType} М${displayNumber(node.fastener.nominalDiameter)}`
+      : fType;
 
     let gasketTag = '';
     if (node.gasket.mode === 'ring') {
@@ -245,52 +245,85 @@
       gasketTag = `Складна форма${C.positive(node.gasket.thickness) ? ` × ${displayNumber(node.gasket.thickness)} мм` : ''}`;
     }
 
-    const normalCase = node.operating?.normal;
-    let operatingTag = '';
-    if (C.positive(normalCase?.pressure) || (normalCase?.temperature !== '' && normalCase?.temperature !== undefined && normalCase?.temperature !== null)) {
-      const pPart = C.positive(normalCase.pressure) ? `${displayNumber(normalCase.pressure)} МПа` : '';
-      const tPart = (normalCase.temperature !== '' && normalCase.temperature !== null && normalCase.temperature !== undefined) ? `${displayNumber(normalCase.temperature)} °C` : '';
-      operatingTag = [pPart, tPart].filter(Boolean).join(' · ');
+    function formatCondition(modeData) {
+      if (!modeData) return null;
+      const p = C.positive(modeData.pressure) ? `${displayNumber(modeData.pressure)} МПа` : '';
+      const t = (modeData.temperature !== '' && modeData.temperature !== null && modeData.temperature !== undefined) ? `${displayNumber(modeData.temperature)} °C` : '';
+      if (!p && !t) return null;
+      return [p, t].filter(Boolean).join(' · ');
     }
+    const normalText = formatCondition(node.operating?.normal);
+    const hydroText = formatCondition(node.operating?.hydro);
 
     let torqueHtml = '';
     if (calcMin !== null && calcMax !== null && target) {
-      const overallMin = Math.min(calcMin, target.minNm);
-      const overallMax = Math.max(calcMax, target.maxNm);
-      const span = Math.max(overallMax - overallMin, 1);
-      const pad = span * 0.06;
-      const axisMin = Math.max(0, overallMin - pad);
-      const axisMax = overallMax + pad;
+      const cMin = calcMin, cMax = calcMax;
+      const tMin = target.minNm, tMax = target.maxNm;
+
+      const valMin = Math.min(cMin, tMin);
+      const valMax = Math.max(cMax, tMax);
+      const span = Math.max(valMax - valMin, 1);
+      const pad = Math.max(span * 0.12, 10);
+      const axisMin = Math.max(0, Math.floor(valMin - pad));
+      const axisMax = Math.ceil(valMax + pad);
       const axisTotal = Math.max(axisMax - axisMin, 1);
-      const toPct = val => Math.max(2, Math.min(98, Math.round(((val - axisMin) / axisTotal) * 100)));
 
-      const tLeft = toPct(target.minNm);
-      const tRight = toPct(target.maxNm);
-      const tWidth = Math.max(4, tRight - tLeft);
+      const toPct = val => Math.max(4, Math.min(96, Math.round(((val - axisMin) / axisTotal) * 1000) / 10));
 
-      const cLeft = toPct(calcMin);
-      const cRight = toPct(calcMax);
-      const cWidth = Math.max(4, cRight - cLeft);
+      const tLeft = toPct(tMin);
+      const tRight = toPct(tMax);
+      const tWidth = Math.max(2, tRight - tLeft);
+
+      const cLeft = toPct(cMin);
+      const cRight = toPct(cMax);
+      const cWidth = Math.max(2, cRight - cLeft);
+
+      const oMin = Math.max(cMin, tMin);
+      const oMax = Math.min(cMax, tMax);
+      const hasOverlap = oMin <= oMax;
+      const oLeft = hasOverlap ? toPct(oMin) : 0;
+      const oRight = hasOverlap ? toPct(oMax) : 0;
+      const oWidth = hasOverlap ? Math.max(2, oRight - oLeft) : 0;
+
+      const isCapped = cMax < tMax;
+      const cappedLeft = isCapped ? toPct(cMax) : 0;
+      const cappedWidth = isCapped ? Math.max(2, tRight - cappedLeft) : 0;
+
+      const isLowSeating = cMin > tMin;
+      const lowLeft = isLowSeating ? toPct(tMin) : 0;
+      const lowWidth = isLowSeating ? Math.max(2, toPct(cMin) - lowLeft) : 0;
 
       const statusIcon = comp.status === 'full' ? icon('check') : comp.status === 'partial' ? icon('info') : icon('close');
 
-      torqueHtml = `<div class="node-torque-cell" title="${esc(comp.description)}"><div class="torque-cell-values"><span class="torque-val-group calc" title="Розрахунковий допустимий діапазон затягування"><small>Розрахунок:</small> <strong>${calcMin}–${calcMax}</strong> <span class="unit">Н·м</span></span><span class="torque-val-sep">·</span><span class="torque-val-group target" title="${esc(target.label)}"><small>ТУ:</small> <strong>${target.minNm}–${target.maxNm}</strong> <span class="unit">Н·м</span></span></div><div class="range-bar-wrap"><div class="range-bar-track"><div class="range-span target" style="left:${tLeft}%;width:${tWidth}%;" title="ТУ: ${target.minNm}–${target.maxNm} Н·м"></div><div class="range-span calc ${comp.status}" style="left:${cLeft}%;width:${cWidth}%;" title="Розрахунок: ${calcMin}–${calcMax} Н·м"></div></div></div><div class="torque-badge ${comp.status}">${statusIcon}<span>${esc(comp.label)}</span></div></div>`;
+      torqueHtml = `<div class="node-torque-cell" title="${esc(comp.description)}"><div class="torque-cell-top"><div class="torque-cell-values"><span class="torque-val-group calc" title="Розрахунковий допустимий діапазон"><span class="legend-indicator calc"></span><small>Розрахунок:</small> <strong>${cMin}–${cMax}</strong> <span class="unit">Н·м</span></span><span class="torque-val-sep">·</span><span class="torque-val-group target" title="${esc(target.label)}"><span class="legend-indicator target"></span><small>ТУ:</small> <strong>${tMin}–${tMax}</strong> <span class="unit">Н·м</span></span></div><div class="torque-badge ${comp.status}">${statusIcon}<span>${esc(comp.label)}</span></div></div><div class="torque-ruler-wrapper"><div class="ruler-labels-track top"><span class="ruler-marker-label tu" style="left:${tLeft}%;"><span class="m-txt"><small class="m-sub">ТУ</small>${tMin}</span></span><span class="ruler-marker-label tu" style="left:${tRight}%;"><span class="m-txt"><small class="m-sub">ТУ</small>${tMax}</span></span></div><div class="ruler-scale-track"><div class="ruler-ticks-bg"></div><div class="ruler-zone calc-zone" style="left:${cLeft}%;width:${cWidth}%;" title="Розрахунковий діапазон: ${cMin}–${cMax} Н·м"></div><div class="ruler-zone tu-bracket" style="left:${tLeft}%;width:${tWidth}%;" title="Норматив за ТУ: ${tMin}–${tMax} Н·м"></div>${hasOverlap ? `<div class="ruler-zone overlap-zone ${comp.status}" style="left:${oLeft}%;width:${oWidth}%;" title="Робочий коридор затягування: ${oMin}–${oMax} Н·м"></div>` : ''}${isCapped ? `<div class="ruler-zone capped-zone" style="left:${cappedLeft}%;width:${cappedWidth}%;" title="Перевищує розрахункову міцність: затяг > ${cMax} Н·м заборонено"></div>` : ''}${isLowSeating ? `<div class="ruler-zone capped-zone low" style="left:${lowLeft}%;width:${lowWidth}%;" title="Недостатній затяг для герметичності (потрібно >= ${cMin} Н·м)"></div>` : ''}<div class="ruler-axis-line"></div><div class="ruler-tick calc" style="left:${cLeft}%;" title="Мін. розрахунковий: ${cMin} Н·м"></div><div class="ruler-tick tu" style="left:${tLeft}%;" title="Мін. за ТУ: ${tMin} Н·м"></div><div class="ruler-tick tu" style="left:${tRight}%;" title="Макс. за ТУ: ${tMax} Н·м"></div><div class="ruler-tick calc" style="left:${cRight}%;" title="Макс. розрахунковий: ${cMax} Н·м"></div></div><div class="ruler-labels-track bottom"><span class="ruler-marker-label calc" style="left:${cLeft}%;"><span class="m-txt"><small class="m-sub">Розр</small>${cMin}</span></span><span class="ruler-marker-label calc" style="left:${cRight}%;"><span class="m-txt"><small class="m-sub">Розр</small>${cMax}</span></span></div></div></div>`;
     } else if (calcMin !== null && calcMax !== null) {
-      torqueHtml = `<div class="node-torque-cell"><div class="torque-cell-values"><span class="torque-val-group calc"><small>Розрахунок:</small> <strong>${calcMin}–${calcMax}</strong> <span class="unit">Н·м</span></span></div><div class="torque-badge neutral"><span>ТУ не вказано</span></div></div>`;
+      const cMin = calcMin, cMax = calcMax;
+      const pad = Math.max((cMax - cMin) * 0.15, 10);
+      const axisMin = Math.max(0, Math.floor(cMin - pad));
+      const axisMax = Math.ceil(cMax + pad);
+      const axisTotal = Math.max(axisMax - axisMin, 1);
+      const toPct = val => Math.max(4, Math.min(96, Math.round(((val - axisMin) / axisTotal) * 1000) / 10));
+      const cLeft = toPct(cMin);
+      const cRight = toPct(cMax);
+      const cWidth = Math.max(2, cRight - cLeft);
+
+      torqueHtml = `<div class="node-torque-cell"><div class="torque-cell-top"><div class="torque-cell-values"><span class="torque-val-group calc"><span class="legend-indicator calc"></span><small>Розрахунок:</small> <strong>${cMin}–${cMax}</strong> <span class="unit">Н·м</span></span></div><div class="torque-badge neutral"><span>ТУ не вказано</span></div></div><div class="torque-ruler-wrapper"><div class="ruler-labels-track top"></div><div class="ruler-scale-track"><div class="ruler-ticks-bg"></div><div class="ruler-zone calc-zone" style="left:${cLeft}%;width:${cWidth}%;"></div><div class="ruler-axis-line"></div><div class="ruler-tick calc" style="left:${cLeft}%;"></div><div class="ruler-tick calc" style="left:${cRight}%;"></div></div><div class="ruler-labels-track bottom"><span class="ruler-marker-label calc" style="left:${cLeft}%;"><span class="m-txt"><small class="m-sub">Розр</small>${cMin}</span></span><span class="ruler-marker-label calc" style="left:${cRight}%;"><span class="m-txt"><small class="m-sub">Розр</small>${cMax}</span></span></div></div></div>`;
     } else {
       const status = C.sectionStatus(node, materials, standardsDb);
       const missingNames = Object.entries(status).filter(([_, ok]) => !ok).map(([key]) => sectionNames[key] || key);
       const targetText = target ? `ТУ: ${target.minNm}–${target.maxNm} Н·м` : '';
-      torqueHtml = `<div class="node-torque-cell pending"><div class="torque-badge neutral">${icon('info')}<span>Потрібні дані</span></div>${targetText ? `<small class="torque-expected-target">${esc(targetText)}</small>` : ''}<small class="torque-missing-hint" title="Незаповнені розділи: ${esc(missingNames.join(', '))}">Бракує: ${esc(missingNames.slice(0, 2).join(', '))}${missingNames.length > 2 ? '…' : ''}</small></div>`;
+      torqueHtml = `<div class="node-torque-cell pending"><div class="torque-cell-top"><div class="torque-badge neutral">${icon('info')}<span>Потрібні дані</span></div>${targetText ? `<small class="torque-expected-target">${esc(targetText)}</small>` : ''}</div><small class="torque-missing-hint" title="Незаповнені розділи: ${esc(missingNames.join(', '))}">Бракує: ${esc(missingNames.slice(0, 2).join(', '))}${missingNames.length > 2 ? '…' : ''}</small></div>`;
     }
 
-    return `<div class="node-row"><button class="node-open" data-action="open-node" data-id="${node.id}"><span class="file-icon">${icon('file')}</span><span class="node-title-group"><strong>${esc(node.name)}</strong><div class="node-tags-row"><span class="node-tag">${esc(fastenerTag)}</span><span class="node-tag">${esc(gasketTag)}</span>${operatingTag ? `<span class="node-tag">${esc(operatingTag)}</span>` : ''}</div></span></button><span class="node-kind">${kindName(node.connection.kind)}</span>${torqueHtml}<span class="node-date">${date(node.updatedAt)}</span><div class="card-actions"><button class="icon-button" data-action="edit-node" data-id="${node.id}" aria-label="Перейменувати ${esc(node.name)}" title="Перейменувати">${icon('edit')}</button><button class="icon-button" data-action="copy-node" data-id="${node.id}" aria-label="Дублювати ${esc(node.name)}" title="Дублювати">${icon('copy')}</button><button class="icon-button danger" data-action="delete-node" data-id="${node.id}" aria-label="Видалити ${esc(node.name)}" title="Видалити">${icon('trash')}</button></div></div>`;
+    return `<div class="node-row"><button class="node-open" data-action="open-node" data-id="${node.id}"><span class="file-icon">${icon('file')}</span><span class="node-title-group"><strong>${esc(node.name)}</strong><div class="node-tags-row"><span class="node-tag fastener-tag">${esc(fastenerTag)}</span><span class="node-tag gasket-tag">${esc(gasketTag)}</span>${normalText ? `<span class="node-tag op-tag nue" title="Нормальні умови експлуатації"><strong class="op-k">НУЕ:</strong> ${esc(normalText)}</span>` : ''}${hydroText ? `<span class="node-tag op-tag hv" title="Гідровипробування"><strong class="op-k">ГВ:</strong> ${esc(hydroText)}</span>` : ''}</div></span></button><span class="node-kind">${kindName(node.connection.kind)}</span>${torqueHtml}<span class="node-date">${date(node.updatedAt)}</span><div class="card-actions"><button class="icon-button" data-action="edit-node" data-id="${node.id}" aria-label="Перейменувати ${esc(node.name)}" title="Перейменувати">${icon('edit')}</button><button class="icon-button" data-action="copy-node" data-id="${node.id}" aria-label="Дублювати ${esc(node.name)}" title="Дублювати">${icon('copy')}</button><button class="icon-button danger" data-action="delete-node" data-id="${node.id}" aria-label="Видалити ${esc(node.name)}" title="Видалити">${icon('trash')}</button></div></div>`;
   }
   function renderDesktopContent() {
     const target = document.querySelector('#desktop-content');
     if (!target) return;
     const source = currentEquipment ? currentEquipment.nodes : workspace.equipment;
-    const filtered = source.filter(item => C.canonical(`${item.name} ${item.designation || ''}`).includes(C.canonical(searchText))).sort((a,b) => sortBy === 'name' ? a.name.localeCompare(b.name,'uk',{numeric:true}) : String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    const filtered = currentEquipment
+      ? [...source].sort((a,b) => a.name.localeCompare(b.name,'uk',{numeric:true}))
+      : source.filter(item => C.canonical(`${item.name} ${item.designation || ''}`).includes(C.canonical(searchText))).sort((a,b) => sortBy === 'name' ? a.name.localeCompare(b.name,'uk',{numeric:true}) : String(b.updatedAt).localeCompare(String(a.updatedAt)));
     if (!source.length) {
       target.innerHTML = `<div class="empty-workspace"><div class="empty-copy"><h2>${currentEquipment ? 'Додайте перший вузол' : 'Створіть першу папку обладнання'}</h2><p>${currentEquipment ? 'Кожне з’єднання має власні параметри роботи, прокладку та елементи кріплення.' : 'Додайте насос, апарат або трубопровід. Усередині зберігатимуться анкети його вузлів.'}</p><button class="button primary" data-action="${currentEquipment ? 'new-node' : 'new-equipment'}">${icon('plus')}${currentEquipment ? 'Створити вузол' : 'Створити обладнання'}</button></div><div class="empty-illustration">${emptyArt()}</div></div>`;
       return;
@@ -780,7 +813,8 @@
       clone.extras.forEach(item => { item.id = C.id(); });
       currentEquipment.nodes.push(clone); currentEquipment.updatedAt = C.timestamp();
       save(); renderDesktop();
-      document.querySelector('#workspace-search').value = searchText;
+      const searchEl = document.querySelector('#workspace-search');
+      if (searchEl) searchEl.value = searchText;
       toast('Копію вузла створено.');
     } else if (action === 'gasket-mode') {
       currentNode.gasket.mode = button.dataset.value; changed(); renderEditor(true);
