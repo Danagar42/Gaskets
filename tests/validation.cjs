@@ -46,6 +46,14 @@ assert(report(node).errors['extras.0.thickness']);assert(report(node).missing['e
 const empty=report(C.createNode('Порожній'));
 assert.deepEqual(empty.errors,{});assert(empty.missing['operating.normal.pressure']);
 
+node=structuredClone(base);
+node.fastener.targetTorqueMinNm='500';node.fastener.targetTorqueMaxNm='300';
+assert(report(node).errors['fastener.targetTorqueMaxNm']);
+node.fastener.targetTorqueMinNm='-50';
+assert(report(node).errors['fastener.targetTorqueMinNm']);
+node.fastener.targetTorqueMinNm='200';node.fastener.targetTorqueMaxNm='300';
+assert(!report(node).errors['fastener.targetTorqueMinNm']&&!report(node).errors['fastener.targetTorqueMaxNm']);
+
 const materials=vm.runInNewContext(fs.readFileSync(path.join(root,'data.js'),'utf8')+';materialsDB');
 node=structuredClone(fixture.nodes[1].application.node);
 assert(G.nodeLimits(node,materials,catalog).rangePassed);

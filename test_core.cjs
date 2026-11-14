@@ -234,5 +234,45 @@ node.gasket.referenceId = 'unknown-tu';
 assert.equal(C.sectionStatus(node,db,catalog).gasket,false);
 node.gasket.referenceId = '';
 assert.equal(C.sectionStatus(node,db,catalog).gasket,true,'Old workspaces with empty gasket source use the only available reference');
+
+// Нормативні моменти за ТУ (Таблиця 1) та порівняння діапазонів
+const m24Torque = C.standardTorque(catalog, '24');
+assert.deepEqual(m24Torque, { tableId: 'universal-table-1', title: 'Таблиця 1 — Допустимі моменти затягування кріпильних виробів', nominalDiameterMm: 24, minNm: 320, maxNm: 360 });
+assert.equal(C.standardTorque(catalog, '99'), null);
+assert.equal(C.standardTorque(catalog, ''), null);
+
+node.fastener.nominalDiameter = '24';
+node.fastener.targetTorqueMinNm = '';
+node.fastener.targetTorqueMaxNm = '';
+assert.equal(C.effectiveTargetTorque(node, catalog)?.source, 'standard');
+assert.equal(C.effectiveTargetTorque(node, catalog)?.minNm, 320);
+assert.equal(C.effectiveTargetTorque(node, catalog)?.maxNm, 360);
+
+node.fastener.targetTorqueMinNm = '250';
+node.fastener.targetTorqueMaxNm = '350';
+assert.equal(C.effectiveTargetTorque(node, catalog)?.source, 'custom');
+assert.equal(C.effectiveTargetTorque(node, catalog)?.minNm, 250);
+assert.equal(C.effectiveTargetTorque(node, catalog)?.maxNm, 350);
+
+// Повне перекриття: розрахунок 126..374 покриває ТУ 320..360
+const compFull = C.compareTorqueRanges({ calculatedMin: 126, calculatedMax: 374, targetMin: 320, targetMax: 360 });
+assert.equal(compFull.status, 'full');
+assert.equal(compFull.overlapMin, 320);
+assert.equal(compFull.overlapMax, 360);
+
+// Часткове перекриття: розрахунок 50..250 проти ТУ 200..300 (коридор 200..250)
+const compPartial = C.compareTorqueRanges({ calculatedMin: 50, calculatedMax: 250, targetMin: 200, targetMax: 300 });
+assert.equal(compPartial.status, 'partial');
+assert.equal(compPartial.overlapMin, 200);
+assert.equal(compPartial.overlapMax, 250);
+assert(compPartial.description.includes('250'));
+
+// Не перекриває: розрахунок 50..150 проти ТУ 200..300
+const compNone = C.compareTorqueRanges({ calculatedMin: 50, calculatedMax: 150, targetMin: 200, targetMax: 300 });
+assert.equal(compNone.status, 'none');
+
+// Неповні дані
+assert.equal(C.compareTorqueRanges({ calculatedMin: null, calculatedMax: 250, targetMin: 200, targetMax: 300 }).status, 'pending');
+
 assert.equal(C.validateWorkspace(JSON.parse(JSON.stringify(state))),true);
-console.log('OK: матеріали, шайби, гайки, різьба до М60 та графітові прокладки Б.1–Б.2.');
+console.log('OK: матеріали, шайби, гайки, різьба до М60, ТУ затягування та графітові прокладки Б.1–Б.2.');

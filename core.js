@@ -12,7 +12,7 @@
       id: id(), name: name.trim(), createdAt: timestamp(), updatedAt: timestamp(),
       operating: { normal: { pressure: '', temperature: '', medium: '' }, hydro: { pressure: '', temperature: '', medium: '' } },
       gasket: { mode: 'ring', thickness: '', outerDiameter: '', innerDiameter: '', hasHoles: false, holeDiameter: '', effectiveArea: '', pressureArea: '', referenceId: DEFAULT_GASKET_REFERENCE_ID },
-      fastener: { type: 'stud', nominalDiameter: '', count: '', lubricated: true, material: null, threadStandardId: 'gost-24705-2004', pitch: '', axialHoleDiameter:'0', torqueNm:'' },
+      fastener: { type: 'stud', nominalDiameter: '', count: '', lubricated: true, material: null, threadStandardId: 'gost-24705-2004', pitch: '', axialHoleDiameter:'0', torqueNm:'', targetTorqueMinNm:'', targetTorqueMaxNm:'' },
       connection: { kind, sideA: { name: kind === 'flange-flange' ? 'Фланець 1' : 'Кришка', material: null, height:'', area:'' }, sideB: { name: kind === 'flange-flange' ? 'Фланець 2' : 'Корпус', material: null, height:'', area:'' } },
       nut: { material: null, standardId: 'gost-5915-70', typeId: 'A' }, washers: { placement: 'none', material: null, standardId: 'gost-11371-78', accuracyClass: 'A', execution: '1' }, extras: [],
       flanges:{sideA:createFlange(),sideB:createFlange()}
@@ -139,6 +139,73 @@
     if (typeof inner !== 'number' || inner <= 0 || !positive(row?.outerDiameterMm) || !positive(row?.thicknessMm)) return null;
     return { document: standard.document, nominalDiameterMm: diameter, accuracyClass, execution, innerDiameterMm: inner, outerDiameterMm: row.outerDiameterMm, thicknessMm: row.thicknessMm };
   }
+  function standardTorque(catalog, nominalDiameter, standardId = 'universal-table-1') {
+    const table = catalog?.torques?.[standardId];
+    const d = number(nominalDiameter);
+    if (!table || d === null) return null;
+    const row = table.sizes?.[String(d)];
+    if (!row || !positive(row.minNm) || !positive(row.maxNm)) return null;
+    return { tableId: standardId, title: table.title, nominalDiameterMm: d, minNm: row.minNm, maxNm: row.maxNm };
+  }
+  function effectiveTargetTorque(node, catalog) {
+    const minRaw = node?.fastener?.targetTorqueMinNm, maxRaw = node?.fastener?.targetTorqueMaxNm;
+    const customMin = positive(minRaw) ? number(minRaw) : null;
+    const customMax = positive(maxRaw) ? number(maxRaw) : null;
+    if (customMin !== null && customMax !== null && customMin <= customMax) {
+      return { minNm: customMin, maxNm: customMax, source: 'custom', label: 'Паспорт / ТУ (задано)' };
+    }
+    const std = standardTorque(catalog, node?.fastener?.nominalDiameter);
+    if (std) return { ...std, source: 'standard', label: `Стандарт (${std.title})` };
+    return null;
+  }
+  function compareTorqueRanges({ calculatedMin, calculatedMax, targetMin, targetMax }) {
+    const cMin = number(calculatedMin), cMax = number(calculatedMax);
+    const tMin = number(targetMin), tMax = number(targetMax);
+    if (cMin === null || cMax === null || cMin > cMax || tMin === null || tMax === null || tMin > tMax) {
+      return { status: 'pending', overlapMin: null, overlapMax: null, reason: 'missing-data', label: 'Немає даних' };
+    }
+    const overlapMin = Math.max(cMin, tMin);
+    const overlapMax = Math.min(cMax, tMax);
+    if (overlapMin <= overlapMax) {
+      if (cMin <= tMin && cMax >= tMax) {
+        return {
+          status: 'full',
+          overlapMin,
+          overlapMax,
+          label: 'Повністю перекриває ТУ',
+          description: `Розрахунковий діапазон [${cMin}–${cMax} Н·м] повністю покриває нормативні межі ТУ [${tMin}–${tMax} Н·м].`
+        };
+      }
+      let reason = '';
+      if (cMin > tMin && cMax < tMax) {
+        reason = `Робочий коридор [${overlapMin}–${overlapMax} Н·м] звужений: мінімум вищий за ТУ (герметичність), а максимум обмежений міцністю.`;
+      } else if (cMin > tMin) {
+        reason = `Мінімальний розрахунковий затяг ${cMin} Н·м вищий за ТУ (${tMin} Н·м) для забезпечення герметичності.`;
+      } else {
+        reason = `Максимальний розрахунковий затяг ${cMax} Н·м нижчий за ТУ (${tMax} Н·м) через міцність вузла.`;
+      }
+      return {
+        status: 'partial',
+        overlapMin,
+        overlapMax,
+        label: `Частково: ${overlapMin}–${overlapMax} Н·м`,
+        description: reason
+      };
+    }
+    let reason = '';
+    if (cMax < tMin) {
+      reason = `Максимально допустимий затяг (${cMax} Н·м) нижчий за мінімальну вимогу ТУ (${tMin} Н·м).`;
+    } else {
+      reason = `Мінімальний момент для герметичності (${cMin} Н·м) перевищує максимум за ТУ (${tMax} Н·м).`;
+    }
+    return {
+      status: 'none',
+      overlapMin: null,
+      overlapMax: null,
+      label: 'Не перекриває ТУ',
+      description: reason
+    };
+  }
   function validateInputs(node, catalog) {
     const errors = {}, missing = {};
     const fail = (path,message) => { errors[path] ||= message; };
@@ -166,6 +233,11 @@
     numeric('gasket.thickness');
     const d = numeric('fastener.nominalDiameter'), count = numeric('fastener.count',{integer:true});
     numeric('fastener.torqueNm',{zero:true,optional:true});
+    const targetMin = numeric('fastener.targetTorqueMinNm',{zero:true,optional:true});
+    const targetMax = numeric('fastener.targetTorqueMaxNm',{zero:true,optional:true});
+    if (targetMin !== null && targetMax !== null && targetMin > targetMax) {
+      fail('fastener.targetTorqueMaxNm','Максимальний момент ТУ має бути не меншим за мінімальний.');
+    }
     const axial = numeric('fastener.axialHoleDiameter',{zero:true});
     let pitch = null;
     if (d !== null && catalog?.threads) {
@@ -289,10 +361,10 @@
       return ['normal','hydro'].every(key => node.operating[key] && ['pressure','temperature','medium'].every(field => isText(node.operating[key][field]))) && typeof node.gasket.hasHoles === 'boolean' && typeof node.fastener.lubricated === 'boolean'
         && ['fastener.material','connection.sideA.material','connection.sideB.material','nut.material','washers.material'].every(path => isRef(get(node, path)))
         && ['sideA','sideB'].every(key => ['height','area'].every(field => node.connection[key][field] === undefined || isText(node.connection[key][field])))
-        && (node.gasket.referenceId === undefined || isText(node.gasket.referenceId)) && ['threadStandardId','pitch','axialHoleDiameter','torqueNm'].every(key => node.fastener[key] === undefined || isText(node.fastener[key])) && ['standardId','typeId','threadedHeight'].every(key => node.nut[key] === undefined || isText(node.nut[key])) && ['standardId','accuracyClass','execution'].every(key => node.washers[key] === undefined || isText(node.washers[key])) && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));
+        && (node.gasket.referenceId === undefined || isText(node.gasket.referenceId)) && ['threadStandardId','pitch','axialHoleDiameter','torqueNm','targetTorqueMinNm','targetTorqueMaxNm'].every(key => node.fastener[key] === undefined || isText(node.fastener[key])) && ['standardId','typeId','threadedHeight'].every(key => node.nut[key] === undefined || isText(node.nut[key])) && ['standardId','accuracyClass','execution'].every(key => node.washers[key] === undefined || isText(node.washers[key])) && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));
     }));
   }
-  const api = { DEFAULT_GASKET_REFERENCE_ID, id, timestamp, sections, createEquipment, createNode, createFlange, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, gasketMediumCoefficient, gasketExpansionAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace, validateInputs };
+  const api = { DEFAULT_GASKET_REFERENCE_ID, id, timestamp, sections, createEquipment, createNode, createFlange, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, standardTorque, effectiveTargetTorque, compareTorqueRanges, gasketMediumCoefficient, gasketExpansionAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace, validateInputs };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlangeCore = api;
 })(globalThis);

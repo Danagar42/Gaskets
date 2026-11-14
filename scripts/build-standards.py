@@ -152,9 +152,32 @@ def validate_gasket(record, filename):
         raise ValueError(f"{filename}: expansion unit mismatch")
 
 
+def validate_torque(record, filename):
+    if record.get("id") != filename.stem or not record.get("title"):
+        raise ValueError(f"{filename}: missing torque table identifier/title")
+    if record.get("unit") != "N*m":
+        raise ValueError(f"{filename}: torque unit must be N*m")
+    sizes = record.get("sizes", {})
+    if not sizes:
+        raise ValueError(f"{filename}: empty sizes map")
+    for d, row in sizes.items():
+        nominal = float(d)
+        if not math.isfinite(nominal) or nominal <= 0:
+            raise ValueError(f"{filename}: invalid nominal diameter {d}")
+        min_nm, max_nm = row.get("minNm"), row.get("maxNm")
+        if type(min_nm) not in (int, float) or type(max_nm) not in (int, float) or min_nm <= 0 or max_nm <= 0 or min_nm > max_nm:
+            raise ValueError(f"{filename}: invalid minNm/maxNm for M{d}")
+
+
 def main():
-    catalog = {"version": 1, "washers": {}, "nuts": {}, "threads": {}, "gaskets": {}}
-    for category, validate in (("washers", validate_washer), ("nuts", validate_nut), ("threads", validate_thread), ("gaskets", validate_gasket)):
+    catalog = {"version": 1, "washers": {}, "nuts": {}, "threads": {}, "gaskets": {}, "torques": {}}
+    for category, validate in (
+        ("washers", validate_washer),
+        ("nuts", validate_nut),
+        ("threads", validate_thread),
+        ("gaskets", validate_gasket),
+        ("torques", validate_torque),
+    ):
         for filename in sorted((SOURCE / category).glob("*.json")):
             record = json.loads(filename.read_text(encoding="utf-8"))
             validate(record, filename)
@@ -167,7 +190,7 @@ def main():
         + "globalThis.FlangeStandardsDB = " + body + ";\n",
         encoding="utf-8",
     )
-    print(f"Built {OUTPUT.name}: {len(catalog['washers'])} washers, {len(catalog['nuts'])} nuts, {len(catalog['threads'])} threads, {len(catalog['gaskets'])} gaskets")
+    print(f"Built {OUTPUT.name}: {len(catalog['washers'])} washers, {len(catalog['nuts'])} nuts, {len(catalog['threads'])} threads, {len(catalog['gaskets'])} gaskets, {len(catalog['torques'])} torque tables")
 
 
 if __name__ == "__main__":

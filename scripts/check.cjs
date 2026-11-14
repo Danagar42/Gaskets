@@ -32,8 +32,8 @@ check('синтаксис JavaScript',() => {
 check('автономний каталог відповідає standards/**/*.json',() => {
   const context = vm.createContext({});
   vm.runInContext(read('standards.bundle.js'),context);
-  const expected = {version:1,washers:{},nuts:{},threads:{},gaskets:{}};
-  for (const category of ['washers','nuts','threads','gaskets']) {
+  const expected = {version:1,washers:{},nuts:{},threads:{},gaskets:{},torques:{}};
+  for (const category of ['washers','nuts','threads','gaskets','torques']) {
     for (const file of files(path.join('standards',category),'.json')) {
       const record = JSON.parse(read(file));
       assert.equal(record.id,path.basename(file,'.json'),`${file}: ID має відповідати назві файла`);
