@@ -218,7 +218,8 @@
       const value = number(raw);
       if (value === null) fail(path,'Вкажіть число без одиниць вимірювання. Для дробової частини використовуйте кому або крапку.');
       else if (value < min || (!zero && value === 0)) fail(path,min < 0 ? `Температура має бути не нижчою за ${min} °C.` : zero ? 'Значення не може бути від’ємним.' : 'Значення має бути більшим за нуль.');
-      else if (integer && !Number.isSafeInteger(value)) fail(path,'Кількість має бути додатним цілим числом у межах точної числової точності.');
+      else if (integer && !Number.isInteger(value)) fail(path,'Кількість має бути додатним цілим числом.');
+      else if (integer && !Number.isSafeInteger(value)) fail(path,'Завелика кількість кріплень для точного розрахунку.');
       return errors[path] ? null : value;
     }
     for (const mode of ['normal','hydro']) {

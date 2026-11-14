@@ -616,7 +616,8 @@
     const notice = document.querySelector('#input-validation');
     if (notice) {
       notice.hidden = !count;
-      notice.innerHTML = count ? `<span>Помилки у полях: ${count}.</span><button data-action="first-input-error">Перейти до першої</button>` : '';
+      if (!notice.firstElementChild) notice.innerHTML = '<span></span><button data-action="first-input-error">Перейти до першої</button>';
+      notice.querySelector('span').textContent = `Помилки у полях: ${count}.`;
     }
   }
 
@@ -870,7 +871,7 @@
     changed(); renderEditor(true);
   });
   document.addEventListener('focusout',event => {
-    if (!currentNode || !event.target.dataset.field) return;
+    if (!currentNode || !event.target.isConnected || !event.target.dataset.field) return;
     touchedFields.add(`${currentNode.id}:${event.target.dataset.field}`);
     updateValidation();
   });
