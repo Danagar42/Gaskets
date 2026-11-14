@@ -356,6 +356,9 @@
     const query = C.canonical(searchText);
     const parentId = currentFolder?.id ?? null;
     const rows = [];
+    const childCounts = new Map();
+    for (const folder of workspace.folders) childCounts.set(folder.parentId,(childCounts.get(folder.parentId) || 0) + 1);
+    for (const item of workspace.equipment) childCounts.set(item.folderId,(childCounts.get(item.folderId) || 0) + 1);
     for (const [items,type] of [[workspace.folders,'folder'],[workspace.equipment,'equipment']]) {
       const isFolder = type === 'folder';
       const matches = items.filter(item => query
@@ -365,9 +368,10 @@
       for (const item of matches) {
         const parent = foldersById.get(isFolder ? item.parentId : item.folderId);
         const path = query ? ['Робочий стіл',...folderPath(parent).map(folder => folder.name)].join(' / ') : '';
-        const detail = isFolder ? 'Папка' : `${item.nodes.length} ${plural(item.nodes.length,['вузол','вузли','вузлів'])}`;
+        const count = isFolder ? childCounts.get(item.id) || 0 : item.nodes.length;
+        const detail = `${count} ${plural(count,isFolder ? ['елемент','елементи','елементів'] : ['вузол','вузли','вузлів'])}`;
         const action = (verb,label,glyph) => `<button class="icon-button ${verb === 'delete' ? 'danger' : ''}" data-action="${verb}-${type}" data-id="${item.id}" title="${label}" aria-label="${label} · ${esc(item.name)}">${icon(glyph)}</button>`;
-        rows.push(`<tr><td><button class="register-open" data-action="open-${type}" data-id="${item.id}"><span class="register-icon ${type}">${icon(isFolder ? 'folder' : 'gasket')}</span><span><strong>${esc(item.name)}</strong>${path ? `<small>${esc(path)}</small>` : ''}</span></button></td><td>${esc(item.designation || '—')}</td><td>${detail}</td><td>${date(item.updatedAt)}</td><td><div class="card-actions">${action('edit','Редагувати','edit')}${action('move','Перемістити','move')}${action('delete','Видалити','trash')}</div></td></tr>`);
+        rows.push(`<tr><td><button class="register-open" data-action="open-${type}" data-id="${item.id}" aria-label="Відкрити ${isFolder ? 'папку' : 'обладнання'} ${esc(item.name)}"><span class="register-icon ${type}">${icon(isFolder ? 'folder' : 'gasket')}</span><span><strong>${esc(item.name)}</strong>${path ? `<small>${esc(path)}</small>` : ''}</span></button></td><td>${esc(item.designation || '—')}</td><td>${detail}</td><td>${date(item.updatedAt)}</td><td><div class="card-actions">${action('edit','Редагувати','edit')}${action('move','Перемістити','move')}${action('delete','Видалити','trash')}</div></td></tr>`);
       }
     }
     if (rows.length) {
