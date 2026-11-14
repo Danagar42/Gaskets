@@ -12,6 +12,10 @@
   <script src="standards.js" defer></script>
   <script src="standards.bundle.js" defer></script>
   <script src="core.js" defer></script>
+  <script src="calculations.js" defer></script>
+  <script src="project.js" defer></script>
+  <script src="excel-template.bundle.js" defer></script>
+  <script src="excel-export.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -22,11 +26,13 @@
       <span>Прокладки<small>Робочий простір</small></span>
     </button>
     <nav id="breadcrumbs" class="breadcrumbs" aria-label="Навігація"></nav>
+    <button class="button secondary project-file-button" data-action="project-file">Файл проєкту</button>
     <div class="header-status"><span class="status-dot"></span><span id="save-status" role="status">Персональний простір</span></div>
   </header>
   <main id="main" tabindex="-1"></main>
   <dialog id="edit-dialog" class="dialog edit-dialog" aria-labelledby="edit-title"></dialog>
   <dialog id="material-dialog" class="dialog material-dialog" aria-labelledby="material-title"></dialog>
+  <dialog id="file-dialog" class="dialog edit-dialog" aria-labelledby="file-title"></dialog>
   <div id="toast" class="toast" role="status" hidden></div>
   <noscript>Для роботи опитувальника потрібно увімкнути JavaScript.</noscript>
 </body>

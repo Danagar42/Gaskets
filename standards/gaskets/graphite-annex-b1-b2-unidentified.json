@@ -60,5 +60,6 @@
     "350": 1.5,
     "400": 1.61
   },
-  "expansionTemperatureSelection": "exact_only"
+  "expansionTemperatureSelection": "ceiling_available",
+  "expansionSelectionNote": "Погоджене користувачем правило застосунку: точна або найближча вища доступна таблична температура. Інтерполяція та підстановка вище останньої температури не застосовуються."
 }

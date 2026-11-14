@@ -142,8 +142,8 @@ def validate_gasket(record, filename):
     if len(set(labels)) != len(labels):
         raise ValueError(f"{filename}: duplicate medium categories")
     values = record.get("expansionMicroPerCByTemperatureC", {})
-    if not values or record.get("expansionTemperatureSelection") != "exact_only":
-        raise ValueError(f"{filename}: alpha must use explicit table values with exact lookup")
+    if not values or record.get("expansionTemperatureSelection") != "ceiling_available":
+        raise ValueError(f"{filename}: alpha must use the approved nearest-higher table selection")
     for temp, alpha in values.items():
         t = float(temp)
         if not math.isfinite(t) or type(alpha) not in (int, float) or not math.isfinite(alpha) or alpha <= 0:
