@@ -17,6 +17,32 @@ assert.notEqual(combined.equipment[0].nodes[0].id,combined.equipment[1].nodes[0]
 assert.notEqual(combined.equipment[0].nodes[0].extras[0].id,combined.equipment[1].nodes[0].extras[0].id);
 assert.equal(JSON.stringify(original),before);
 assert.equal(P.combine(original,restored,'replace').equipment.length,1);
+assert.deepEqual(restored.folders,[]);
+const nested={...original,folders:[
+  {id:'pumps',name:'Насоси',parentId:'unit'},
+  {id:'station',name:'ХАЕС',parentId:null},
+  {id:'unit',name:'4 Блок',parentId:'station'},
+],equipment:[{...equipment,folderId:'pumps'}]};
+const backup=P.parse(P.serialize(nested));
+assert.deepEqual(backup.folders,nested.folders);
+const copied=P.combine(nested,backup,'add');
+assert(C.validateWorkspace(copied));
+assert.deepEqual(copied.equipment[1].nodes[0].fastener,node.fastener);
+let parent=copied.equipment[1].folderId;
+for (const id of ['pumps','unit','station']) {
+  const folder=nested.folders.find(item=>item.id===id);
+  const copy=copied.folders.find(item=>item.id===parent);
+  assert.notEqual(copy.id,folder.id);
+  assert.equal(copy.name,folder.name);
+  parent=copy.parentId;
+}
+assert.equal(parent,null);
+for (const parentId of ['pumps','unit','missing']) {
+  const invalid=structuredClone(nested);
+  invalid.folders[1].parentId=parentId;
+  assert.throws(()=>P.normalize(invalid));
+}
+assert.throws(()=>P.normalize({...nested,equipment:[{...equipment,folderId:'missing'}]}));
 for (const text of ['{','{}','null',JSON.stringify({...original,version:2}),JSON.stringify({...original,format:'other'})]) assert.throws(() => P.parse(text));
 const duplicate=JSON.parse(serialized); duplicate.equipment.push(duplicate.equipment[0]);
 assert.throws(() => P.parse(JSON.stringify(duplicate)));

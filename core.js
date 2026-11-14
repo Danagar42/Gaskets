@@ -349,7 +349,21 @@
     const isRef = ref => ref === null || (ref && isText(ref.name) && isText(ref.kp) && isText(ref.description));
     const ids = new Set();
     const validId = item => isText(item?.id) && !ids.has(item.id) && !!ids.add(item.id);
-    return value.equipment.every(equipment => validId(equipment) && isText(equipment.name) && isText(equipment.designation) && Array.isArray(equipment.nodes) && equipment.nodes.every(node => {
+    const folders = value.folders === undefined ? [] : value.folders;
+    if (!Array.isArray(folders) || !folders.every(folder => validId(folder) && /^[\w-]{1,100}$/.test(folder.id) && isText(folder.name) && folder.name.trim() && (folder.updatedAt === undefined || isText(folder.updatedAt)))) return false;
+    const parents = new Map(folders.map(folder => [folder.id,folder.parentId]));
+    const verified = new Set();
+    for (const folder of folders) {
+      const path = new Set();
+      let cursor = folder.id;
+      while (cursor !== null && !verified.has(cursor)) {
+        if (!parents.has(cursor) || path.has(cursor)) return false;
+        path.add(cursor);
+        cursor = parents.get(cursor);
+      }
+      for (const id of path) verified.add(id);
+    }
+    return value.equipment.every(equipment => validId(equipment) && (equipment.folderId == null || parents.has(equipment.folderId)) && isText(equipment.name) && isText(equipment.designation) && Array.isArray(equipment.nodes) && equipment.nodes.every(node => {
       if (!validId(node) || !isText(node.name) || !node.operating || !node.gasket || !node.fastener || !node.connection || !node.nut || !node.washers || !Array.isArray(node.extras)) return false;
       const template = createNode('');
       const scalarFields = ['gasket.mode','gasket.thickness','gasket.outerDiameter','gasket.innerDiameter','gasket.holeDiameter','gasket.effectiveArea','gasket.pressureArea','fastener.type','fastener.nominalDiameter','fastener.count','connection.kind','connection.sideA.name','connection.sideB.name','washers.placement'];

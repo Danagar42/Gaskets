@@ -7,6 +7,7 @@
   function normalize(value) {
     if (!C.validateWorkspace(value)) throw new Error('Файл не є проєктом «Прокладки» підтримуваної версії.');
     const result = JSON.parse(JSON.stringify(value));
+    result.folders ??= [];
     result.preferences = Object.fromEntries(['recent','favorites'].map(key => [key,
       Array.isArray(value.preferences?.[key]) ? value.preferences[key].filter(item => typeof item === 'string') : []]));
     for (const equipment of result.equipment) {
@@ -49,8 +50,13 @@
     if (mode === 'replace') return imported;
     if (mode !== 'add') throw new Error('Невідомий спосіб імпорту.');
     const target = normalize(current);
+    const folderIds = new Map(imported.folders.map(folder => [folder.id,C.id()]));
+    for (const folder of imported.folders) {
+      target.folders.push({...folder,id:folderIds.get(folder.id),parentId:folderIds.get(folder.parentId) ?? null});
+    }
     for (const equipment of imported.equipment) {
       equipment.id = C.id();
+      if (equipment.folderId != null) equipment.folderId = folderIds.get(equipment.folderId);
       for (const node of equipment.nodes) {
         node.id = C.id();
         node.extras.forEach(extra => { extra.id = C.id(); });

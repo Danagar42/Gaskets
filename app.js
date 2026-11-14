@@ -17,7 +17,7 @@
     arrow:'m14 6-6 6 6 6', chevron:'m9 5 7 7-7 7', down:'m6 9 6 6 6-6', close:'m6 6 12 12M18 6 6 18',
     edit:'m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15v5', trash:'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7',
     file:'M14 2H5v20h14V7l-5-5Zm0 0v6h5M8 12h8M8 16h6', copy:'M9 8h12v13H9zM15 8V3H3v13h6',
-    folder:'M3 5h7l2 3h9v12H3z', check:'m5 12 4 4L19 6', info:'M12 11v6M12 7v.1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+    move:'M3 5h7l2 3h9v12H3zM7 14h9m-3-3 3 3-3 3', folder:'M3 5h7l2 3h9v12H3z', check:'m5 12 4 4L19 6', info:'M12 11v6M12 7v.1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
     save:'m8 12 3 3 6-7M7 3H4v18h16V7l-4-4H7Z', grid:'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
     operating:'M4 19h16M6 16V9M12 16V4M18 16v-5', gasket:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
     fastener:'M8 3h8v4H8zM10 7v14h4V7M9 11h6M9 15h6M9 19h6', connection:'M3 6h7v12H3zM14 6h7v12h-7zM10 9h4M10 15h4',
@@ -33,7 +33,7 @@
   const plural = (value, words) => words[value % 10 === 1 && value % 100 !== 11 ? 0 : value % 10 >= 2 && value % 10 <= 4 && (value % 100 < 12 || value % 100 > 14) ? 1 : 2];
   const kindName = kind => ({'body-cover':'Корпус — кришка','flange-flange':'Фланець — фланець',custom:'Інше з’єднання'}[kind] || 'З’єднання');
   const date = value => { const parsed = new Date(value); return Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString('uk-UA', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—'; };
-  let workspace = { version:1, equipment:[], preferences:{ recent:[], favorites:[] } };
+  let workspace = { version:1, folders:[], equipment:[], preferences:{ recent:[], favorites:[] } };
   let storageError = '';
   let rawSaved = '';
   try {
@@ -44,6 +44,8 @@
       workspace = P.normalize(saved);
     }
   } catch (error) { storageError = error.message; }
+  let currentFolder = null;
+  let foldersById = new Map();
   let currentEquipment = null;
   let currentNode = null;
   let editContext = null;
@@ -77,7 +79,7 @@
     let backupAvailable = false;
     try { backupAvailable = !!localStorage.getItem(`${STORAGE_KEY}-before-import`); }
     catch { /* A browser storage error must not block downloading the in-memory project. */ }
-    fileShell('Файл проєкту',`<p>Збережіть усе обладнання та анкети вузлів в окремий файл. Матеріали зберігаються як посилання на актуальну базу.</p><button class="button primary" data-action="save-project">${icon('save')}Зберегти JSON</button><hr><label class="field" for="project-upload"><strong>Відкрити резервну копію</strong><span>Спочатку покажемо вміст файла та спосіб відновлення.</span><input id="project-upload" type="file" accept=".json,application/json"></label><div id="import-preview" hidden></div>${backupAvailable ? '<button class="button secondary" data-action="download-before-import">Завантажити стан до останнього відновлення</button>' : ''}`);
+    fileShell('Файл проєкту',`<p>Збережіть папки, обладнання та анкети вузлів в окремий файл. Матеріали зберігаються як посилання на актуальну базу.</p><button class="button primary" data-action="save-project">${icon('save')}Зберегти JSON</button><hr><label class="field" for="project-upload"><strong>Відкрити резервну копію</strong><span>Спочатку покажемо вміст файла та спосіб відновлення.</span><input id="project-upload" type="file" accept=".json,application/json"></label><div id="import-preview" hidden></div>${backupAvailable ? '<button class="button secondary" data-action="download-before-import">Завантажити стан до останнього відновлення</button>' : ''}`);
   }
   fileDialog.addEventListener('change',async event => {
     if (event.target.id !== 'project-upload') return;
@@ -93,7 +95,7 @@
       importedProject = candidate;
       const count = candidate.equipment.reduce((sum,item) => sum + item.nodes.length,0);
       const preview = document.querySelector('#import-preview');
-      preview.innerHTML = `<div class="import-summary"><strong>${candidate.equipment.length} обладнання · ${count} вузлів</strong><ul>${candidate.equipment.map(item => `<li>${esc(item.name)} <span>(${item.nodes.length})</span></li>`).join('')}</ul></div><label class="import-choice"><input type="radio" name="import-mode" value="add" checked><span><strong>Додати копії обладнання</strong><small>Поточні анкети залишаться. Імпортовані отримають нові ідентифікатори.</small></span></label><label class="import-choice"><input type="radio" name="import-mode" value="replace"><span><strong>Відновити весь проєкт із файла</strong><small>Замінить поточний простір. Попередній стан залишиться в резервній копії цього браузера.</small></span></label><button class="button primary" data-action="apply-import">Імпортувати</button>`;
+      preview.innerHTML = `<div class="import-summary"><strong>${candidate.folders.length} ${plural(candidate.folders.length,['папка','папки','папок'])} · ${candidate.equipment.length} од. обладнання · ${count} вузлів</strong><ul>${candidate.equipment.map(item => `<li>${esc(item.name)} <span>(${item.nodes.length})</span></li>`).join('')}</ul></div><label class="import-choice"><input type="radio" name="import-mode" value="add" checked><span><strong>Додати папки й обладнання</strong><small>Поточні анкети залишаться. Імпортовані отримають нові ідентифікатори.</small></span></label><label class="import-choice"><input type="radio" name="import-mode" value="replace"><span><strong>Відновити весь проєкт із файла</strong><small>Замінить поточний простір. Попередній стан залишиться в резервній копії цього браузера.</small></span></label><button class="button primary" data-action="apply-import">Імпортувати</button>`;
       preview.hidden = false;
     } catch (error) {
       if (event.target.isConnected && fileDialog.open && event.target.files[0] === file) fileError(error);
@@ -180,8 +182,19 @@
     if (location.hash.slice(1) === hash) renderRoute();
     else location.hash = hash;
   }
+  function folderPath(folder) {
+    const path = [];
+    while (folder) {
+      path.push(folder);
+      folder = foldersById.get(folder.parentId);
+    }
+    return path.reverse();
+  }
   function renderBreadcrumbs() {
     const links = [`<button data-action="home">Робочий стіл</button>`];
+    for (const folder of folderPath(currentFolder)) {
+      links.push(`${icon('chevron')}<button data-action="open-folder" data-id="${folder.id}" title="${esc(folder.name)}" ${folder === currentFolder && !currentEquipment ? 'aria-current="page"' : ''}>${esc(folder.name)}</button>`);
+    }
     if (currentEquipment) links.push(`${icon('chevron','root-chevron')}<button data-action="open-equipment" data-id="${currentEquipment.id}" ${!currentNode ? 'aria-current="page"' : ''}>${esc(currentEquipment.name)}</button>`);
     if (currentNode) links.push(`${icon('chevron')}<span class="current" aria-current="page">${esc(currentNode.name)}</span>`);
     document.querySelector('#breadcrumbs').innerHTML = links.join('');
@@ -190,7 +203,9 @@
     if (materialDialog.open) materialDialog.close();
     if (editDialog.open) editDialog.close();
     const parts = location.hash.slice(1).split('/');
-    currentEquipment = workspace.equipment.find(item => item.id === parts[1]) || null;
+    foldersById = new Map(workspace.folders.map(folder => [folder.id,folder]));
+    currentEquipment = ['node','equipment'].includes(parts[0]) ? workspace.equipment.find(item => item.id === parts[1]) || null : null;
+    currentFolder = foldersById.get(parts[0] === 'folder' ? parts[1] : currentEquipment?.folderId) || null;
     currentNode = parts[0] === 'node' ? currentEquipment?.nodes.find(item => item.id === parts[2]) || null : null;
     searchText = '';
     renderBreadcrumbs();
@@ -199,19 +214,21 @@
       main.innerHTML = `<section class="desktop"><h1>Збережені дані потребують перевірки</h1><p class="calculation-notice" style="margin-top:20px">Не вдалося прочитати робочий простір. Поточне збереження залишилося в браузері.</p><button class="button secondary" data-action="recover">Завантажити збережені дані</button><button class="button quiet" data-action="reset">Створити новий простір</button></section>`;
     } else if (currentNode) renderEditor();
     else renderDesktop();
-    document.title = `${currentNode?.name || currentEquipment?.name || 'Робочий простір'} — Прокладки`;
+    document.title = `${currentNode?.name || currentEquipment?.name || currentFolder?.name || 'Робочий простір'} — Прокладки`;
   }
 
-  const folderArt = () => `<svg class="folder-art" viewBox="0 0 76 58" fill="none" aria-hidden="true"><path d="M5 8a5 5 0 0 1 5-5h20l8 8h28a5 5 0 0 1 5 5v33H5V8Z" fill="#b9cceb"/><path d="M12 12h49v34H12V12Z" fill="#f5f8ff"/><path d="M10 17h56v31H10V17Z" fill="#e7effc"/><path d="M4 22a5 5 0 0 1 5-5h25l7 7h26a5 5 0 0 1 5 5l-3 23a4 4 0 0 1-4 3H9a4 4 0 0 1-4-4L2 28a5 5 0 0 1 2-6Z" fill="#d2e1fa" stroke="#91b0df"/><path d="M13 35h20M13 40h13" stroke="#87a9d9" stroke-width="1.4" stroke-linecap="round"/></svg>`;
   function emptyArt() {
     return `<svg viewBox="0 0 320 260" fill="none" aria-hidden="true"><path d="M45 64h230M45 194h230M90 30v200M230 30v200" stroke="#c8d7ed" stroke-dasharray="4 5"/><path d="M53 64v130M47 70l6-6 6 6M47 188l6 6 6-6M90 222h140M96 216l-6 6 6 6M224 216l6 6-6 6" stroke="#91aace"/><ellipse cx="160" cy="129" rx="69" ry="67" fill="#e4edfb" stroke="#7d9fd0" stroke-width="2"/><ellipse cx="160" cy="129" rx="42" ry="40" fill="#f6f9ff" stroke="#7d9fd0" stroke-width="2"/><g fill="#f6f9ff" stroke="#7d9fd0" stroke-width="1.6"><circle cx="160" cy="76" r="5"/><circle cx="197" cy="92" r="5"/><circle cx="214" cy="129" r="5"/><circle cx="197" cy="166" r="5"/><circle cx="160" cy="182" r="5"/><circle cx="123" cy="166" r="5"/><circle cx="106" cy="129" r="5"/><circle cx="123" cy="92" r="5"/></g><path d="M160 52v154M78 129h164" stroke="#245ed0" stroke-dasharray="8 4 2 4" opacity=".45"/><rect x="235" y="40" width="47" height="27" rx="5" fill="white" stroke="#d2dff1"/><path d="M247 54h22M258 47v14" stroke="#245ed0" stroke-width="1.8" stroke-linecap="round"/></svg>`;
   }
   function renderDesktop() {
     const equipment = currentEquipment;
-    main.innerHTML = `<section class="desktop">
-      ${equipment ? `<button class="back-button" data-action="home">${icon('arrow')}Робочий стіл</button>` : ''}
-      <div class="page-heading"><div class="${equipment ? 'folder-heading' : ''}">${equipment ? folderArt() : ''}<div><h1>${esc(equipment?.name || 'Моє обладнання')}</h1><p>${equipment ? `${esc(equipment.designation || 'Обладнання')} · ${equipment.nodes.length} ${plural(equipment.nodes.length,['вузол','вузли','вузлів'])}` : 'Обладнання та його фланцеві з’єднання в одному просторі.'}</p></div></div><div class="heading-actions">${equipment ? '<button class="button secondary" data-action="excel-export" data-scope="equipment">Excel обладнання</button>' : ''}<button class="button primary" data-action="${equipment ? 'new-node' : 'new-equipment'}">${icon('plus')}${equipment ? 'Створити вузол' : 'Створити обладнання'}</button></div></div>
-      ${equipment ? '' : `<div class="toolbar"><div class="search">${icon('search')}<input type="search" id="workspace-search" data-list-search placeholder="Знайти обладнання…" aria-label="Пошук обладнання"></div><div class="toolbar-right"><span class="item-count">${workspace.equipment.length} ${plural(workspace.equipment.length,['папка','папки','папок'])}</span><select aria-label="Сортування" data-list-sort><option value="recent" ${sortBy === 'recent' ? 'selected' : ''}>Спочатку останні</option><option value="name" ${sortBy === 'name' ? 'selected' : ''}>За назвою</option></select></div></div>`}
+    const parent = equipment ? currentFolder : foldersById.get(currentFolder?.parentId);
+    const heading = equipment?.name || currentFolder?.name || 'Реєстр обладнання';
+    main.innerHTML = `<section class="desktop register">
+      ${equipment || currentFolder ? `<button class="back-button" data-action="${parent ? 'open-folder' : 'home'}" data-id="${parent?.id || ''}">${icon('arrow')}${esc(parent?.name || 'Робочий стіл')}</button>` : ''}
+      <div class="page-heading"><div><h1>${esc(heading)}</h1>${equipment ? `<p>${esc(equipment.designation || 'Обладнання')} · ${equipment.nodes.length} ${plural(equipment.nodes.length,['вузол','вузли','вузлів'])}</p>` : ''}</div>
+      <div class="heading-actions">${equipment ? '<button class="button secondary" data-action="excel-export" data-scope="equipment">Excel обладнання</button>' : `<button class="button secondary" data-action="new-folder">${icon('folder')}Нова папка</button>`}<button class="button primary" data-action="${equipment ? 'new-node' : 'new-equipment'}">${icon('plus')}${equipment ? 'Створити вузол' : 'Додати обладнання'}</button></div></div>
+      ${equipment ? '' : `<div class="toolbar"><div class="search">${icon('search')}<input type="search" id="workspace-search" data-list-search placeholder="Пошук у всьому реєстрі…" aria-label="Пошук папок та обладнання у всьому реєстрі"></div><select aria-label="Сортування" data-list-sort><option value="recent" ${sortBy === 'recent' ? 'selected' : ''}>Спочатку останні</option><option value="name" ${sortBy === 'name' ? 'selected' : ''}>За назвою</option></select></div>`}
       <div id="desktop-content"></div><p class="workspace-footer">${icon('lock')}Дані зберігаються в цьому браузері на вашому комп’ютері.</p></section>`;
     renderDesktopContent();
   }
@@ -296,7 +313,7 @@
 
       const statusIcon = comp.status === 'full' ? icon('check') : comp.status === 'partial' ? icon('info') : icon('close');
 
-      torqueHtml = `<div class="node-torque-cell" title="${esc(comp.description)}"><div class="torque-cell-top"><div class="torque-cell-values"><span class="torque-val-group calc" title="Розрахунковий допустимий діапазон"><span class="legend-indicator calc"></span><small>Розрахунок:</small> <strong>${cMin}–${cMax}</strong> <span class="unit">Н·м</span></span><span class="torque-val-sep">·</span><span class="torque-val-group target" title="${esc(target.label)}"><span class="legend-indicator target"></span><small>ТУ:</small> <strong>${tMin}–${tMax}</strong> <span class="unit">Н·м</span></span></div><div class="torque-badge ${comp.status}">${statusIcon}<span>${esc(comp.label)}</span></div></div><div class="torque-ruler-wrapper"><div class="ruler-labels-track top"><span class="ruler-marker-label tu" style="left:${tLeft}%;"><span class="m-txt"><small class="m-sub">ТУ</small>${tMin}</span></span><span class="ruler-marker-label tu" style="left:${tRight}%;"><span class="m-txt"><small class="m-sub">ТУ</small>${tMax}</span></span></div><div class="ruler-scale-track"><div class="ruler-zone calc-zone" style="left:${cLeft}%;width:${cWidth}%;" title="Розрахунковий діапазон: ${cMin}–${cMax} Н·м"></div><div class="ruler-zone tu-bracket" style="left:${tLeft}%;width:${tWidth}%;" title="Норматив за ТУ: ${tMin}–${tMax} Н·м"></div>${hasOverlap ? `<div class="ruler-zone overlap-zone ${comp.status}" style="left:${oLeft}%;width:${oWidth}%;" title="Робочий коридор затягування: ${oMin}–${oMax} Н·м"></div>` : ''}${isCapped ? `<div class="ruler-zone capped-zone" style="left:${cappedLeft}%;width:${cappedWidth}%;" title="Перевищує розрахункову міцність: затяг > ${cMax} Н·м заборонено"></div>` : ''}${isLowSeating ? `<div class="ruler-zone capped-zone low" style="left:${lowLeft}%;width:${lowWidth}%;" title="Недостатній затяг для герметичності (потрібно >= ${cMin} Н·м)"></div>` : ''}<div class="ruler-tick calc" style="left:${cLeft}%;" title="Мін. розрахунковий: ${cMin} Н·м"></div><div class="ruler-tick tu" style="left:${tLeft}%;" title="Мін. за ТУ: ${tMin} Н·м"></div><div class="ruler-tick tu" style="left:${tRight}%;" title="Макс. за ТУ: ${tMax} Н·м"></div><div class="ruler-tick calc" style="left:${cRight}%;" title="Макс. розрахунковий: ${cMax} Н·м"></div></div><div class="ruler-labels-track bottom"><span class="ruler-marker-label calc" style="left:${cLeft}%;"><span class="m-txt"><small class="m-sub">Розр</small>${cMin}</span></span><span class="ruler-marker-label calc" style="left:${cRight}%;"><span class="m-txt"><small class="m-sub">Розр</small>${cMax}</span></span></div></div></div>`;
+      torqueHtml = `<div class="node-torque-cell" title="${esc(comp.description)}"><div class="torque-cell-top"><div class="torque-cell-values"><span class="torque-val-group calc" title="Розрахунковий допустимий діапазон"><span class="legend-indicator calc"></span><small>Розрахунок:</small> <strong>${cMin}–${cMax}</strong> <span class="unit">Н·м</span></span><span class="torque-val-sep">·</span><span class="torque-val-group target" title="${esc(target.label)}"><span class="legend-indicator target"></span><small>ТУ:</small> <strong>${tMin}–${tMax}</strong> <span class="unit">Н·м</span></span></div><div class="torque-badge ${comp.status}">${statusIcon}<span>${esc(comp.label)}</span></div></div><div class="torque-ruler-wrapper"><div class="ruler-labels-track top"><span class="ruler-marker-label tu" style="left:${tLeft}%;"><span class="m-txt">${tMin}</span></span><span class="ruler-marker-label tu" style="left:${tRight}%;"><span class="m-txt">${tMax}</span></span></div><div class="ruler-scale-track"><div class="ruler-zone calc-zone" style="left:${cLeft}%;width:${cWidth}%;" title="Розрахунковий діапазон: ${cMin}–${cMax} Н·м"></div><div class="ruler-zone tu-bracket" style="left:${tLeft}%;width:${tWidth}%;" title="Норматив за ТУ: ${tMin}–${tMax} Н·м"></div>${hasOverlap ? `<div class="ruler-zone overlap-zone ${comp.status}" style="left:${oLeft}%;width:${oWidth}%;" title="Робочий коридор затягування: ${oMin}–${oMax} Н·м"></div>` : ''}${isCapped ? `<div class="ruler-zone capped-zone" style="left:${cappedLeft}%;width:${cappedWidth}%;" title="Перевищує розрахункову міцність: затяг > ${cMax} Н·м заборонено"></div>` : ''}${isLowSeating ? `<div class="ruler-zone capped-zone low" style="left:${lowLeft}%;width:${lowWidth}%;" title="Недостатній затяг для герметичності (потрібно >= ${cMin} Н·м)"></div>` : ''}<div class="ruler-tick calc" style="left:${cLeft}%;" title="Мін. розрахунковий: ${cMin} Н·м"></div><div class="ruler-tick tu" style="left:${tLeft}%;" title="Мін. за ТУ: ${tMin} Н·м"></div><div class="ruler-tick tu" style="left:${tRight}%;" title="Макс. за ТУ: ${tMax} Н·м"></div><div class="ruler-tick calc" style="left:${cRight}%;" title="Макс. розрахунковий: ${cMax} Н·м"></div></div><div class="ruler-labels-track bottom"><span class="ruler-marker-label calc" style="left:${cLeft}%;"><span class="m-txt">${cMin}</span></span><span class="ruler-marker-label calc" style="left:${cRight}%;"><span class="m-txt">${cMax}</span></span></div></div></div>`;
     } else if (calcMin !== null && calcMax !== null) {
       const cMin = calcMin, cMax = calcMax;
       const pad = Math.max((cMax - cMin) * 0.15, 10);
@@ -308,7 +325,7 @@
       const cRight = toPct(cMax);
       const cWidth = Math.max(2, cRight - cLeft);
 
-      torqueHtml = `<div class="node-torque-cell"><div class="torque-cell-top"><div class="torque-cell-values"><span class="torque-val-group calc"><span class="legend-indicator calc"></span><small>Розрахунок:</small> <strong>${cMin}–${cMax}</strong> <span class="unit">Н·м</span></span></div><div class="torque-badge neutral"><span>ТУ не вказано</span></div></div><div class="torque-ruler-wrapper"><div class="ruler-labels-track top"></div><div class="ruler-scale-track"><div class="ruler-zone calc-zone" style="left:${cLeft}%;width:${cWidth}%;"></div><div class="ruler-tick calc" style="left:${cLeft}%;"></div><div class="ruler-tick calc" style="left:${cRight}%;"></div></div><div class="ruler-labels-track bottom"><span class="ruler-marker-label calc" style="left:${cLeft}%;"><span class="m-txt"><small class="m-sub">Розр</small>${cMin}</span></span><span class="ruler-marker-label calc" style="left:${cRight}%;"><span class="m-txt"><small class="m-sub">Розр</small>${cMax}</span></span></div></div></div>`;
+      torqueHtml = `<div class="node-torque-cell"><div class="torque-cell-top"><div class="torque-cell-values"><span class="torque-val-group calc"><span class="legend-indicator calc"></span><small>Розрахунок:</small> <strong>${cMin}–${cMax}</strong> <span class="unit">Н·м</span></span></div><div class="torque-badge neutral"><span>ТУ не вказано</span></div></div><div class="torque-ruler-wrapper"><div class="ruler-labels-track top"></div><div class="ruler-scale-track"><div class="ruler-zone calc-zone" style="left:${cLeft}%;width:${cWidth}%;"></div><div class="ruler-tick calc" style="left:${cLeft}%;"></div><div class="ruler-tick calc" style="left:${cRight}%;"></div></div><div class="ruler-labels-track bottom"><span class="ruler-marker-label calc" style="left:${cLeft}%;"><span class="m-txt">${cMin}</span></span><span class="ruler-marker-label calc" style="left:${cRight}%;"><span class="m-txt">${cMax}</span></span></div></div></div>`;
     } else {
       const status = C.sectionStatus(node, materials, standardsDb);
       const missingNames = Object.entries(status).filter(([_, ok]) => !ok).map(([key]) => sectionNames[key] || key);
@@ -321,19 +338,44 @@
   function renderDesktopContent() {
     const target = document.querySelector('#desktop-content');
     if (!target) return;
-    const source = currentEquipment ? currentEquipment.nodes : workspace.equipment;
-    const filtered = currentEquipment
-      ? [...source].sort((a,b) => a.name.localeCompare(b.name,'uk',{numeric:true}))
-      : source.filter(item => C.canonical(`${item.name} ${item.designation || ''}`).includes(C.canonical(searchText))).sort((a,b) => sortBy === 'name' ? a.name.localeCompare(b.name,'uk',{numeric:true}) : String(b.updatedAt).localeCompare(String(a.updatedAt)));
-    if (!source.length) {
-      target.innerHTML = `<div class="empty-workspace"><div class="empty-copy"><h2>${currentEquipment ? 'Додайте перший вузол' : 'Створіть першу папку обладнання'}</h2><p>${currentEquipment ? 'Кожне з’єднання має власні параметри роботи, прокладку та елементи кріплення.' : 'Додайте насос, апарат або трубопровід. Усередині зберігатимуться анкети його вузлів.'}</p><button class="button primary" data-action="${currentEquipment ? 'new-node' : 'new-equipment'}">${icon('plus')}${currentEquipment ? 'Створити вузол' : 'Створити обладнання'}</button></div><div class="empty-illustration">${emptyArt()}</div></div>`;
+    if (!currentEquipment) {
+      renderRegister(target);
       return;
     }
-    if (!filtered.length) { target.innerHTML = '<div class="no-results">Нічого не знайдено. Спробуйте іншу назву.</div>'; return; }
-    if (currentEquipment) {
-      target.innerHTML = `<div class="nodes-list"><div class="node-table-head"><span>Вузол і параметри</span><span>Тип з’єднання</span><span>Момент затягування (Розрахунок vs ТУ)</span><span>Змінено</span><span></span></div>${filtered.map(node => renderNodeRow(node)).join('')}</div>`;
+    if (!currentEquipment.nodes.length) {
+      target.innerHTML = `<div class="empty-workspace"><div class="empty-copy"><h2>Додайте перший вузол</h2><p>Кожне з’єднання має власні параметри роботи, прокладку та елементи кріплення.</p></div><div class="empty-illustration">${emptyArt()}</div></div>`;
+      return;
+    }
+    const sorted = [...currentEquipment.nodes].sort((a,b) => a.name.localeCompare(b.name,'uk',{numeric:true}));
+    target.innerHTML = `<div class="nodes-list"><div class="node-table-head"><span>Вузол і параметри</span><span>Тип з’єднання</span><span>Момент затягування (Розрахунок vs ТУ)</span><span>Змінено</span><span></span></div>${sorted.map(renderNodeRow).join('')}</div>`;
+  }
+  function folderHasContents(id) {
+    return workspace.folders.some(folder => folder.parentId === id) || workspace.equipment.some(item => item.folderId === id);
+  }
+  function renderRegister(target) {
+    const query = C.canonical(searchText);
+    const parentId = currentFolder?.id ?? null;
+    const rows = [];
+    for (const [items,type] of [[workspace.folders,'folder'],[workspace.equipment,'equipment']]) {
+      const isFolder = type === 'folder';
+      const matches = items.filter(item => query
+        ? C.canonical(`${item.name} ${item.designation || ''}`).includes(query)
+        : (isFolder ? item.parentId : item.folderId ?? null) === parentId);
+      matches.sort((a,b) => (sortBy === 'recent' && String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))) || a.name.localeCompare(b.name,'uk',{numeric:true}));
+      for (const item of matches) {
+        const parent = foldersById.get(isFolder ? item.parentId : item.folderId);
+        const path = query ? ['Робочий стіл',...folderPath(parent).map(folder => folder.name)].join(' / ') : '';
+        const detail = isFolder ? 'Папка' : `${item.nodes.length} ${plural(item.nodes.length,['вузол','вузли','вузлів'])}`;
+        const action = (verb,label,glyph) => `<button class="icon-button ${verb === 'delete' ? 'danger' : ''}" data-action="${verb}-${type}" data-id="${item.id}" title="${label}" aria-label="${label} · ${esc(item.name)}">${icon(glyph)}</button>`;
+        rows.push(`<tr><td><button class="register-open" data-action="open-${type}" data-id="${item.id}"><span class="register-icon ${type}">${icon(isFolder ? 'folder' : 'gasket')}</span><span><strong>${esc(item.name)}</strong>${path ? `<small>${esc(path)}</small>` : ''}</span></button></td><td>${esc(item.designation || '—')}</td><td>${detail}</td><td>${date(item.updatedAt)}</td><td><div class="card-actions">${action('edit','Редагувати','edit')}${action('move','Перемістити','move')}${action('delete','Видалити','trash')}</div></td></tr>`);
+      }
+    }
+    if (rows.length) {
+      target.innerHTML = `<table class="register-list"><thead><tr><th>Назва</th><th>Позначення</th><th>Вміст</th><th>Змінено</th><th aria-label="Дії"></th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+    } else if (query) {
+      target.innerHTML = '<div class="no-results">Збігів у реєстрі немає. Спробуйте іншу назву або позначення.</div>';
     } else {
-      target.innerHTML = `<div class="equipment-grid">${filtered.map(equipment => `<article class="equipment-card"><button class="equipment-open" data-action="open-equipment" data-id="${equipment.id}">${folderArt()}<h2>${esc(equipment.name)}</h2><p class="designation">${esc(equipment.designation || 'Обладнання')}</p></button><div class="equipment-card-footer"><span>${icon('file')}${equipment.nodes.length} ${plural(equipment.nodes.length,['вузол','вузли','вузлів'])}</span><div class="card-actions"><button class="icon-button" data-action="edit-equipment" data-id="${equipment.id}" aria-label="Редагувати ${esc(equipment.name)}" title="Редагувати">${icon('edit')}</button><button class="icon-button danger" data-action="delete-equipment" data-id="${equipment.id}" aria-label="Видалити ${esc(equipment.name)}" title="Видалити">${icon('trash')}</button></div></div></article>`).join('')}<button class="create-card" data-action="new-equipment"><span>${icon('plus')}</span>Нове обладнання</button></div>`;
+      target.innerHTML = `<div class="empty-workspace"><div class="empty-copy"><h2>${currentFolder ? 'Папка порожня' : 'З чого почати реєстр?'}</h2><p>Створіть папку для станції, блока чи системи або одразу додайте обладнання.</p><button class="button secondary" data-action="new-folder">${icon('folder')}Створити папку</button></div><div class="empty-illustration">${emptyArt()}</div></div>`;
     }
   }
 
@@ -656,31 +698,78 @@
   }
 
   function openEdit(type, targetId) {
-    const equipment = type.endsWith('equipment') ? workspace.equipment.find(item => item.id === targetId) : currentEquipment;
-    const node = type.endsWith('node') ? currentEquipment.nodes.find(item => item.id === targetId) : null;
-    editContext = { type, equipment, node };
-    const deleting = type.startsWith('delete');
-    const isEquipment = type.endsWith('equipment');
-    const item = isEquipment ? equipment : node;
-    const title = deleting ? `Видалити ${isEquipment ? 'обладнання' : 'вузол'}?` : type.startsWith('new') ? `Створити ${isEquipment ? 'обладнання' : 'вузол'}` : isEquipment ? 'Редагувати обладнання' : 'Перейменувати вузол';
-    editDialog.innerHTML = `<form id="edit-form"><div class="dialog-header"><div><h2 id="edit-title">${title}</h2>${!deleting ? `<p>${isEquipment ? 'Окрема папка для вузлів одного обладнання.' : 'Окрема анкета для одного з’єднання.'}</p>` : ''}</div><button class="icon-button" type="button" data-action="close-edit" aria-label="Закрити">${icon('close')}</button></div><div class="dialog-body">${deleting ? `<p class="delete-description">${esc(item.name)}${isEquipment && equipment.nodes.length ? ` та всі його вузли (${equipment.nodes.length})` : ''} буде видалено з робочого простору.</p>` : `<div class="field"><label for="edit-name">${isEquipment ? 'Назва обладнання' : 'Назва вузла'}</label><input id="edit-name" name="name" required maxlength="120" value="${esc(item?.name || '')}" placeholder="${isEquipment ? 'Наприклад, насос 600В-1,6/100' : 'Наприклад, кришка — корпус'}" autocomplete="off"></div>${isEquipment ? `<div class="field"><label for="edit-designation">Позначення / позиція <span style="font-weight:400">(необов’язково)</span></label><input id="edit-designation" name="designation" maxlength="120" value="${esc(item?.designation || '')}" placeholder="Наприклад, Н-101" autocomplete="off"></div>` : type === 'new-node' ? '<div class="field"><label for="edit-kind">Тип з’єднання</label><select id="edit-kind" name="kind"><option value="body-cover">Корпус — кришка</option><option value="flange-flange">Фланець — фланець</option><option value="custom">Інше з’єднання</option></select></div>' : ''}`}<p class="dialog-error" id="edit-error" hidden></p></div><div class="dialog-footer"><button class="button secondary" type="button" data-action="close-edit">Скасувати</button><button class="button ${deleting ? 'danger' : 'primary'}" type="submit">${deleting ? 'Видалити' : type.startsWith('new') ? 'Створити' : 'Зберегти'}</button></div></form>`;
+    const [verb,kind] = type.split('-');
+    const equipment = kind === 'equipment' ? workspace.equipment.find(item => item.id === targetId) : currentEquipment;
+    const node = kind === 'node' ? currentEquipment.nodes.find(item => item.id === targetId) : null;
+    const folder = kind === 'folder' ? foldersById.get(targetId) : null;
+    const item = folder || node || equipment;
+    editContext = { type, equipment, node, folder };
+    const deleting = verb === 'delete';
+    const moving = verb === 'move';
+    const noun = {folder:'папку',equipment:'обладнання',node:'вузол'}[kind];
+    const title = `${{new:'Створити',edit:kind === 'equipment' ? 'Редагувати' : 'Перейменувати',move:'Перемістити',delete:'Видалити'}[verb]} ${noun}${deleting ? '?' : ''}`;
+    let body;
+    let blocked = false;
+    if (moving) {
+      const parentId = kind === 'folder' ? folder.parentId : equipment.folderId ?? null;
+      const destinations = workspace.folders.map(candidate => ({id:candidate.id,path:folderPath(candidate)}))
+        .filter(candidate => !folder || !candidate.path.includes(folder))
+        .map(candidate => ({id:candidate.id,label:candidate.path.map(part => part.name).join(' / ')}))
+        .sort((a,b) => a.label.localeCompare(b.label,'uk',{numeric:true}));
+      destinations.unshift({id:null,label:'Робочий стіл'});
+      const options = destinations.filter(candidate => candidate.id !== parentId);
+      blocked = !options.length;
+      body = `<p class="edit-subject">${esc(item.name)}</p>${blocked ? '<p>Спочатку створіть папку призначення.</p>' : `<div class="field"><label for="edit-destination">Куди перемістити</label><select id="edit-destination" name="destination">${options.map(option => `<option value="${option.id || ''}">${esc(option.label)}</option>`).join('')}</select></div>`}`;
+    } else if (deleting) {
+      blocked = kind === 'folder' && folderHasContents(folder.id);
+      body = blocked ? `<p>Папка «${esc(folder.name)}» містить обладнання або вкладені папки. Перемістіть їх перед видаленням.</p>`
+        : `<p class="delete-description">«${esc(item.name)}»${kind === 'equipment' && equipment.nodes.length ? ` та всі його вузли (${equipment.nodes.length})` : ''} буде видалено з робочого простору.</p>`;
+    } else {
+      const label = {folder:'Назва папки',equipment:'Назва обладнання',node:'Назва вузла'}[kind];
+      const example = {folder:'Наприклад, ХАЕС',equipment:'Наприклад, насос 600В-1,6/100',node:'Наприклад, кришка — корпус'}[kind];
+      body = `<div class="field"><label for="edit-name">${label}</label><input id="edit-name" name="name" required maxlength="120" value="${esc(verb === 'new' ? '' : item.name)}" placeholder="${example}" autocomplete="off"></div>`;
+      if (kind === 'equipment') body += `<div class="field"><label for="edit-designation">Позначення / позиція (необов’язково)</label><input id="edit-designation" name="designation" maxlength="120" value="${esc(equipment?.designation)}" placeholder="Наприклад, Н-101" autocomplete="off"></div>`;
+      if (type === 'new-node') body += '<div class="field"><label for="edit-kind">Тип з’єднання</label><select id="edit-kind" name="kind"><option value="body-cover">Корпус — кришка</option><option value="flange-flange">Фланець — фланець</option><option value="custom">Інше з’єднання</option></select></div>';
+    }
+    editDialog.innerHTML = `<form id="edit-form"><div class="dialog-header"><h2 id="edit-title">${title}</h2><button class="icon-button" type="button" data-action="close-edit" aria-label="Закрити">${icon('close')}</button></div><div class="dialog-body">${body}<p class="dialog-error" id="edit-error" role="alert" hidden></p></div><div class="dialog-footer"><button class="button secondary" type="button" data-action="close-edit">${blocked ? 'Закрити' : 'Скасувати'}</button>${blocked ? '' : `<button class="button ${deleting ? 'danger' : 'primary'}" type="submit">${{delete:'Видалити',new:'Створити',edit:'Зберегти',move:'Перемістити'}[verb]}</button>`}</div></form>`;
     editDialog.showModal();
-    if (deleting) editDialog.querySelector('[data-action="close-edit"]').focus();
-    else document.querySelector('#edit-name').focus();
+    if (deleting || blocked) editDialog.querySelector('[data-action="close-edit"]').focus();
+    else document.querySelector(moving ? '#edit-destination' : '#edit-name').focus();
   }
   editDialog.addEventListener('submit', event => {
     event.preventDefault();
-    const { type, equipment, node } = editContext;
+    const { type, equipment, node, folder } = editContext;
     const form = new FormData(event.target);
     const name = String(form.get('name') || '').trim();
-    if (!type.startsWith('delete') && !name) {
+    if ((type.startsWith('new') || type.startsWith('edit')) && !name) {
       document.querySelector('#edit-error').textContent = 'Вкажіть назву.';
       document.querySelector('#edit-error').hidden = false;
       return;
     }
     let nextHash;
-    if (type === 'new-equipment') {
+    if (type.startsWith('move-')) {
+      if (!form.has('destination')) return;
+      const destination = form.get('destination') || null;
+      if (destination && !foldersById.has(destination)) return;
+      if (folder) {
+        if (folderPath(foldersById.get(destination)).includes(folder)) return;
+        folder.parentId = destination;
+      } else equipment.folderId = destination;
+      (folder || equipment).updatedAt = C.timestamp();
+      nextHash = destination ? `folder/${destination}` : '';
+    } else if (type === 'new-folder') {
+      const created = {id:C.id(),name,parentId:currentFolder?.id ?? null,updatedAt:C.timestamp()};
+      workspace.folders.push(created);
+      nextHash = `folder/${created.id}`;
+    } else if (type === 'edit-folder') {
+      folder.name = name;
+      folder.updatedAt = C.timestamp();
+    } else if (type === 'delete-folder') {
+      if (folderHasContents(folder.id)) return;
+      workspace.folders = workspace.folders.filter(item => item.id !== folder.id);
+    } else if (type === 'new-equipment') {
       const created = C.createEquipment(name,String(form.get('designation') || ''));
+      created.folderId = currentFolder?.id ?? null;
       workspace.equipment.push(created);
       nextHash = `equipment/${created.id}`;
     } else if (type === 'edit-equipment') {
@@ -689,7 +778,6 @@
       equipment.updatedAt = C.timestamp();
     } else if (type === 'delete-equipment') {
       workspace.equipment = workspace.equipment.filter(item => item.id !== equipment.id);
-      nextHash = '';
     } else if (type === 'new-node') {
       const created = C.createNode(name,String(form.get('kind')));
       equipment.nodes.push(created);
@@ -803,9 +891,10 @@
       }
     }
     else if (action === 'home') navigate();
+    else if (action === 'open-folder') navigate(`folder/${button.dataset.id}`);
     else if (action === 'open-equipment') navigate(`equipment/${button.dataset.id}`);
     else if (action === 'open-node') navigate(`node/${currentEquipment.id}/${button.dataset.id}`);
-    else if (['new-equipment','new-node','edit-equipment','edit-node','delete-equipment','delete-node'].includes(action)) openEdit(action,button.dataset.id);
+    else if (['new-folder','edit-folder','delete-folder','move-folder','move-equipment','new-equipment','new-node','edit-equipment','edit-node','delete-equipment','delete-node'].includes(action)) openEdit(action,button.dataset.id);
     else if (action === 'close-edit') editDialog.close();
     else if (action === 'copy-node') {
       const source = currentEquipment.nodes.find(node => node.id === button.dataset.id);
