@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="uk">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пробна анкета фланцевого вузла</title>
+<style>
+  :root { color-scheme: light; --ink:#1b3440; --muted:#516875; --line:#cbd8dc; --accent:#006d73; }
+  * { box-sizing:border-box }
+  body { margin:0; background:#edf2f3; color:var(--ink); font:16px/1.45 Inter,"Segoe UI",sans-serif }
+  main { max-width:1760px; margin:auto; padding:clamp(14px,1.4vw,24px) }
+  header,nav,.controls,.sheet-heading,.sheet-foot,.ref { display:flex; align-items:center; justify-content:space-between; gap:14px }
+  header { margin-bottom:14px }
+  .gallery-link { color:var(--accent); text-underline-offset:4px }
+  h1,h2,p,figure { margin:0 }
+  h1 { font-size:clamp(24px,2.2vw,34px); letter-spacing:-.04em }
+  header small,.sheet-foot,.help { color:var(--muted) }
+  nav { flex-direction:column; align-items:stretch; justify-content:flex-start; gap:3px; padding:16px 8px; background:#f0f5f5; border-right:1px solid var(--line); overflow:auto }
+  nav button { display:flex; gap:9px; align-items:baseline; text-align:left; padding:10px 9px; font-size:14px; line-height:1.25 }
+  nav button span { color:var(--muted); font-variant-numeric:tabular-nums }
+  button,select,input { font:inherit }
+  button,select { cursor:pointer }
+  button { color:var(--ink); border:0; border-radius:6px; background:transparent; padding:9px 16px }
+  nav [aria-current=step] { background:white; color:var(--accent); box-shadow:inset 3px 0 var(--accent); font-weight:650 }
+  :focus-visible { outline:3px solid #008e9b; outline-offset:3px }
+  .workspace { display:grid; grid-template-columns:clamp(148px,13vw,208px) clamp(310px,26vw,400px) minmax(0,1fr); height:max(462px,calc(100dvh - 115px)); border:1px solid var(--line); background:white; box-shadow:0 9px 30px #183e4910; border-radius:12px; overflow:hidden }
+  figure { display:grid; grid-template-rows:auto minmax(0,1fr) auto; height:max(430px,calc(100dvh - 124px)); padding:12px 18px; border-left:1px solid var(--line); background-color:#f7faf9; background-image:linear-gradient(#c4d6dc38 1px,transparent 1px),linear-gradient(90deg,#c4d6dc38 1px,transparent 1px); background-size:22px 22px }
+  .sheet-heading { font-size:15px; font-weight:600 }
+  .sheet-heading span:last-child { font-size:13px; color:var(--muted); font-weight:400 }
+  #drawing { display:block; width:100%; height:100%; min-height:0 }
+  .sheet-foot { border-top:1px solid var(--line); padding-top:6px; font-size:13px }
+  .panel { padding:clamp(14px,1.4vw,24px); overflow:auto }
+  figure { height:100%; min-width:0; min-height:0 }
+  .group { margin:16px 0 4px; font-weight:650 }
+  .extra { border-top:1px solid var(--line); padding:7px 0 14px }
+  .extra button { margin-top:8px }
+  nav button:last-child { border-top:1px solid var(--line); margin-top:10px }
+  h2 { font-size:32px; letter-spacing:-.04em; line-height:1.1; margin:0 0 12px }
+  label { display:block; font-weight:600; font-size:15px; margin:14px 0 6px }
+  select,input { width:100%; height:42px; border:1px solid #aebfc5; border-radius:5px; background:white; padding:0 11px; color:var(--ink) }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:14px }
+  .ref { border-left:3px solid var(--accent); background:#eff6f5; padding:12px 14px; margin:21px 0 0; font-size:14px; align-items:flex-start }
+  .ref strong { white-space:nowrap }
+  .help { margin-top:7px; font-size:13px }
+  .controls { margin-top:20px; padding-top:14px; border-top:1px solid var(--line); justify-content:flex-end }
+  .primary { background:var(--accent); color:white; font-weight:600 }
+  button:disabled { opacity:.55; cursor:default }
+  .secondary { border:1px solid var(--line) }
+  .part { stroke:#324c59; stroke-width:2; stroke-linejoin:round }
+  .axis { stroke:#67848e; stroke-width:1; stroke-dasharray:12 4 2 4 }
+  .dim { fill:none; stroke:var(--accent); stroke-width:1.5 }
+  .measure { fill:#005f66; font:600 19px "Segoe UI",sans-serif; paint-order:stroke; stroke:#f7faf9; stroke-width:5px }
+  .caption { fill:#46616c; font:15px "Segoe UI",sans-serif }
+  .check { display:flex; align-items:center; gap:9px; cursor:pointer }
+  .check input { width:18px; height:18px; margin:0; accent-color:var(--accent) }
+  #gasketError { color:#963d21 }
+  #gasketFields .ref { display:grid; grid-template-columns:1fr auto; gap:5px 10px }
+  #gasketFields .ref strong { text-align:right }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:10px 16px; margin:8px 0 }
+  dt { color:var(--muted) } dd { margin:0; text-align:right; font-weight:600 }
+  [hidden] { display:none !important }
+</style>
+<main>
+  <header><div><small>Пробна анкета вузла</small><h1>Фланцеве з’єднання</h1></div><a class="gallery-link" href="component-gallery.html" target="_blank" rel="noopener">Галерея деталей</a>
+  </header>
+  <div class="workspace">
+    <nav aria-label="Кроки анкети" id="steps"></nav>
+    <section class="panel">
+      <h2 id="title" tabindex="-1"></h2>
+      <div id="operatingFields"></div>
+      <div id="studFields">
+        <label for="diameter">Номінальний діаметр різьби</label><select id="diameter"></select>
+        <div class="pair">
+          <div><label for="pitch">Крок P, мм</label><select id="pitch"></select></div>
+          <div><label for="count">Кількість, шт.</label><input id="count" type="number" min="1" step="1" value="8" required></div>
+        </div>
+        <p class="help" id="countError" hidden>Введіть цілу кількість від 1.</p>
+        <div class="ref"><span>Крок за ГОСТ 8724-2002</span><strong id="pitchRef"></strong></div>
+      </div>
+      <div id="nutFields" hidden>
+        <label for="standard">Стандарт гайки</label><select id="standard"></select>
+        <label for="type">Виконання</label><select id="type"></select>
+        <p class="help" id="matching"></p>
+        <div class="ref"><span id="heightLabel"></span><strong id="heightRef"></strong></div>
+      </div>
+      <div id="gasketFields" hidden>
+        <div class="pair">
+          <div><label for="outerDiameter">Зовнішній Ø, мм</label><input id="outerDiameter" type="number" step="any" value="320"></div>
+          <div><label for="innerDiameter">Внутрішній Ø, мм</label><input id="innerDiameter" type="number" step="any" value="200"></div>
+        </div>
+        <label for="thickness">Товщина, мм</label><input id="thickness" type="number" step="any" value="3">
+        <label class="check"><input id="hasHoles" type="checkbox">Отвори під шпильки</label>
+        <div id="holeFields" hidden><label for="holeDiameter">Діаметр отвору, мм</label><input id="holeDiameter" type="number" step="any" value="26"><p class="help" id="holeCount"></p></div>
+        <p class="help" id="gasketError" aria-live="polite"></p>
+        <div class="ref"><span>Ширина кільця</span><strong id="ringWidth"></strong><span>Ефективна площа</span><strong id="ringArea"></strong></div>
+      </div>
+      <div id="washerFields" hidden>
+        <label for="placement">Розташування</label><select id="placement"><option value="a">З боку А</option><option value="b">З боку Б</option><option value="both">З обох боків</option><option value="none">Без шайб</option></select>
+        <div id="washerSettings"><div class="pair"><div><label for="execution">Виконання</label><select id="execution"><option>1</option><option>2</option></select></div><div><label for="accuracy">Клас точності</label><select id="accuracy"><option>A</option><option>C</option></select></div></div>
+        <div class="ref"><span>ГОСТ 11371-78</span><strong id="washerSize"></strong></div></div>
+      </div>
+      <div id="sideAFields" hidden></div><div id="sideBFields" hidden></div>
+      <div id="extrasFields" hidden><div id="extraList"></div>
+        <label for="extraKind">Додати до пакета</label><select id="extraKind"><option>Проставка</option><option>Бурт корпусу</option><option>Решітка</option></select>
+        <button type="button" id="addExtra" class="secondary">Додати деталь</button></div>
+      <div id="summaryFields" hidden><dl id="parts"></dl></div>
+      <div class="controls"><button class="secondary" id="back" hidden>Назад</button><button class="primary" id="next"></button></div>
+    </section>
+    <figure>
+      <figcaption class="sheet-heading"><span id="viewTitle"></span><span>Розміри в мм</span></figcaption>
+      <svg id="drawing" viewBox="0 0 640 350" role="img" aria-labelledby="description">
+        <title id="description"></title>
+        <defs>
+          <linearGradient id="steel" x2="0" y2="1" gradientUnits="objectBoundingBox">
+            <stop stop-color="#728b95"/><stop offset=".2" stop-color="#bccdd1"/><stop offset=".39" stop-color="#eef4f4"/><stop offset=".65" stop-color="#b3c4c9"/><stop offset="1" stop-color="#7a919b"/>
+          </linearGradient>
+          <linearGradient id="shaftSteel" href="#steel" x2="1" y2="0"/>
+          <linearGradient id="graphite" x2=".85" y2="1"><stop stop-color="#79898c"/><stop offset=".45" stop-color="#505f64"/><stop offset="1" stop-color="#303f45"/></linearGradient>
+          <pattern id="cut" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#bdc9ca"/><path d="M-2 2 l4 -4 M0 8 l8 -8 M6 10 l4 -4" stroke="#5a6c72" stroke-width="1"/></pattern>
+          <marker id="tip" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="7" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 8 3 0 6Z" fill="#006d73"/></marker>
+        </defs>
+        <g id="geometry"></g>
+      </svg>
+      <div class="sheet-foot"><span id="drawingName"></span><span>Схема без масштабу</span></div>
+    </figure>
+  </div>
+</main>
+<script src="standards.bundle.js"></script>
+<script src="core.js"></script>
+<script src="calculations.js"></script>
+<script>
+  'use strict';
+  const el = id => document.getElementById(id);
+  const catalog = FlangeStandardsDB;
+  const thread = catalog.threads['gost-24705-2004'];
+  const fmt = value => value.toLocaleString('uk-UA');
+  const diameter = el('diameter'), pitch = el('pitch'), count = el('count');
+  const standard = el('standard'), type = el('type');
+  const steps = [
+    ['operating','Технологічні параметри'],['gasket','Прокладка'],['stud','Шпилька'],['nut','Гайка'],
+    ['washer','Шайба'],['sideA','Деталь А'],['sideB','Деталь Б'],['extras','Додаткові деталі'],['summary','Підсумок']
+  ];
+  let step = 0, extraId = 0;
+
+  function options(select, entries, preferred) {
+    select.replaceChildren(...entries.map(([value, label]) => new Option(label, value)));
+    if (entries.some(([value]) => String(value) === String(preferred))) select.value = preferred;
+  }
+  function setSizes() {
+    const size = thread.sizes[diameter.value];
+    const pitches = size.pitchesMm.map(p => [p, fmt(p) + (p === size.coarsePitchMm ? ' · великий' : '') + (size.nonPreferredPitchesMm?.includes(p) ? ' · нерекоменд.' : '')]);
+    if (size.coarsePitchMm === null) pitches.unshift(['','Оберіть крок']);
+    options(pitch, pitches, size.coarsePitchMm ?? '');
+    const compatible = Object.values(catalog.nuts).filter(nut => nut.sizes[diameter.value]);
+    options(standard, compatible.map(nut => [nut.id,nut.document]), standard.value);
+    setTypes();
+  }
+  function setTypes() {
+    const nut = catalog.nuts[standard.value];
+    const types = Object.entries(nut.types || { A:{label:'Шестигранна'} })
+      .filter(([key]) => FlangeCore.nutDimensions(catalog, nut.id, diameter.value, key));
+    options(type, types.map(([key, item]) => [key,item.label]), type.value);
+    type.disabled = types.length === 1;
+  }
+  function dimension(x1,y1,x2,y2) {
+    return '<line class="dim" marker-start="url(#tip)" marker-end="url(#tip)" x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'"/>';
+  }
+  function studDrawing(d,p) {
+    const half = 16 + d*.64, center = 241, left = center-half, right = center+half;
+    const body = `M${left+5} 26 H${right-5} l5 5 V288 l-5 5 H${left+5} l-5 -5 V31 Z`;
+    let grooves = '';
+    if (p) {
+      for (const [start,end] of [[27,101],[220,293]]) {
+        for (let y=start; y<end; y+=2+p*1.55) grooves += `M${left} ${y+5} L${right} ${y}`;
+      }
+    }
+    const run = 20 + (p || 0)*4, x = 415, y = 145;
+    const profile = ` l-18 ${run*.4} v${run*.12} l18 ${run*.4} v${run*.08}`.repeat(4);
+    return `<defs><clipPath id="shaft"><path d="${body}"/></clipPath></defs>
+      <path d="${body}" fill="url(#shaftSteel)" class="part"/>
+      <g clip-path="url(#shaft)" fill="none">
+        <path d="${grooves}" stroke="#375563" stroke-width="2.2"/>
+        <path d="${grooves}" transform="translate(0 1.6)" stroke="#edf4f3" stroke-width=".95"/>
+      </g>
+      <path class="axis" d="M${center} 12 V304"/>
+      <path class="dim" d="M${left} 289 V334 M${right} 289 V334"/>
+      ${dimension(left,326,right,326)}
+      <text class="measure" x="${center}" y="318" text-anchor="middle">Ø ${d}</text>
+      <path class="dim" d="M${left+2} 74 L${left-33} 48 h-56"/>
+      <text class="measure" x="${left-88}" y="41">М${d}</text>
+      ${p ? `<path class="dim" stroke-dasharray="3 4" d="M${right} 85 L354 118 H386"/>
+      <text class="caption" x="378" y="74">Профіль різьби, збільшено</text>
+      <path class="part" fill="url(#shaftSteel)" d="M${x-37} ${y-run} H${x}${profile} H${x-37}"/>
+      <path class="dim" d="M${x+5} ${y} h40 M${x+5} ${y+run} h40"/>
+      ${dimension(x+34,y,x+34,y+run)}
+      <text class="measure" x="${x+48}" y="${y+run/2+6}">P = ${fmt(p)}</text>` : ''}
+    `;
+  }
+  function nutDrawing(d,nut) {
+    const capped = nut.typeId === 'B', half = 59+d*.64;
+    const base = 244, h = 55+nut.heightMm*1.15, top = base-h;
+    const left = 218-half, right = 218+half;
+    const shoulder = capped ? top+h*.48 : top+9;
+    const outline = capped
+      ? `M${left} ${base-7} V${shoulder} L${left+10} ${shoulder-5} Q${left+10} ${top} 218 ${top} Q${right-10} ${top} ${right-10} ${shoulder-5} L${right} ${shoulder} V${base-7}`
+      : `M${left} ${base-7} V${shoulder} l10 -9 H${right-10} l10 9 V${base-7}`;
+    const radius = half*1.15;
+    const hex = Array.from({length:6},(_,i)=>[455+radius*Math.cos(i*Math.PI/3),174+radius*Math.sin(i*Math.PI/3)].join(',')).join(' ');
+    return `<path class="part" fill="url(#steel)" d="${outline} l-10 7 H${left+10} Z"/>
+      <path fill="#45616e" opacity=".25" d="M${left} ${shoulder} Q${left+16} ${shoulder-8} ${left+28} ${shoulder} V${base-4} L${left+10} ${base} l-10 -7 Z"/>
+      <path fill="#e3eef0" opacity=".45" d="M${right-28} ${shoulder} Q${right-16} ${shoulder-8} ${right} ${shoulder} V${base-7} l-10 7 -18 -4 Z"/>
+      <path class="part" fill="none" d="M${left} ${shoulder} Q${left+16} ${shoulder-8} ${left+28} ${shoulder} Q218 ${shoulder-12} ${right-28} ${shoulder} Q${right-16} ${shoulder-8} ${right} ${shoulder} M${left+28} ${shoulder} V${base-4} M${right-28} ${shoulder} V${base-4}"/>
+      <path class="axis" d="M218 ${top-20} V265"/>
+      <path class="dim" d="M${capped?218:left+10} ${top} H98 M${left+10} ${base} H98"/>
+      ${dimension(107,top,107,base)}
+      <text class="measure" transform="translate(96 ${(top+base)/2}) rotate(-90)" text-anchor="middle">${nut.heightSymbol} = ${fmt(nut.heightMm)}</text>
+      <polygon class="part" points="${hex}" fill="#b5c7cd"/>
+      <circle class="part" cx="455" cy="174" r="${half*.88}" fill="#d3dee1"/>
+      <circle class="part" cx="455" cy="174" r="${half*.50}" fill="#f7faf9"/>
+      <path d="M455 ${174-half*.57} a${half*.57} ${half*.57} 0 1 1 ${-half*.57} ${half*.57}" fill="none" stroke="#526b76"/>
+      <path class="axis" d="M${445-radius} 174 H${465+radius} M455 ${166-radius} V${182+radius}"/>
+      <path class="dim" d="M${455+half*.36} ${174-half*.36} L518 84 h55"/>
+      <text class="measure" x="571" y="77" text-anchor="end">М${d}</text>
+      <text class="caption" x="218" y="302" text-anchor="middle">Вигляд збоку</text>
+      <text class="caption" x="455" y="302" text-anchor="middle">З боку різьби</text>`;
+  }
+  function gasketInput() {
+    return {
+      mode:'ring', outerDiameter:el('outerDiameter').valueAsNumber, innerDiameter:el('innerDiameter').valueAsNumber,
+      thickness:el('thickness').valueAsNumber, hasHoles:el('hasHoles').checked, holeDiameter:el('holeDiameter').valueAsNumber
+    };
+  }
+  function gasketDrawing(gasket,width,washer=false) {
+    const {outerDiameter, innerDiameter, thickness, hasHoles, holeDiameter} = gasket;
+    const cx = 173, cy = 160;
+    const outer = Math.min(145, 125 * outerDiameter / (washer ? 44 : 320));
+    const inner = outer * (innerDiameter/outerDiameter);
+    const ringPath = radius => `M${cx-radius} ${cy} a${radius} ${radius} 0 1 0 ${2*radius} 0 a${radius} ${radius} 0 1 0 ${-2*radius} 0 Z`;
+    let holes = '';
+    // The questionnaire supplies no pitch-circle diameter. The layout is illustrative.
+    const detailedHoles = count.valueAsNumber <= 240;
+    if (hasHoles && detailedHoles) {
+      const radius = (outer+inner)/2, bore = outer*(holeDiameter/outerDiameter);
+      for (let i=0; i<count.valueAsNumber; i++) {
+        const angle = 2*Math.PI*i/count.valueAsNumber - Math.PI/2;
+        const x = cx+radius*Math.cos(angle), y = cy+radius*Math.sin(angle);
+        holes += `M${x-bore} ${y} a${bore} ${bore} 0 1 0 ${2*bore} 0 a${bore} ${bore} 0 1 0 ${-2*bore} 0 Z`;
+      }
+    }
+    const sectionWidth = Math.min(137, Math.max(1, width*1.8)), sectionHeight = Math.min(90, Math.max(1, thickness*5));
+    const x = 375, y = 200, end = x+sectionWidth, top = y-sectionHeight;
+    return `<path fill="url(#${washer?'steel':'graphite'})" fill-rule="evenodd" stroke="#30444c" stroke-width="1" d="${ringPath(outer)}${ringPath(inner)}${holes}"/>
+      <path class="axis" d="M${cx-outer-12} ${cy} H${cx+outer+12} M${cx} ${cy-outer-9} V${cy+outer+9}"/>
+      ${dimension(cx-inner,cy,cx+inner,cy)}
+      <text class="measure" text-anchor="middle" x="${cx}" y="${cy-8}">Ø ${fmt(innerDiameter)}</text>
+      <path class="dim" d="M${cx-outer} ${cy+5} V326 M${cx+outer} ${cy+5} V326"/>
+      ${dimension(cx-outer,318,cx+outer,318)}
+      <text class="measure" text-anchor="middle" x="${cx}" y="311">Ø ${fmt(outerDiameter)}</text>
+      <path class="dim" stroke-dasharray="3 4" d="M${cx+(outer+inner)*.39} ${cy-(outer+inner)*.31} L337 81 H361"/>
+      <text class="caption" x="${x}" y="84">Радіальний переріз</text>
+      <rect x="${x}" y="${top}" width="${sectionWidth}" height="${sectionHeight}" fill="url(#cut)" class="part"/>
+      <path class="dim" d="M${x} ${y+3} V237 M${end} ${y+3} V237"/>
+      ${dimension(x,228,end,228)}
+      <text class="measure" text-anchor="middle" x="${x+sectionWidth/2}" y="254">${fmt(width)}</text>
+      <path class="dim" d="M${end+3} ${top} h29 M${end+3} ${y} h29"/>
+      ${dimension(end+22,top,end+22,y)}
+      <text class="measure" x="${end+33}" y="${(top+y)/2+6}">${fmt(thickness)}</text>
+      ${hasHoles ? `<text class="caption" x="${x}" y="290">${count.value} отв. × Ø ${fmt(holeDiameter)}</text>` : ''}`;
+  }
+  function validStud() {
+    return Boolean(pitch.value) && count.validity.valid && Number.isSafeInteger(count.valueAsNumber);
+  }
+  function numeric(id,label,value,min) {
+    return `<div><label for="${id}">${label}</label><input type="number" step="any" id="${id}" value="${value}" min="${min}" required></div>`;
+  }
+  function selected(id) { return el(id).selectedOptions[0].text }
+  function shown(id,unit='') {
+    const input=el(id);
+    return input.validity.valid && Number.isFinite(input.valueAsNumber) ? fmt(input.valueAsNumber)+unit : '—';
+  }
+  function diagram(title,source,box,markup,units='Розміри в мм') {
+    el('viewTitle').textContent=title;
+    el('drawingName').textContent=source;
+    document.querySelector('.sheet-heading span:last-child').textContent=units;
+    document.querySelector('.sheet-foot span:last-child').textContent=units ? 'Схема без масштабу' : '';
+    el('description').textContent=title;
+    el('drawing').setAttribute('viewBox',box);
+    el('geometry').innerHTML=markup;
+  }
+  function note(text) { return `<text class="caption" x="310" y="170" text-anchor="middle">${text}</text>` }
+  function operatingText(key) {
+    return shown(key+'P',' МПа')+' · '+shown(key+'T',' °C')+' · '+selected(key+'Medium');
+  }
+  function operatingDrawing() {
+    const modes=[['normal','Нормальні умови експлуатації'],['hydro','Гідровипробування']];
+    return modes.map(([key,label],i)=>{
+      const y=35+i*160;
+      const medium=selected(key+'Medium');
+      const mediumLabel=medium.length>16?'<tspan x="364" dy="-9">Газ з високою</tspan><tspan x="364" dy="17">проникною властивістю</tspan>':medium;
+      return `<g transform="translate(36 ${y})"><text class="caption" x="0" y="0">${label}</text>
+        <rect x="0" y="22" width="528" height="85" rx="5" fill="${i?'#eef3fa':'#e9f3f2'}" stroke="#c4d4d7"/>
+        <text class="caption" x="18" y="47">Тиск</text><text class="measure" x="18" y="82">${shown(key+'P',' МПа')}</text>
+        <text class="caption" x="190" y="47">Температура</text><text class="measure" x="190" y="82">${shown(key+'T',' °C')}</text>
+        <text class="caption" x="364" y="47">Середовище</text><text class="${medium.length>16?'caption':'measure'}" x="364" y="82">${mediumLabel}</text></g>`;
+    }).join('');
+  }
+  function sideDrawing(key) {
+    const outer=el(key+'Outer').valueAsNumber, inner=el(key+'Inner').valueAsNumber, height=el(key+'Height').valueAsNumber;
+    if (!(outer>inner && inner>0 && height>0)) return note('Вкажіть Df > D > 0 та додатну висоту.');
+    const bore=128*(inner/outer), h=Math.min(96,Math.max(3,2*height));
+    return `<path class="part" fill="url(#steel)" fill-rule="evenodd" d="M174 28 a128 128 0 1 1 -.01 0 Z M174 ${156-bore} a${bore} ${bore} 0 1 1 -.01 0 Z"/>
+      <path class="axis" d="M30 156 H318 M174 16 V292"/>
+      ${dimension(174-bore,156,174+bore,156)}<text class="measure" x="174" y="147" text-anchor="middle">Ø ${fmt(inner)}</text>
+      <path class="dim" d="M46 158 V322 M302 158 V322"/>${dimension(46,315,302,315)}<text class="measure" x="174" y="306" text-anchor="middle">Ø ${fmt(outer)}</text>
+      <text class="caption" x="360" y="106">Радіальний переріз</text>
+      <rect class="part" x="360" y="${215-h}" width="${128-bore}" height="${h}" fill="url(#cut)"/>
+      <path class="dim" d="M${488-bore} ${215-h} H512 M${488-bore} 215 H512"/>
+      ${dimension(505,215-h,505,215)}<text class="measure" x="520" y="${220-h/2}">${fmt(height)}</text>`;
+  }
+  function render() {
+    const [key,title]=steps[step];
+    for (const [id] of steps) {
+      el(id+'Fields').hidden=id!==key;
+      el(id+'Tab').setAttribute('aria-current',id===key?'step':'false');
+    }
+    el('title').textContent=title;
+    el('back').hidden=step===0;
+    el('next').textContent=step===steps.length-1?'До початку':step===steps.length-2?'Переглянути підсумок':'Далі';
+    const d=Number(diameter.value), p=FlangeCore.threadPitch(catalog,thread.id,d,pitch.value)?.pitchMm;
+    const nut=FlangeCore.nutDimensions(catalog,standard.value,d,type.value);
+    const designation='М'+d+(p?' × '+fmt(p):'');
+    const gasket=gasketInput(), {values,issues}=FlangeCalculations.gasketGeometry(gasket,count.value);
+    const gasketError=issues[0] || (gasket.thickness>0?'':'Введіть додатну товщину прокладки.');
+    const gasketSize=gasketError?'Потрібні дані':[gasket.outerDiameter,gasket.innerDiameter,gasket.thickness].map(fmt).join(' × ')+' мм';
+    const washer=FlangeCore.washerDimensions(catalog,'gost-11371-78',d,el('accuracy').value,el('execution').value);
+    const hasWasher=el('placement').value!=='none';
+    const box='5 0 628 350';
+    if (key==='operating') diagram('Режими роботи вузла','Технологічні параметри',box,operatingDrawing(),'');
+    if (key==='gasket') {
+      el('holeFields').hidden=!gasket.hasHoles;
+      el('holeCount').textContent='Кількість із кроку «Шпилька» — '+(count.value || '—')+'. Розташування умовне.';
+      el('gasketError').textContent=gasketError;
+      el('ringWidth').textContent=values.width===null?'—':fmt(values.width)+' мм';
+      el('ringArea').textContent=values.effectiveArea===null?'—':fmt(values.effectiveArea)+' мм²';
+      diagram('Графітова кільцева прокладка',gasket.hasHoles && count.valueAsNumber>240?'Отвори позначено кількістю та діаметром':'Вигляд у плані та переріз',box,gasketError?note('Уточніть розміри в анкеті'):gasketDrawing(gasket,values.width));
+    }
+    if (key==='stud') {
+      el('countError').hidden=count.validity.valid && Number.isSafeInteger(count.valueAsNumber);
+      el('pitchRef').textContent=p?fmt(p)+' мм':'Оберіть крок';
+      diagram('Шпилька '+designation,thread.document,'85 3 494 339',studDrawing(d,p));
+    }
+    if (key==='nut') {
+      el('matching').textContent='Різьба зі шпильки — '+designation+'.';
+      el('heightLabel').textContent=nut.heightLabel+' за '+nut.document;
+      el('heightRef').textContent=nut.heightSymbol+' = '+fmt(nut.heightMm)+' мм';
+      diagram('Гайка '+designation,nut.document,'70 6 510 316',nutDrawing(d,nut));
+    }
+    if (key==='washer') {
+      el('washerSettings').hidden=!hasWasher;
+      const available=hasWasher && washer;
+      el('washerSize').textContent=washer ? [washer.outerDiameterMm,washer.innerDiameterMm,washer.thicknessMm].map(fmt).join(' × ')+' мм':'Немає розмірів';
+      const data=available && {outerDiameter:washer.outerDiameterMm,innerDiameter:washer.innerDiameterMm,thickness:washer.thicknessMm};
+      diagram('Плоска шайба під М'+d,'ГОСТ 11371-78',box,available?gasketDrawing(data,(data.outerDiameter-data.innerDiameter)/2,true):note(hasWasher?'Для цього типорозміру немає розмірів у каталозі.':'У вузлі шайб немає.'));
+    }
+    if (key==='sideA' || key==='sideB') diagram(selected(key+'Name'),'Основні розміри деталі',box,sideDrawing(key));
+    const extras=Array.from(el('extraList').children);
+    if (key==='extras') {
+      const last=el('extraList').querySelector('.extra:focus-within') || extras.at(-1);
+      const part=last && last.dataset.kind, height=last && shown(last.id+'Height',' мм'), area=last && shown(last.id+'Area',' мм²');
+      diagram(part || 'Додаткові деталі','Склад пакета',box,last?`<rect x="120" y="130" width="320" height="60" fill="url(#cut)" class="part"/>${dimension(470,130,470,190)}<text class="measure" x="483" y="167">${height}</text><text class="caption" x="120" y="233">Площа перерізу · ${area}</text>`:note('Додаткових деталей у пакеті немає.'));
+    }
+    if (key==='summary') {
+      const rows=[['НУЕ',operatingText('normal')],['ГВ',operatingText('hydro')],['Момент',shown('torque',' Н·м')],['Прокладка',gasketSize],['Отвори',gasket.hasHoles?(count.value||'—')+' × Ø '+shown('holeDiameter',' мм'):'Без отворів'],['Шпилька',validStud()?designation+', '+count.value+' шт.':'Потрібні дані'],['Гайка',selected('type')+', '+nut.document+', '+nut.heightSymbol+' = '+fmt(nut.heightMm)+' мм'],['Шайба',selected('placement')+(hasWasher?(washer?' · '+fmt(washer.thicknessMm)+' мм':' · немає розмірів'):'')]];
+      for (const side of ['sideA','sideB']) rows.push([selected(side+'Name'),[side+'Outer',side+'Inner',side+'Height'].map(id=>shown(id)).join(' × ')+' мм']);
+      for (const extra of extras) rows.push([extra.dataset.kind,shown(extra.id+'Height',' мм')+' · '+shown(extra.id+'Area',' мм²')]);
+      el('parts').replaceChildren(...rows.flatMap(([label,value])=>[Object.assign(document.createElement('dt'),{textContent:label}),Object.assign(document.createElement('dd'),{textContent:value})]));
+      diagram('Режими роботи вузла','Підсумок введених даних',box,operatingDrawing(),'');
+    }
+  }
+  function go(target) {
+    step=target;
+    render();
+    document.querySelector('.panel').scrollTop=0;
+    el('title').focus({preventScroll:true});
+  }
+  for (const [index,[key,label]] of steps.entries()) {
+    const button=document.createElement('button');
+    button.id=key+'Tab';
+    button.innerHTML=(key==='summary'?'':`<span>${index+1}.</span>`)+label;
+    button.onclick=()=>go(index);
+    el('steps').append(button);
+  }
+  const media=['Відсутнє','Рідина','Вода','Мастило','Олива','Розчин','Пар','Повітря','Водень','Гелій','Газ','Газ з високою проникною властивістю'];
+  for (const [key,label,pressure,temperature] of [['normal','Нормальні умови експлуатації',0.6,80],['hydro','Гідровипробування',0.85,20]]) {
+    el('operatingFields').insertAdjacentHTML('beforeend',`<p class="group">${label}</p><div class="pair">${numeric(key+'P','Тиск, МПа',pressure,0)}${numeric(key+'T','Температура, °C',temperature,-273.15)}</div><label for="${key}Medium">Середовище</label><select id="${key}Medium"></select>`);
+    options(el(key+'Medium'),media.map(m=>[m,m]),'Вода');
+  }
+  el('operatingFields').insertAdjacentHTML('beforeend',numeric('torque','Момент затягування, Н·м','',0));
+  for (const [key,letter,name] of [['sideA','А','Кришка'],['sideB','Б','Корпус']]) {
+    el(key+'Fields').innerHTML=`<label for="${key}Name">Деталь з боку ${letter}</label><select id="${key}Name"><option>${name}</option><option>Фланець ${letter}</option></select>
+      <div class="pair">${numeric(key+'Outer','Зовнішній Ø, мм',360,0)}${numeric(key+'Inner','Внутрішній Ø, мм',190,0)}</div>${numeric(key+'Height','Висота фланця hƒ, мм',key==='sideA'?36:42,0)}`;
+  }
+  el('addExtra').onclick=()=>{
+    const id='extra'+(++extraId),kind=selected('extraKind');
+    el('extraList').insertAdjacentHTML('beforeend',`<section class="extra" id="${id}" data-kind="${kind}"><strong>${kind}</strong><div class="pair">${numeric(id+'Height','Товщина, мм','',0)}${numeric(id+'Area','Площа, мм²','',0)}</div><button class="secondary" type="button">Вилучити</button></section>`);
+    el(id).querySelector('button').onclick=()=>{el(id).remove();render()};
+    el(id).addEventListener('focusin',render);
+    render();
+    el(id+'Height').focus();
+  };
+  const available=Object.keys(thread.sizes).filter(d=>Object.values(catalog.nuts).some(nut=>nut.sizes[d]));
+  options(diameter,available.map(d=>[d,'М'+d]),'24');
+  setSizes();
+  document.querySelector('.panel').addEventListener('input',event=>{
+    if (event.target===diameter) setSizes();
+    if (event.target===standard) setTypes();
+    if (event.target===el('execution')) {
+      const classes=catalog.washers['gost-11371-78'].executions[el('execution').value];
+      options(el('accuracy'),classes.map(c=>[c,c]),el('accuracy').value);
+    }
+    render();
+  });
+  el('next').onclick=()=>go((step+1)%steps.length);
+  el('back').onclick=()=>go(step-1);
+  render();
+</script>
+</html>

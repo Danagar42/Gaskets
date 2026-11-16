@@ -24,6 +24,22 @@ invalid('flanges.sideA.boltCircle','1000');invalid('flanges.sideA.outerDiameter'
 invalid('flanges.sideA.innerDiameter','1230');invalid('flanges.sideA.height','0');invalid('flanges.sideA.coneHeight','-1');
 invalid('fastener.torqueNm','-1');invalid('fastener.torqueNm','200 Нм');
 let node=structuredClone(base);
+for (const [pattern,limit] of [['single',200],['cross',200/Math.SQRT2],['tee',200/Math.SQRT2],['parallel',100]]) {
+  const sample=structuredClone(base);
+  Object.assign(sample.gasket,{innerDiameter:'200',partitionPattern:pattern,partitionWidth:''});
+  assert.ok(report(sample).missing['gasket.partitionWidth']);
+  for (const width of ['-1','0',String(limit)]) {
+    sample.gasket.partitionWidth=width;
+    assert.ok(report(sample).errors['gasket.partitionWidth']);
+  }
+  sample.gasket.partitionWidth='12,5';
+  assert.ok(!report(sample).errors['gasket.partitionWidth']);
+  sample.gasket.partitionWidth='-1';
+  sample.gasket.partitionPattern='none';
+  assert.ok(!report(sample).errors['gasket.partitionWidth']);
+  Object.assign(sample.gasket,{mode:'area',partitionPattern:pattern});
+  assert.ok(!report(sample).errors['gasket.partitionWidth']);
+}
 node.operating.normal.pressure='0';node.operating.normal.temperature='-273.15';node.operating.hydro.temperature='500';
 node.fastener.torqueNm='';node.connection.sideA.area='';node.flanges.sideA.holeDiameter='';node.flanges.sideA.coneHeight='0';
 assert.deepEqual(report(node).errors,{},'Valid zeros, negative Celsius, auto areas and hydro thermal convention remain supported');

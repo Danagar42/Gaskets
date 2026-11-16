@@ -2,6 +2,7 @@
   'use strict';
   const sections = ['operating', 'gasket', 'fastener', 'connection', 'nut', 'washers', 'extras'];
   const DEFAULT_GASKET_REFERENCE_ID = 'graphite-annex-b1-b2-unidentified';
+  const gasketPartitions = Object.freeze({none:'Без перегородок',single:'Одна смуга',cross:'Навхрест',tee:'Т-подібна',parallel:'Дві паралельні смуги'});
   const id = () => root.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   const timestamp = () => new Date().toISOString();
   function createEquipment(name, designation = '') {
@@ -11,7 +12,7 @@
     return {
       id: id(), name: name.trim(), createdAt: timestamp(), updatedAt: timestamp(),
       operating: { normal: { pressure: '', temperature: '', medium: '' }, hydro: { pressure: '', temperature: '', medium: '' } },
-      gasket: { mode: 'ring', thickness: '', outerDiameter: '', innerDiameter: '', hasHoles: false, holeDiameter: '', effectiveArea: '', pressureArea: '', referenceId: DEFAULT_GASKET_REFERENCE_ID },
+      gasket: { mode: 'ring', thickness: '', outerDiameter: '', innerDiameter: '', hasHoles: false, holeDiameter: '', partitionPattern:'none', partitionWidth:'', effectiveArea: '', pressureArea: '', referenceId: DEFAULT_GASKET_REFERENCE_ID },
       fastener: { type: 'stud', nominalDiameter: '', count: '', lubricated: true, material: null, threadStandardId: 'gost-24705-2004', pitch: '', axialHoleDiameter:'0', torqueNm:'', targetTorqueMinNm:'', targetTorqueMaxNm:'' },
       connection: { kind, sideA: { name: kind === 'flange-flange' ? 'Фланець 1' : 'Кришка', material: null, height:'', area:'' }, sideB: { name: kind === 'flange-flange' ? 'Фланець 2' : 'Корпус', material: null, height:'', area:'' } },
       nut: { material: null, standardId: 'gost-5915-70', typeId: 'A' }, washers: { placement: 'none', material: null, standardId: 'gost-11371-78', accuracyClass: 'A', execution: '1' }, extras: [],
@@ -125,6 +126,7 @@
       heightMm: height,
       heightSymbol: hasTypes ? type.heightSymbol : 'm',
       heightLabel: hasTypes ? type.heightLabel : 'Висота гайки',
+      acrossFlatsMm: hasTypes ? row.acrossFlatsByTypeMm?.[nutType] ?? null : row.acrossFlatsMm ?? null,
       typeId: hasTypes ? nutType : null,
       nonPreferred: (standard.nonPreferredDiametersMm || []).includes(diameter)
     };
@@ -263,6 +265,13 @@
     } else {
       const outer = numeric('gasket.outerDiameter'), inner = numeric('gasket.innerDiameter');
       const hole = node.gasket.hasHoles ? numeric('gasket.holeDiameter') : 0;
+      const pattern = node.gasket.partitionPattern ?? 'none';
+      if (pattern !== 'none') {
+        const strip = numeric('gasket.partitionWidth');
+        // Гранична ширина, за якої зникає хоча б один прохід заданої схеми.
+        const limit = pattern === 'parallel' ? inner / 2 : pattern === 'single' ? inner : inner / Math.SQRT2;
+        if (inner > 0 && strip !== null && strip >= limit) fail('gasket.partitionWidth','Смуга перекриває прохід. Зменште її ширину або змініть схему.');
+      }
       if (outer !== null && inner !== null) {
         if (outer <= inner) {
           fail('gasket.outerDiameter','Зовнішній діаметр має бути більшим за внутрішній.');
@@ -316,6 +325,7 @@
     result.gasket = positive(gasket.thickness) && (gasket.mode === 'area'
       ? positive(gasket.effectiveArea) && positive(gasket.pressureArea)
       : positive(gasket.outerDiameter) && positive(gasket.innerDiameter) && number(gasket.outerDiameter) > number(gasket.innerDiameter) && (!gasket.hasHoles || positive(gasket.holeDiameter))) && (!standardsDb || !!standardsDb.gaskets?.[gasket.referenceId || DEFAULT_GASKET_REFERENCE_ID]);
+    if (gasket.mode === 'ring' && (gasket.partitionPattern ?? 'none') !== 'none') result.gasket &&= positive(gasket.partitionWidth);
     result.fastener = positive(node.fastener.nominalDiameter) && positive(node.fastener.count) && Number.isInteger(number(node.fastener.count)) && validMaterial(node.fastener.material, ['RTm','RTp','E']) && (!standardsDb?.threads || !!threadPitch(standardsDb, node.fastener.threadStandardId || 'gost-24705-2004', node.fastener.nominalDiameter, node.fastener.pitch || ''));
     result.connection = !!node.connection.sideA.name.trim() && !!node.connection.sideB.name.trim() && positive(node.connection.sideA.height) && positive(node.connection.sideB.height) && validMaterial(node.connection.sideA.material) && validMaterial(node.connection.sideB.material);
     result.connection &&= ['sideA','sideB'].every(key => {
@@ -368,6 +378,8 @@
       const template = createNode('');
       const scalarFields = ['gasket.mode','gasket.thickness','gasket.outerDiameter','gasket.innerDiameter','gasket.holeDiameter','gasket.effectiveArea','gasket.pressureArea','fastener.type','fastener.nominalDiameter','fastener.count','connection.kind','connection.sideA.name','connection.sideB.name','washers.placement'];
       if (!scalarFields.every(path => typeof get(node, path) === typeof get(template, path))) return false;
+      if (node.gasket.partitionPattern !== undefined && (typeof node.gasket.partitionPattern !== 'string' || !Object.hasOwn(gasketPartitions,node.gasket.partitionPattern))) return false;
+      if (node.gasket.partitionWidth !== undefined && !isText(node.gasket.partitionWidth)) return false;
       if (!['ring','area'].includes(node.gasket.mode) || !['stud','bolt'].includes(node.fastener.type) || !['body-cover','flange-flange','custom'].includes(node.connection.kind) || !['none','a','b','both'].includes(node.washers.placement)) return false;
       if (node.flanges !== undefined && (!node.flanges || !['sideA','sideB'].every(key => {
         const flange = node.flanges[key];
@@ -379,7 +391,7 @@
         && (node.gasket.referenceId === undefined || isText(node.gasket.referenceId)) && ['threadStandardId','pitch','axialHoleDiameter','torqueNm','targetTorqueMinNm','targetTorqueMaxNm'].every(key => node.fastener[key] === undefined || isText(node.fastener[key])) && ['standardId','typeId','threadedHeight'].every(key => node.nut[key] === undefined || isText(node.nut[key])) && ['standardId','accuracyClass','execution'].every(key => node.washers[key] === undefined || isText(node.washers[key])) && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));
     }));
   }
-  const api = { DEFAULT_GASKET_REFERENCE_ID, id, timestamp, sections, createEquipment, createNode, createFlange, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, standardTorque, effectiveTargetTorque, compareTorqueRanges, gasketMediumCoefficient, gasketExpansionAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace, validateInputs };
+  const api = { DEFAULT_GASKET_REFERENCE_ID, gasketPartitions, id, timestamp, sections, createEquipment, createNode, createFlange, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, standardTorque, effectiveTargetTorque, compareTorqueRanges, gasketMediumCoefficient, gasketExpansionAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace, validateInputs };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlangeCore = api;
 })(globalThis);

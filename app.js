@@ -11,7 +11,9 @@
   const fileDialog = document.querySelector('#file-dialog');
   const P = window.FlangeProject;
   const media = ['Відсутнє','Рідина','Вода','Мастило','Олива','Розчин','Пар','Повітря','Водень','Гелій','Газ','Газ з високою проникною властивістю'];
-  const sectionNames = { operating:'Параметри роботи', gasket:'Прокладка', fastener:'Кріплення', connection:'З’єднання', nut:'Гайка', washers:'Шайби', extras:'Додаткові елементи' };
+  const sectionNames = { operating:'Технологічні параметри', gasket:'Прокладка', fastener:'Шпилька / болт', connection:'Деталі А / Б та фланці', nut:'Гайка', washers:'Шайба', extras:'Додаткові елементи' };
+  const editorSteps = ['operating','gasket','fastener','nut','washers','connection','extras','results'];
+  let editorStep = 'operating';
   const paths = {
     plus:'M12 5v14M5 12h14', search:'m21 21-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
     arrow:'m14 6-6 6 6 6', chevron:'m9 5 7 7-7 7', down:'m6 9 6 6 6-6', close:'m6 6 12 12M18 6 6 18',
@@ -46,6 +48,8 @@
   } catch (error) { storageError = error.message; }
   let currentFolder = null;
   let foldersById = new Map();
+  let draggedFolder = null;
+  let dropCard = null;
   let currentEquipment = null;
   let currentNode = null;
   let editContext = null;
@@ -57,6 +61,7 @@
   let saveFailed = false;
   let importedProject = null;
   let excelContext = null;
+  let pendingField = null;
   const touchedFields = new Set();
 
   function download(content, name, type) {
@@ -127,7 +132,8 @@
     fileShell('Експорт у початковий Excel',`<p>${esc(currentEquipment.name)} · ${nodes.length} ${plural(nodes.length,['вузол','вузли','вузлів'])}. Кожен вузол матиме окремий редагований аркуш із формулами.</p><div class="export-nodes">${nodes.map((node,index) => {
       const report = reports[index];
       const torque = C.number(node.fastener.torqueNm) ?? (report.limits.maximum.roundedTorqueNm >= 0 ? report.limits.maximum.roundedTorqueNm : '');
-      return `<section class="export-node"><h3>${esc(node.name)}</h3>${report.errors.length ? `<ul class="dialog-error">${report.errors.map(error => `<li>${esc(error)}</li>`).join('')}</ul>` : `<div class="field"><label for="excel-torque-${index}">Момент перевірки, Н·м</label><input id="excel-torque-${index}" data-excel-torque="${index}" inputmode="decimal" value="${esc(torque)}" required><small>Для C6 у файлі. ${C.number(node.fastener.torqueNm) === null ? 'Запропоновано округлений максимум.' : 'Взято з анкети.'} Анкета не зміниться.</small></div>`}${report.warnings.map(warning => `<p class="file-warning">${esc(warning)}</p>`).join('')}</section>`;
+      const issue = report.errors.length ? nextInputIssue(node,report.limits) : null;
+      return `<section class="export-node"><h3>${esc(node.name)}</h3>${report.errors.length ? `${issue ? issueMarkup(issue,node) + '<details class="export-diagnostics"><summary>Деталі перевірки</summary>' : ''}<ul class="dialog-error">${report.errors.map(error => `<li>${esc(error)}</li>`).join('')}</ul>${issue ? '</details>' : ''}` : `<div class="field"><label for="excel-torque-${index}">Момент перевірки, Н·м</label><input id="excel-torque-${index}" data-excel-torque="${index}" inputmode="decimal" value="${esc(torque)}" required><small>Для C6 у файлі. ${C.number(node.fastener.torqueNm) === null ? 'Запропоновано округлений максимум.' : 'Взято з анкети.'} Анкета не зміниться.</small></div>`}${report.warnings.map(warning => `<p class="file-warning">${esc(warning)}</p>`).join('')}</section>`;
     }).join('')}</div><p class="file-warning">Схеми й оформлення збережені з шаблону; зображення не перебудовуються за новими розмірами. Характеристики металів беруться з поточної бази на момент експорту. Excel перерахує формули при відкритті.</p>`, `<button class="button secondary" data-action="close-file">Закрити</button><button class="button primary" data-action="download-excel" ${blocked ? 'disabled' : ''}>${icon('file')}Завантажити XLSX</button>`);
   }
   async function exportExcel(button) {
@@ -200,6 +206,7 @@
     document.querySelector('#breadcrumbs').innerHTML = links.join('');
   }
   function renderRoute() {
+    endFolderDrag();
     if (materialDialog.open) materialDialog.close();
     if (editDialog.open) editDialog.close();
     const parts = location.hash.slice(1).split('/');
@@ -212,11 +219,16 @@
     if (storageError) {
       setSaveStatus('Не вдалося відкрити збереження', true);
       main.innerHTML = `<section class="desktop"><h1>Збережені дані потребують перевірки</h1><p class="calculation-notice" style="margin-top:20px">Не вдалося прочитати робочий простір. Поточне збереження залишилося в браузері.</p><button class="button secondary" data-action="recover">Завантажити збережені дані</button><button class="button quiet" data-action="reset">Створити новий простір</button></section>`;
-    } else if (currentNode) renderEditor();
+    } else if (currentNode) {
+      renderEditor();
+      if (pendingField?.nodeId === currentNode.id) focusInput(pendingField.path);
+    }
     else renderDesktop();
+    pendingField = null;
     document.title = `${currentNode?.name || currentEquipment?.name || currentFolder?.name || 'Робочий простір'} — Прокладки`;
   }
 
+  const folderArt = `<svg class="folder-art" viewBox="0 0 76 58" fill="none" aria-hidden="true"><path d="M5 8a5 5 0 0 1 5-5h20l8 8h28a5 5 0 0 1 5 5v33H5V8Z" fill="var(--folder-back,#b9cceb)"/><path d="M12 12h49v34H12V12Z" fill="#f5f8ff"/><path d="M10 17h56v31H10V17Z" fill="var(--folder-sheet,#e7effc)"/><path d="M4 22a5 5 0 0 1 5-5h25l7 7h26a5 5 0 0 1 5 5l-3 23a4 4 0 0 1-4 3H9a4 4 0 0 1-4-4L2 28a5 5 0 0 1 2-6Z" fill="var(--folder-front,#d2e1fa)" stroke="var(--folder-edge,#91b0df)"/><path d="M13 35h20M13 40h13" stroke="var(--folder-lines,#87a9d9)" stroke-width="1.4" stroke-linecap="round"/></svg>`;
   function emptyArt() {
     return `<svg viewBox="0 0 320 260" fill="none" aria-hidden="true"><path d="M45 64h230M45 194h230M90 30v200M230 30v200" stroke="#c8d7ed" stroke-dasharray="4 5"/><path d="M53 64v130M47 70l6-6 6 6M47 188l6 6 6-6M90 222h140M96 216l-6 6 6 6M224 216l6 6-6 6" stroke="#91aace"/><ellipse cx="160" cy="129" rx="69" ry="67" fill="#e4edfb" stroke="#7d9fd0" stroke-width="2"/><ellipse cx="160" cy="129" rx="42" ry="40" fill="#f6f9ff" stroke="#7d9fd0" stroke-width="2"/><g fill="#f6f9ff" stroke="#7d9fd0" stroke-width="1.6"><circle cx="160" cy="76" r="5"/><circle cx="197" cy="92" r="5"/><circle cx="214" cy="129" r="5"/><circle cx="197" cy="166" r="5"/><circle cx="160" cy="182" r="5"/><circle cx="123" cy="166" r="5"/><circle cx="106" cy="129" r="5"/><circle cx="123" cy="92" r="5"/></g><path d="M160 52v154M78 129h164" stroke="#245ed0" stroke-dasharray="8 4 2 4" opacity=".45"/><rect x="235" y="40" width="47" height="27" rx="5" fill="white" stroke="#d2dff1"/><path d="M247 54h22M258 47v14" stroke="#245ed0" stroke-width="1.8" stroke-linecap="round"/></svg>`;
   }
@@ -274,7 +286,9 @@
     const hydroText = formatCondition(node.operating?.hydro);
 
     let torqueHtml = '';
-    if (calcMin !== null && calcMax !== null && target) {
+    const hasBounds = calcMin !== null && calcMax !== null;
+    const issue = !limits?.complete ? nextInputIssue(node,limits) : null;
+    if (hasBounds && target) {
       const cMin = calcMin, cMax = calcMax;
       const tMin = target.minNm, tMax = target.maxNm;
 
@@ -314,7 +328,7 @@
       const statusIcon = comp.status === 'full' ? icon('check') : comp.status === 'partial' ? icon('info') : icon('close');
 
       torqueHtml = `<div class="node-torque-cell" title="${esc(comp.description)}"><div class="torque-cell-top"><div class="torque-cell-values"><span class="torque-val-group calc" title="Розрахунковий допустимий діапазон"><span class="legend-indicator calc"></span><small>Розрахунок:</small> <strong>${cMin}–${cMax}</strong> <span class="unit">Н·м</span></span><span class="torque-val-sep">·</span><span class="torque-val-group target" title="${esc(target.label)}"><span class="legend-indicator target"></span><small>ТУ:</small> <strong>${tMin}–${tMax}</strong> <span class="unit">Н·м</span></span></div><div class="torque-badge ${comp.status}">${statusIcon}<span>${esc(comp.label)}</span></div></div><div class="torque-ruler-wrapper"><div class="ruler-labels-track top"><span class="ruler-marker-label tu" style="left:${tLeft}%;"><span class="m-txt">${tMin}</span></span><span class="ruler-marker-label tu" style="left:${tRight}%;"><span class="m-txt">${tMax}</span></span></div><div class="ruler-scale-track"><div class="ruler-zone calc-zone" style="left:${cLeft}%;width:${cWidth}%;" title="Розрахунковий діапазон: ${cMin}–${cMax} Н·м"></div><div class="ruler-zone tu-bracket" style="left:${tLeft}%;width:${tWidth}%;" title="Норматив за ТУ: ${tMin}–${tMax} Н·м"></div>${hasOverlap ? `<div class="ruler-zone overlap-zone ${comp.status}" style="left:${oLeft}%;width:${oWidth}%;" title="Робочий коридор затягування: ${oMin}–${oMax} Н·м"></div>` : ''}${isCapped ? `<div class="ruler-zone capped-zone" style="left:${cappedLeft}%;width:${cappedWidth}%;" title="Перевищує розрахункову міцність: затяг > ${cMax} Н·м заборонено"></div>` : ''}${isLowSeating ? `<div class="ruler-zone capped-zone low" style="left:${lowLeft}%;width:${lowWidth}%;" title="Недостатній затяг для герметичності (потрібно >= ${cMin} Н·м)"></div>` : ''}<div class="ruler-tick calc" style="left:${cLeft}%;" title="Мін. розрахунковий: ${cMin} Н·м"></div><div class="ruler-tick tu" style="left:${tLeft}%;" title="Мін. за ТУ: ${tMin} Н·м"></div><div class="ruler-tick tu" style="left:${tRight}%;" title="Макс. за ТУ: ${tMax} Н·м"></div><div class="ruler-tick calc" style="left:${cRight}%;" title="Макс. розрахунковий: ${cMax} Н·м"></div></div><div class="ruler-labels-track bottom"><span class="ruler-marker-label calc" style="left:${cLeft}%;"><span class="m-txt">${cMin}</span></span><span class="ruler-marker-label calc" style="left:${cRight}%;"><span class="m-txt">${cMax}</span></span></div></div></div>`;
-    } else if (calcMin !== null && calcMax !== null) {
+    } else if (hasBounds) {
       const cMin = calcMin, cMax = calcMax;
       const pad = Math.max((cMax - cMin) * 0.15, 10);
       const axisMin = Math.max(0, Math.floor(cMin - pad));
@@ -327,13 +341,11 @@
 
       torqueHtml = `<div class="node-torque-cell"><div class="torque-cell-top"><div class="torque-cell-values"><span class="torque-val-group calc"><span class="legend-indicator calc"></span><small>Розрахунок:</small> <strong>${cMin}–${cMax}</strong> <span class="unit">Н·м</span></span></div><div class="torque-badge neutral"><span>ТУ не вказано</span></div></div><div class="torque-ruler-wrapper"><div class="ruler-labels-track top"></div><div class="ruler-scale-track"><div class="ruler-zone calc-zone" style="left:${cLeft}%;width:${cWidth}%;"></div><div class="ruler-tick calc" style="left:${cLeft}%;"></div><div class="ruler-tick calc" style="left:${cRight}%;"></div></div><div class="ruler-labels-track bottom"><span class="ruler-marker-label calc" style="left:${cLeft}%;"><span class="m-txt">${cMin}</span></span><span class="ruler-marker-label calc" style="left:${cRight}%;"><span class="m-txt">${cMax}</span></span></div></div></div>`;
     } else {
-      const status = C.sectionStatus(node, materials, standardsDb);
-      const missingNames = Object.entries(status).filter(([_, ok]) => !ok).map(([key]) => sectionNames[key] || key);
       const targetText = target ? `ТУ: ${target.minNm}–${target.maxNm} Н·м` : '';
-      torqueHtml = `<div class="node-torque-cell pending"><div class="torque-cell-top pending-top"><div class="torque-badge neutral">${icon('info')}<span>Потрібні дані</span></div>${targetText ? `<span class="torque-expected-target">${esc(targetText)}</span>` : ''}</div><small class="torque-missing-hint" title="Незаповнені розділи: ${esc(missingNames.join(', '))}">Бракує: ${esc(missingNames.slice(0, 2).join(', '))}${missingNames.length > 2 ? '…' : ''}</small></div>`;
+      torqueHtml = `<div class="node-torque-cell pending"><div class="torque-cell-top pending-top"><div class="torque-badge neutral">${icon('info')}<span>Потрібні дані</span></div>${targetText ? `<span class="torque-expected-target">${esc(targetText)}</span>` : ''}</div>${issue ? issueMarkup(issue,node) : '<small>Перегляньте результати перевірок у вузлі.</small>'}</div>`;
     }
 
-    return `<div class="node-row"><button class="node-open" data-action="open-node" data-id="${node.id}"><span class="file-icon">${icon('file')}</span><span class="node-title-group"><strong>${esc(node.name)}</strong><div class="node-params-grid"><div class="node-tag op-tag nue" title="Нормальні умови експлуатації"><strong class="op-k">НУЕ:</strong> <span>${normalText ? esc(normalText) : '—'}</span></div><div class="node-tag fastener-tag" title="Елементи кріплення">${esc(fastenerTag)}</div><div class="node-tag op-tag hv" title="Гідровипробування"><strong class="op-k">ГВ:</strong> <span>${hydroText ? esc(hydroText) : '—'}</span></div><div class="node-tag gasket-tag" title="Параметри прокладки">${esc(gasketTag)}</div></div></span></button><span class="node-kind">${kindName(node.connection.kind)}</span>${torqueHtml}<span class="node-date">${date(node.updatedAt)}</span><div class="card-actions"><button class="icon-button" data-action="edit-node" data-id="${node.id}" aria-label="Перейменувати ${esc(node.name)}" title="Перейменувати">${icon('edit')}</button><button class="icon-button" data-action="copy-node" data-id="${node.id}" aria-label="Дублювати ${esc(node.name)}" title="Дублювати">${icon('copy')}</button><button class="icon-button danger" data-action="delete-node" data-id="${node.id}" aria-label="Видалити ${esc(node.name)}" title="Видалити">${icon('trash')}</button></div></div>`;
+    return `<div class="node-row"><button class="node-open" data-action="open-node" data-id="${node.id}"><span class="file-icon">${icon('file')}</span><span class="node-title-group"><strong>${esc(node.name)}</strong><div class="node-params-grid"><div class="node-tag op-tag nue" title="Нормальні умови експлуатації"><strong class="op-k">НУЕ:</strong> <span>${normalText ? esc(normalText) : '—'}</span></div><div class="node-tag fastener-tag" title="Елементи кріплення">${esc(fastenerTag)}</div><div class="node-tag op-tag hv" title="Гідровипробування"><strong class="op-k">ГВ:</strong> <span>${hydroText ? esc(hydroText) : '—'}</span></div><div class="node-tag gasket-tag" title="Параметри прокладки">${esc(gasketTag)}</div></div></span></button><span class="node-kind">${kindName(node.connection.kind)}</span>${hasBounds && issue ? `<div class="node-torque-summary">${torqueHtml}${issueMarkup(issue,node)}</div>` : torqueHtml}<span class="node-date">${date(node.updatedAt)}</span><div class="card-actions"><button class="icon-button" data-action="edit-node" data-id="${node.id}" aria-label="Перейменувати ${esc(node.name)}" title="Перейменувати">${icon('edit')}</button><button class="icon-button" data-action="copy-node" data-id="${node.id}" aria-label="Дублювати ${esc(node.name)}" title="Дублювати">${icon('copy')}</button><button class="icon-button danger" data-action="delete-node" data-id="${node.id}" aria-label="Видалити ${esc(node.name)}" title="Видалити">${icon('trash')}</button></div></div>`;
   }
   function renderDesktopContent() {
     const target = document.querySelector('#desktop-content');
@@ -355,7 +367,7 @@
   function renderRegister(target) {
     const query = C.canonical(searchText);
     const parentId = currentFolder?.id ?? null;
-    const rows = [];
+    const cards = [];
     const childCounts = new Map();
     for (const folder of workspace.folders) childCounts.set(folder.parentId,(childCounts.get(folder.parentId) || 0) + 1);
     for (const item of workspace.equipment) childCounts.set(item.folderId,(childCounts.get(item.folderId) || 0) + 1);
@@ -371,11 +383,19 @@
         const count = isFolder ? childCounts.get(item.id) || 0 : item.nodes.length;
         const detail = `${count} ${plural(count,isFolder ? ['елемент','елементи','елементів'] : ['вузол','вузли','вузлів'])}`;
         const action = (verb,label,glyph) => `<button class="icon-button ${verb === 'delete' ? 'danger' : ''}" data-action="${verb}-${type}" data-id="${item.id}" title="${label}" aria-label="${label} · ${esc(item.name)}">${icon(glyph)}</button>`;
-        rows.push(`<tr><td><button class="register-open" data-action="open-${type}" data-id="${item.id}" aria-label="Відкрити ${isFolder ? 'папку' : 'обладнання'} ${esc(item.name)}"><span class="register-icon ${type}">${icon(isFolder ? 'folder' : 'gasket')}</span><span><strong>${esc(item.name)}</strong>${path ? `<small>${esc(path)}</small>` : ''}</span></button></td><td>${esc(item.designation || '—')}</td><td>${detail}</td><td>${date(item.updatedAt)}</td><td><div class="card-actions">${action('edit','Редагувати','edit')}${action('move','Перемістити','move')}${action('delete','Видалити','trash')}</div></td></tr>`);
+        cards.push(`<article class="equipment-card ${isFolder ? 'directory-card' : ''}" ${isFolder ? `data-folder-id="${item.id}"` : ''}>
+          <button class="equipment-open" data-action="open-${type}" data-id="${item.id}" ${isFolder ? 'draggable="true" title="Відкрити папку або перетягнути в іншу папку"' : ''} aria-label="Відкрити ${isFolder ? 'папку' : 'обладнання'} ${esc(item.name)}">
+            ${folderArt}<strong class="card-name">${esc(item.name)}</strong>
+            <span class="designation">${isFolder ? 'Папка' : esc(item.designation || 'Обладнання')}</span>
+            ${path ? `<small class="card-path">${esc(path)}</small>` : ''}
+          </button>
+          <div class="equipment-card-footer"><span title="Змінено ${date(item.updatedAt)}">${icon(isFolder ? 'folder' : 'file')}${detail}</span>
+            <div class="card-actions">${action('edit','Редагувати','edit')}${action('move','Перемістити','move')}${action('delete','Видалити','trash')}</div>
+          </div></article>`);
       }
     }
-    if (rows.length) {
-      target.innerHTML = `<table class="register-list"><thead><tr><th>Назва</th><th>Позначення</th><th>Вміст</th><th>Змінено</th><th aria-label="Дії"></th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+    if (cards.length) {
+      target.innerHTML = `<div class="equipment-grid">${cards.join('')}${query ? '' : `<button class="create-card" data-action="new-equipment"><span>${icon('plus')}</span>Нове обладнання</button>`}</div>`;
     } else if (query) {
       target.innerHTML = '<div class="no-results">Збігів у реєстрі немає. Спробуйте іншу назву або позначення.</div>';
     } else {
@@ -389,12 +409,86 @@
     return `<div class="field"><label for="${fieldId}">${label}</label><div class="input-unit"><input id="${fieldId}" aria-describedby="${fieldId}-error" data-field="${path}" value="${esc(value)}" ${unit ? `inputmode="${settings.integer ? 'numeric' : 'decimal'}" data-number="true" data-min="${settings.min ?? 0}" ${settings.positive !== false ? 'data-positive="true"' : ''} ${settings.integer ? 'data-integer="true"' : ''}` : 'maxlength="120"'} autocomplete="off" placeholder="${esc(settings.placeholder || '—')}" ${unit === 'М' ? 'data-unit="М"' : ''}>${unit ? `<span ${unit === 'М' ? 'class="unit-prefix"' : ''}>${unit}</span>` : ''}</div>${settings.help ? `<p class="field-help">${settings.help}</p>` : ''}<p id="${fieldId}-error" class="field-error" aria-live="polite" hidden></p></div>`;
   }
   function selectField(path, label, options) {
-    return `<div class="field"><label for="field-${path.replaceAll('.','-')}">${label}</label><select id="field-${path.replaceAll('.','-')}" aria-describedby="field-${path.replaceAll('.','-')}-error" data-field="${path}">${options.map(([value,text]) => `<option value="${esc(value)}" ${C.get(currentNode,path) === value ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select><p id="field-${path.replaceAll('.','-')}-error" class="field-error" aria-live="polite" hidden></p></div>`;
+    return `<div class="field"><label for="field-${path.replaceAll('.','-')}">${label}</label><select id="field-${path.replaceAll('.','-')}" aria-describedby="field-${path.replaceAll('.','-')}-error" data-field="${path}">${options.map(([value,text]) => `<option value="${esc(value)}" ${String(C.get(currentNode,path) ?? '') === String(value) ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select><p id="field-${path.replaceAll('.','-')}-error" class="field-error" aria-live="polite" hidden></p></div>`;
   }
   function materialField(path, label = 'Матеріал') {
     const ref = C.get(currentNode,path);
     const found = C.resolveMaterial(materials,ref);
     return `<p class="sub-label">${esc(label)}</p><button type="button" class="material-card ${!ref ? 'missing' : !found ? 'invalid' : ''}" data-action="pick-material" data-path="${path}" data-label="${esc(label)}" aria-label="${esc(label)}: ${esc(ref?.name || 'вибрати матеріал')}">${icon('material')}<span><strong>${esc(ref?.name || 'Вибрати матеріал')}</strong><small>${found ? `${found.grade.kp ? `КП ${esc(found.grade.kp)} · ` : ''}${esc(C.cleanDescription(found.material.name,found.grade.description))}` : ref ? 'Виконання відсутнє в базі. Виберіть повторно.' : 'Марка сталі / сплаву та КП'}</small></span>${icon('chevron','chevron')}</button>`;
+  }
+  function inputLabel(path) {
+    const [section,part] = path.split('.');
+    const key = path.split('.').at(-1);
+    const labels = {
+      pressure:'Тиск', temperature:'Температура', medium:'Середовище', thickness:'Товщина',
+      count:'Кількість кріплень', nominalDiameter:'Діаметр різьби', pitch:'Крок різьби',
+      threadStandardId:'Стандарт різьби', axialHoleDiameter:'Поздовжній отвір', torqueNm:'Заданий момент',
+      targetTorqueMinNm:'Мінімальний момент за ТУ', targetTorqueMaxNm:'Максимальний момент за ТУ',
+      effectiveArea:'Ефективна площа', pressureArea:'Площа дії тиску', outerDiameter:'Зовнішній діаметр',
+      innerDiameter:'Внутрішній діаметр', holeDiameter:'Діаметр отвору', height:'Висота',
+      area:'Площа перерізу', boltCircle:'Діаметр кола кріплень', wallCylinder:'Товщина стінки',
+      wallCone:'Товщина конуса', coneHeight:'Висота конуса', gasketDiameter:'Діаметр прокладки',
+      threadedHeight:'Висота різьбової частини', partitionWidth:'Ширина смуги перегородки'
+    };
+    let context = sectionNames[section];
+    if (section === 'operating') context = part === 'normal' ? 'НУЕ' : 'ГВ';
+    if (section === 'connection' || section === 'flanges') context = `${section === 'flanges' ? 'Фланець' : 'Деталь'} ${part === 'sideA' ? 'А' : 'Б'}`;
+    if (section === 'extras') context = `Елемент ${Number(part) + 1}`;
+    return `${context} · ${labels[key] || key}`;
+  }
+  function nextInputIssue(node, limits) {
+    const {errors,missing} = C.validateInputs(node,standardsDb);
+    const path = Object.keys(errors)[0] || Object.keys(missing)[0];
+    if (path) return {path, message:`${inputLabel(path)}. ${errors[path] || missing[path]}`, action:'Перейти до поля'};
+
+    // Only highlight properties that feed an active calculation for this part and mode.
+    const parts = [
+      ['fastener.material','кріплення',['E','RTp']],
+      ['connection.sideA.material','деталі А',['E']],
+      ['connection.sideB.material','деталі Б',['E']],
+      ['nut.material','гайки',['RTp']]
+    ];
+    if (node.washers.placement !== 'none') parts.push(['washers.material','шайб',['E']]);
+    node.extras.forEach((_,i) => parts.push([`extras.${i}.material`,`елемента ${i + 1}`,['E']]));
+    for (const [path,part,keys] of parts) {
+      const ref = C.get(node,path);
+      const action = `Переглянути матеріал ${part}`;
+      if (!C.resolveMaterial(materials,ref)) {
+        return {path,action,message:ref ? `Матеріал ${part}: виконання «${ref.name}» відсутнє в базі.` : `Оберіть матеріал ${part}.`};
+      }
+      const side = path.startsWith('connection.') ? path.split('.')[1] : null;
+      const flange = limits?.flanges.sides[side];
+      const missingByMode = [];
+      for (const [mode,operating] of Object.entries(node.operating)) {
+        const required = [...keys];
+        const state = flange?.states[mode];
+        if (side === 'sideB' && node.fastener.type === 'stud' && !limits?.maximum.omitted.some(item => item.mode === mode)) required.push('RTp');
+        if (mode === 'normal' && (side === 'sideA' || (side === 'sideB' && node.fastener.type === 'bolt') || path === 'washers.material')) required.push('Alpha');
+        if (state && state.values.allowable === null) required.push('RTm','RTp');
+        if (state && mode === 'normal' && Object.values(state.checks).some(check => check.active && check.allowable === null)) required.push(state.castIron && !state.sources.some(source => source.key === 'RTm') ? 'RTm' : 'RTp');
+        const properties = C.missingProperties(materials,ref,{[mode]:operating},[...new Set(required)]);
+        if (properties.length) missingByMode.push(`${mode === 'normal' ? 'НУЕ' : 'ГВ'} (${displayNumber(operating.temperature)} °C) — ${properties.map(item => ({RTp:'Rp',RTm:'Rm',Alpha:'α',E:'E'})[item.property]).join(', ')}`);
+      }
+      if (missingByMode.length) return {path,action,message:`Для матеріалу ${part} «${ref.name}» бракує табличних даних: ${missingByMode.join('; ')}.`};
+    }
+    for (const side of ['sideA','sideB']) {
+      if (!['flange','none'].includes(node.flanges?.[side]?.mode)) return {path:`flanges.${side}.mode`,message:`Визначте застосовність перевірки фланця ${side === 'sideA' ? 'А' : 'Б'}.`,action:'Перейти до перевірки фланця'};
+    }
+    if (!C.nutDimensions(standardsDb,node.nut.standardId,node.fastener.nominalDiameter,node.nut.typeId)) return {path:'nut.standardId',message:'Для вибраної гайки й діаметра кріплення в каталозі немає розмірів.',action:'Переглянути стандарт гайки'};
+    if (node.washers.placement !== 'none' && !C.washerDimensions(standardsDb,node.washers.standardId,node.fastener.nominalDiameter,node.washers.accuracyClass,node.washers.execution)) return {path:'washers.standardId',message:'Для вибраної шайби й діаметра кріплення в каталозі немає розмірів.',action:'Переглянути стандарт шайби'};
+    return null;
+  }
+  function issueMarkup(issue,node) {
+    return `<span class="input-issue"><span>${esc(issue.message)}</span><button type="button" class="issue-jump" data-action="focus-input" data-id="${esc(node.id)}" data-path="${esc(issue.path)}">${esc(issue.action)}</button></span>`;
+  }
+  function focusInput(path) {
+    const selector = CSS.escape(path);
+    const input = main.querySelector(`[data-field="${selector}"],[data-action="pick-material"][data-path="${selector}"]`);
+    if (!input) return;
+    selectEditorStep(input.closest('.settings-section').dataset.section);
+    input.closest('.settings-section').open = true;
+    input.focus();
+    input.scrollIntoView({block:'nearest'});
   }
   function updateMaterialWarnings() {
     const labels = { RTm:'Rm', RTp:'Rp', E:'E', Alpha:'α' };
@@ -416,7 +510,17 @@
     return `<span class="section-status ${complete ? 'ready' : ''}">${complete ? icon('check') : ''}${complete ? optional : 'Заповнити'}</span>`;
   }
   function section(key, body, open, statuses) {
-    return `<details class="settings-section" data-section="${key}" ${open ? 'open' : ''}><summary>${icon(key)}${sectionNames[key]}${statusMarkup(key,statuses[key])}${icon('down','section-chevron')}</summary><div class="section-body">${body}</div></details>`;
+    const d = C.number(currentNode?.fastener?.nominalDiameter);
+    let title = sectionNames[key] || '';
+    if (key === 'fastener') {
+      const typeName = currentNode?.fastener?.type === 'bolt' ? 'Болт' : 'Шпилька';
+      title = d ? `${typeName} М${displayNumber(d)}` : typeName;
+    } else if (key === 'nut' && d) {
+      title = `Гайка М${displayNumber(d)}`;
+    } else if (key === 'washers' && d && currentNode?.washers?.placement !== 'none') {
+      title = `Шайба М${displayNumber(d)}`;
+    }
+    return `<details class="settings-section" data-section="${key}" ${open ? 'open' : ''}><summary>${icon(key)}${title}${statusMarkup(key,statuses[key])}${icon('down','section-chevron')}</summary><div class="section-body">${body}</div></details>`;
   }
   function standardBox(kind) {
     if (kind === 'washers') {
@@ -425,9 +529,17 @@
       const diameter = C.number(currentNode.fastener.nominalDiameter);
       const dimensions = C.washerDimensions(standardsDb, selection.standardId, diameter, selection.accuracyClass, selection.execution);
       const label = record?.document || 'Стандарт шайб не знайдено';
-      const rows = dimensions ? [['Товщина',dimensions.thicknessMm],['Зовнішній діаметр',dimensions.outerDiameterMm],['Внутрішній діаметр',dimensions.innerDiameterMm]] : [];
+      const widthMm = dimensions ? (dimensions.outerDiameterMm - dimensions.innerDiameterMm) / 2 : null;
+      const meanDiameterMm = dimensions ? (dimensions.outerDiameterMm + dimensions.innerDiameterMm) / 2 : null;
+      const rows = dimensions ? [
+        ['Товщина s', `${displayNumber(dimensions.thicknessMm)} мм`],
+        ['Зовнішній діаметр d₂', `${displayNumber(dimensions.outerDiameterMm)} мм`],
+        ['Внутрішній діаметр d₁', `${displayNumber(dimensions.innerDiameterMm)} мм`],
+        ['Ширина шайби b', `${displayNumber(widthMm)} мм`],
+        ['Середній діаметр dср', `${displayNumber(meanDiameterMm)} мм`]
+      ] : [];
       const note = diameter === null ? 'Спочатку вкажіть номінальний діаметр різьби.' : !record ? 'Відсутні дані вибраного стандарту.' : `Немає нормативних розмірів для М${displayNumber(diameter)}, виконання ${esc(selection.execution)}, класу ${esc(selection.accuracyClass)}.`;
-      return `<div class="standard-box"><span>${icon('file')}${esc(label)} · виконання ${esc(selection.execution)}, клас ${esc(selection.accuracyClass)}</span>${rows.length ? rows.map(([name,value]) => `<div class="readonly-line"><span>${name}</span><strong>${displayNumber(value)} мм</strong></div>`).join('') : note}</div>`;
+      return `<div class="standard-box"><span>${icon('file')}${esc(label)} · виконання ${esc(selection.execution)}, клас ${esc(selection.accuracyClass)}</span>${rows.length ? rows.map(([name,value]) => `<div class="readonly-line"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('') : note}</div>`;
     }
     if (kind === 'nuts') {
       const selection = currentNode.nut;
@@ -435,9 +547,15 @@
       const diameter = C.number(currentNode.fastener.nominalDiameter);
       const dimensions = C.nutDimensions(standardsDb, selection.standardId, diameter, selection.typeId || 'A');
       const label = record?.document || 'Стандарт гайок не знайдено';
+      const eDiameter = dimensions?.acrossFlatsMm ? Math.round(dimensions.acrossFlatsMm * (2 / Math.sqrt(3)) * 10) / 10 : null;
+      const rows = dimensions ? [
+        [`${dimensions.heightLabel} ${dimensions.heightSymbol}`, `${displayNumber(dimensions.heightMm)} мм`],
+        dimensions.acrossFlatsMm ? ['Розмір під ключ S', `${displayNumber(dimensions.acrossFlatsMm)} мм`] : null,
+        eDiameter ? ['Описане коло e (габарит)', `${displayNumber(eDiameter)} мм`] : null
+      ].filter(Boolean) : [];
       const note = diameter === null ? 'Спочатку вкажіть номінальний діаметр різьби.' : !record ? 'Відсутні дані вибраного стандарту.' : `Для М${displayNumber(diameter)} й обраного типу немає оцифрованої нормативної висоти.`;
-      return `<div class="standard-box"><span>${icon('file')}${esc(label)}</span>${dimensions
-        ? `<div class="readonly-line"><span>${esc(dimensions.heightLabel)} ${esc(dimensions.heightSymbol)}</span><strong>${displayNumber(dimensions.heightMm)} мм</strong></div>${dimensions.nonPreferred ? '<p class="field-help">Розмір у ГОСТ наведено в дужках; за можливості не застосовувати.</p>' : ''}${dimensions.typeId === 'B' ? '<p class="field-help">Для ковпачкової гайки l₁ — загальна висота, а не довжина зачеплення різьби чи висота опорної частини.</p>' : ''}`
+      return `<div class="standard-box"><span>${icon('file')}${esc(label)}</span>${rows.length
+        ? `${rows.map(([name,value]) => `<div class="readonly-line"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('')}${dimensions.nonPreferred ? '<p class="field-help">Розмір у ГОСТ наведено в дужках; за можливості не застосовувати.</p>' : ''}${dimensions.typeId === 'B' ? '<p class="field-help">Для ковпачкової гайки l₁ — загальна висота, а не довжина зачеплення різьби чи висота опорної частини.</p>' : ''}`
         : note}</div>`;
     }
     return '';
@@ -446,11 +564,24 @@
     const referenceId = currentNode.gasket.referenceId || C.DEFAULT_GASKET_REFERENCE_ID;
     const record = standardsDb.gaskets?.[referenceId];
     if (!record) return `<div class="standard-box" data-gasket-reference><span>${icon('file')}Характеристики графітової прокладки</span>Нормативні дані недоступні. Перевірте файл standards.bundle.js.</div>`;
+    const od = C.number(currentNode.gasket.outerDiameter);
+    const id = C.number(currentNode.gasket.innerDiameter);
+    let ringGeometryRows = [];
+    if (currentNode.gasket.mode === 'ring' && od > 0 && id > 0 && od > id) {
+      const b0 = (od - id) / 2;
+      const b = b0 > 15 ? Math.round(3.8 * Math.sqrt(b0) * 10) / 10 : b0;
+      const dMid = (od + id) / 2;
+      ringGeometryRows = [
+        ['Реальна ширина b₀', `${displayNumber(b0)} мм`],
+        ['Розрахункова ширина b', `${displayNumber(b)} мм`],
+        ['Середній діаметр Dср', `${displayNumber(dMid)} мм`]
+      ];
+    }
     const scalarRows = [
-      ['Модуль Юнга Eпр', record.elasticModulusMPa, 'МПа'],
-      ['Питомий тиск обтиснення q₀', record.seatingPressureMPa, 'МПа'],
-      ['Мінімальний питомий тиск qmin', record.minimumPressureMPa, 'МПа'],
-      ['Максимальний питомий тиск qmax', record.maximumPressureMPa, 'МПа']
+      ['Модуль Юнга Eпр', `${displayNumber(record.elasticModulusMPa)} МПа`],
+      ['Питомий тиск обтиснення q₀', `${displayNumber(record.seatingPressureMPa)} МПа`],
+      ['Мінімальний питомий тиск qmin', `${displayNumber(record.minimumPressureMPa)} МПа`],
+      ['Максимальний питомий тиск qmax', `${displayNumber(record.maximumPressureMPa)} МПа`]
     ];
     const cases = [['normal','НУЕ'],['hydro','ГВ']];
     const stateRows = cases.map(([mode,label]) => {
@@ -458,11 +589,13 @@
       const m = C.gasketMediumCoefficient(standardsDb, referenceId, state.medium);
       const a = C.gasketExpansionAt(standardsDb, referenceId, state.temperature);
       const temp = C.number(state.temperature);
-      return `<div class="readonly-line"><span>m, ${label} (${esc(state.medium || 'середовище не задано')})</span><strong>${m ? displayNumber(m.value) : '—'}</strong></div><div class="readonly-line"><span>α, ${label} (${temp === null ? 'T не задано' : `${displayNumber(temp)} °C`})</span><strong>${a ? `${displayNumber(a.value)} × 10⁻⁶/°C` : '—'}</strong></div>${a ? `<p class="field-help">α для ${label} взята з таблиці при ${displayNumber(a.temperatureC)} °C.</p>` : ''}`;
+      return `<div class="readonly-line"><span>m, ${label} (${esc(state.medium || 'середовище не задано')})</span><strong>${m ? displayNumber(m.value) : '—'}</strong></div><div class="readonly-line"><span>α, ${label} (${temp === null ? 'T не задано' : `${displayNumber(temp)} °C`})</span><strong>${a ? `${displayNumber(a.value)} × 10⁻⁶/°C` : '—'}</strong></div>`;
     }).join('');
     const alphaRows = Object.entries(record.expansionMicroPerCByTemperatureC || {}).map(([temp,value]) => `<div class="readonly-line"><span>${esc(temp)} °C</span><strong>${displayNumber(value)} × 10⁻⁶/°C</strong></div>`).join('');
-    const warning = record.source?.verificationStatus === 'screenshot_only' ? '<p class="field-help">Номер та редакцію ТУ не встановлено. Дані оцифровані з наданого фрагмента: перед використанням у розрахунковій методиці потрібно підтвердити джерело.</p>' : '';
-    return `<div class="standard-box" data-gasket-reference><span>${icon('file')}${esc(record.document || record.name)}</span>${scalarRows.map(([name,value,unit]) => `<div class="readonly-line"><span>${esc(name)}</span><strong>${displayNumber(value)} ${unit}</strong></div>`).join('')}<div class="readonly-line"><span>Ширина за таблицею Б.1</span><strong>Ширина поля прокладки</strong></div><p class="field-help">У розрахунку застосовано погоджене зменшення: b = 3,8√b₀ при b₀ &gt; 15 мм; інакше b = b₀.</p>${stateRows}<p class="field-help">Для α береться точна або найближча вища доступна таблична температура. Вище останньої точки значення не підставляється.</p><details><summary>Таблиця Б.2 — всі значення α</summary>${alphaRows}</details>${warning}</div>`;
+    const widthHelp = currentNode.gasket.mode === 'ring' && od > 0 && id > 0 && od > id
+      ? '<p class="field-help">У розрахунку застосовано погоджене зменшення: b = 3,8√b₀ при b₀ &gt; 15 мм; інакше b = b₀.</p>'
+      : '';
+    return `<div class="standard-box" data-gasket-reference><span>${icon('file')}${esc(record.document || record.name)}</span>${ringGeometryRows.map(([name,value]) => `<div class="readonly-line"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('')}${widthHelp}${scalarRows.map(([name,value]) => `<div class="readonly-line"><span>${esc(name)}</span><strong>${esc(value)}</strong></div>`).join('')}${stateRows}<p class="field-help">Для α береться точна або найближча вища доступна таблична температура.</p><details><summary>Таблиця Б.2 — всі значення α</summary>${alphaRows}</details></div>`;
   }
   function gasketSketch() {
     return `<svg viewBox="0 0 70 66" fill="none" aria-hidden="true"><circle cx="34" cy="32" r="26" fill="#e7effb" stroke="#91acd0"/><circle cx="34" cy="32" r="17" fill="#f5f8fd" stroke="#91acd0"/><circle cx="34" cy="10" r="2.4" fill="#f5f8fd" stroke="#91acd0"/><circle cx="56" cy="32" r="2.4" fill="#f5f8fd" stroke="#91acd0"/><circle cx="34" cy="54" r="2.4" fill="#f5f8fd" stroke="#91acd0"/><circle cx="12" cy="32" r="2.4" fill="#f5f8fd" stroke="#91acd0"/><path d="M34 2v60M3 32h62" stroke="#a6bad7" stroke-dasharray="3 3"/></svg>`;
@@ -471,17 +604,24 @@
     const node = currentNode;
     const statuses = C.sectionStatus(node,materials,standardsDb);
     const operating = `<div class="case-grid">${[['normal','НУЕ'],['hydro','ГВ']].map(([key,label]) => `<div><p class="case-title ${key === 'hydro' ? 'hydro' : ''}"><span></span>${label}</p>${field(`operating.${key}.pressure`,'Тиск','МПа',{positive:false})}${field(`operating.${key}.temperature`,'Температура','°C',{min:-273.15,positive:false})}${selectField(`operating.${key}.medium`,'Середовище',[['','Оберіть…'],...media.map(item => [item,item])])}</div>`).join('')}</div>`;
-    const gasket = `<p class="section-intro">Графітова прокладка · параметри з таблиць Б.1–Б.2 застосовуються автоматично. Номер ТУ уточнюється.</p><div class="choice-group" role="group" aria-label="Спосіб задання прокладки"><button data-action="gasket-mode" data-value="ring" aria-pressed="${node.gasket.mode === 'ring'}">Кільцева</button><button data-action="gasket-mode" data-value="area" aria-pressed="${node.gasket.mode === 'area'}">Задати площі</button></div>${field('gasket.thickness','Товщина прокладки','мм')}${node.gasket.mode === 'ring' ? `<div class="field-row">${field('gasket.outerDiameter','Зовнішній Ø','мм')}${field('gasket.innerDiameter','Внутрішній Ø','мм')}</div><label class="check-label"><input type="checkbox" data-field="gasket.hasHoles" ${node.gasket.hasHoles ? 'checked' : ''}>Отвори під кріплення</label>${node.gasket.hasHoles ? field('gasket.holeDiameter','Діаметр отвору','мм',{help:'Кількість отворів дорівнює кількості кріплень.'}) : ''}` : `${field('gasket.effectiveArea','Ефективна площа перерізу Aпр','мм²')}${field('gasket.pressureArea','Площа дії гідростатичного зусилля A','мм²')}<div class="gasket-help">${gasketSketch()}<span>Це дві різні площі. Введіть готові значення для нестандартної форми прокладки.</span></div>`}<p class="small-note">${icon('lock')}Характеристики матеріалу прокладки задаються за ТУ.</p>`;
+    const gasket = `<p class="section-intro">Графітова прокладка · параметри з таблиць Б.1–Б.2 застосовуються автоматично.</p><div class="choice-group" role="group" aria-label="Спосіб задання прокладки"><button data-action="gasket-mode" data-value="ring" aria-pressed="${node.gasket.mode === 'ring'}">Кільцева</button><button data-action="gasket-mode" data-value="area" aria-pressed="${node.gasket.mode === 'area'}">Задати площі</button></div>${field('gasket.thickness','Товщина прокладки','мм')}${node.gasket.mode === 'ring' ? `<div class="field-row">${field('gasket.outerDiameter','Зовнішній Ø','мм')}${field('gasket.innerDiameter','Внутрішній Ø','мм')}</div><label class="check-label"><input type="checkbox" data-field="gasket.hasHoles" ${node.gasket.hasHoles ? 'checked' : ''}>Отвори під кріплення</label>${node.gasket.hasHoles ? field('gasket.holeDiameter','Діаметр отвору','мм',{help:'Кількість отворів дорівнює кількості кріплень.'}) : ''}` : `${field('gasket.effectiveArea','Ефективна площа перерізу Aпр','мм²')}${field('gasket.pressureArea','Площа дії гідростатичного зусилля A','мм²')}<div class="gasket-help">${gasketSketch()}<span>Це дві різні площі. Введіть готові значення для нестандартної форми прокладки.</span></div>`}`;
     const threadStandardOptions = Object.values(standardsDb.threads || {}).map(item => [item.id, `${item.document} — ${item.title}`]);
     const selectedThreadStandard = standardsDb.threads?.[node.fastener.threadStandardId];
     const nominalThreadDiameter = C.number(node.fastener.nominalDiameter);
+    const diameterOptions = [['','Оберіть діаметр…'], ...Object.keys(selectedThreadStandard?.sizes || {}).sort((a,b) => Number(a)-Number(b)).map(value => [value,`М${displayNumber(value)}`])];
+    const savedDiameter = String(node.fastener.nominalDiameter ?? '');
+    if (savedDiameter && !diameterOptions.some(([value]) => value === savedDiameter)) diameterOptions.push([savedDiameter,`М${savedDiameter} · поза каталогом`]);
     const threadSize = nominalThreadDiameter === null ? null : selectedThreadStandard?.sizes?.[String(nominalThreadDiameter)];
     const pitchOptions = threadSize ? [
       ['', threadSize.coarsePitchMm === null ? 'Оберіть крок різьби…' : `Великий крок (авто): ${displayNumber(threadSize.coarsePitchMm)} мм`],
       ...threadSize.pitchesMm.map(pitch => [String(pitch), `P = ${displayNumber(pitch)} мм${pitch === threadSize.coarsePitchMm ? ' · великий' : ''}${threadSize.nonPreferredPitchesMm?.includes(pitch) ? ' · нерекомендований' : ''}`])
     ] : [['','Спочатку вкажіть діаметр з довідника']];
     const resolvedPitch = C.threadPitch(standardsDb,node.fastener.threadStandardId,nominalThreadDiameter,node.fastener.pitch);
-    const pitchReference = resolvedPitch ? `Крок різьби: P = ${displayNumber(resolvedPitch.pitchMm)} мм${resolvedPitch.automatic ? ' (автоматично)' : ''}${resolvedPitch.nonPreferred ? ' · у ГОСТ 8724 наведений у дужках' : ''}.` : threadSize ? 'Для цього діаметра немає великого кроку. Оберіть допустимий крок вручну.' : 'Крок буде доступний після введення стандартного номінального діаметра.';
+    const pitchHelp = resolvedPitch?.nonPreferred
+      ? '<p class="field-help">Крок наведений у ГОСТ 8724 у дужках; за можливості не застосовувати.</p>'
+      : !resolvedPitch
+        ? (threadSize ? '<p class="field-help">Для цього діаметра немає великого кроку. Оберіть допустимий крок вручну.</p>' : '<p class="field-help">Крок буде доступний після введення стандартного номінального діаметра.</p>')
+        : '';
     const targetMin = node.fastener.targetTorqueMinNm ?? '';
     const targetMax = node.fastener.targetTorqueMaxNm ?? '';
     const stdTorque = C.standardTorque(standardsDb, node.fastener.nominalDiameter);
@@ -490,34 +630,198 @@
       const isCustom = (targetMin && Number(targetMin) !== stdTorque.minNm) || (targetMax && Number(targetMax) !== stdTorque.maxNm);
       targetHint = `<div class="target-torque-hint"><span>Стандарт (${stdTorque.title}): <strong>${stdTorque.minNm} – ${stdTorque.maxNm} Н·м</strong></span>${isCustom ? `<button type="button" class="link-button" data-action="apply-standard-torque">Скинути до стандарту</button>` : ''}</div>`;
     }
-    const fastener = `${selectField('fastener.type','Виконання',[['stud','Шпилька в корпусі'],['bolt','Наскрізний болт із гайкою']])}${materialField('fastener.material','Матеріал кріплення')}<div class="field-row">${field('fastener.nominalDiameter','Діаметр різьби','М')}${field('fastener.count','Кількість','шт.',{integer:true})}</div>${selectField('fastener.threadStandardId','Стандарт різьби',threadStandardOptions)}${selectField('fastener.pitch','Крок різьби P',pitchOptions)}<p class="field-help">${esc(pitchReference)}</p><label class="check-label"><input type="checkbox" data-field="fastener.lubricated" ${node.fastener.lubricated ? 'checked' : ''}>Мащення є</label><hr><p class="sub-label">Нормативний момент за ТУ / паспортом</p><div class="field-row">${field('fastener.targetTorqueMinNm','Мінімальний за ТУ','Н·м',{min:0,placeholder:stdTorque ? String(stdTorque.minNm) : '—'})}${field('fastener.targetTorqueMaxNm','Максимальний за ТУ','Н·м',{min:0,placeholder:stdTorque ? String(stdTorque.maxNm) : '—'})}</div>${targetHint}<p class="small-note">${icon('info')}Великі й дрібні кроки — за ГОСТ 8724-2002; розміри різьби — за ГОСТ 24705-2004. Похідні розміри показані в блоці геометрії.</p>`;
-    const connection = `${selectField('connection.kind','Тип з’єднання',[['body-cover','Корпус — кришка'],['flange-flange','Фланець — фланець'],['custom','Інше з’єднання']])}${['sideA','sideB'].map((key,index) => `<div class="side-title"><span class="side-letter">${index ? 'Б' : 'А'}</span>Деталь ${index + 1}</div>${field(`connection.${key}.name`,'Назва деталі')}${materialField(`connection.${key}.material`,`Матеріал деталі ${index + 1}`)}`).join('')}<p class="small-note">${icon('info')}Нижче задаються застосовність та геометрія фланцевих перевірок для обох деталей.</p>`;
+    const axialHole = field('fastener.axialHoleDiameter','Поздовжній отвір у кріпленні','мм',{positive:false,help:'Для суцільної шпильки або болта — 0.'});
+    const torque = field('fastener.torqueNm','Заданий момент затягування','Н·м',{positive:false,help:'Для перевірки конкретного затягу. Нижня межа обчислюється незалежно від цього поля.'});
+    const fastener = `${selectField('fastener.type','Виконання',[['stud','Шпилька в корпусі'],['bolt','Наскрізний болт із гайкою']])}${materialField('fastener.material','Матеріал кріплення')}<div class="field-row">${selectField('fastener.nominalDiameter','Діаметр різьби',diameterOptions)}${field('fastener.count','Кількість','шт.',{integer:true})}</div>${selectField('fastener.threadStandardId','Стандарт різьби',threadStandardOptions)}${selectField('fastener.pitch','Крок різьби P',pitchOptions)}${pitchHelp}<div class="field-row"><label class="check-label"><input type="checkbox" data-field="fastener.lubricated" ${node.fastener.lubricated ? 'checked' : ''}>Мащення є</label></div>${axialHole}<hr><p class="sub-label">Момент затягування</p><div class="field-row">${field('fastener.targetTorqueMinNm','Мінімальний за ТУ','Н·м',{min:0,placeholder:stdTorque ? String(stdTorque.minNm) : '—'})}${field('fastener.targetTorqueMaxNm','Максимальний за ТУ','Н·м',{min:0,placeholder:stdTorque ? String(stdTorque.maxNm) : '—'})}</div>${targetHint}${torque}`;
+    const connection = `${selectField('connection.kind','Тип з’єднання',[['body-cover','Корпус — кришка'],['flange-flange','Фланець — фланець'],['custom','Інше з’єднання']])}${['sideA','sideB'].map((key,index) => `<div class="side-title"><span class="side-letter">${index ? 'Б' : 'А'}</span>Деталь ${index + 1}</div>${field(`connection.${key}.name`,'Назва деталі')}${materialField(`connection.${key}.material`,`Матеріал деталі ${index + 1}`)}`).join('')}`;
     const nutStandardOptions = Object.values(standardsDb.nuts || {}).map(item => [item.id, `${item.document} — ${item.title}`]);
     const currentNutStandard = standardsDb.nuts?.[node.nut.standardId];
     const nutTypeField = currentNutStandard?.types ? selectField('nut.typeId','Тип гайки',Object.entries(currentNutStandard.types).map(([id,type]) => [id,type.label])) : '';
-    const nut = `${materialField('nut.material','Матеріал гайки')}${selectField('nut.standardId','Стандарт',nutStandardOptions)}${nutTypeField}<div class="readonly-line"><span>Номінальний діаметр</span><strong>${node.fastener.nominalDiameter ? `М${displayNumber(node.fastener.nominalDiameter)}` : '—'}</strong></div>${standardBox('nuts')}`;
+    const nut = `${materialField('nut.material','Матеріал гайки')}${selectField('nut.standardId','Стандарт',nutStandardOptions)}${nutTypeField}${standardBox('nuts')}`;
     const washerStandardOptions = Object.values(standardsDb.washers || {}).map(item => [item.id, `${item.document} — ${item.scope}`]);
     const washers = `${selectField('washers.placement','Розташування',[['none','Шайб немає'],['a','Тільки з боку А'],['b','Тільки з боку Б'],['both','З обох боків']])}${node.washers.placement !== 'none' ? `${selectField('washers.standardId','Стандарт',washerStandardOptions)}<div class="field-row">${selectField('washers.execution','Виконання',[['1','Виконання 1'],['2','Виконання 2']])}${selectField('washers.accuracyClass','Клас точності',[['A','А'],['C','С']])}</div>${materialField('washers.material','Матеріал шайб')}${node.washers.placement === 'both' ? '<p class="section-intro">З обох боків використовуються однакові шайби.</p>' : ''}${standardBox('washers')}` : '<p class="section-intro">У цьому з’єднанні шайби не використовуються.</p>'}`;
     const extras = `<p class="section-intro">Проставки та інші деталі, що впливають на податливість з’єднання.</p>${node.extras.map((item,index) => `<div class="extra-card"><div class="extra-card-heading"><span>Елемент ${index + 1}</span><button class="icon-button danger" data-action="remove-extra" data-id="${item.id}" aria-label="Видалити додатковий елемент ${index + 1}">${icon('close')}</button></div>${field(`extras.${index}.name`,'Назва')}${materialField(`extras.${index}.material`,'Матеріал елемента')}<div class="field-row">${field(`extras.${index}.thickness`,'Товщина','мм')}${field(`extras.${index}.area`,'Площа перерізу','мм²')}</div></div>`).join('')}<button class="add-extra" data-action="add-extra">${icon('plus')}Додати елемент</button>`;
     const heightFields = `<div class="field-row">${field('connection.sideA.height','Висота деталі А','мм')}${field('connection.sideB.height','Висота деталі Б','мм')}</div><p class="field-help">А: ${esc(node.connection.sideA.name)}. Б: ${esc(node.connection.sideB.name)}. Для шпильки в корпусі висота деталі Б входить до різьбової довжини; для наскрізного болта обидві деталі — до нерізьбової.</p>`;
-    const axialHole = field('fastener.axialHoleDiameter','Поздовжній отвір у кріпленні','мм',{positive:false,help:'Для суцільної шпильки або болта — 0.'});
     const nutThreadHeight = C.nutDimensions(standardsDb,node.nut.standardId,node.fastener.nominalDiameter,node.nut.typeId)?.typeId === 'B' ? field('nut.threadedHeight','Висота різьбової частини','мм',{help:'Для ковпачкової гайки загальна висота l₁ не використовується замість висоти різьбової частини.'}) : '';
     const areaFields = `<div class="field-row">${field('connection.sideA.area','Площа перерізу А','мм²',{placeholder:'Авто'})}${field('connection.sideB.area','Площа перерізу Б','мм²',{placeholder:'Авто'})}</div><p class="field-help">Порожнє поле: площа кільцевого поля прокладки з урахуванням отворів, як у контрольному Excel. Для іншого перерізу введіть власну площу. При ручному заданні площ прокладки площі деталей А/Б обов’язкові.</p>`;
-    const torque = field('fastener.torqueNm','Заданий момент затягування','Н·м',{positive:false,help:'Для перевірки конкретного затягу. Нижня межа обчислюється незалежно від цього поля.'});
     const flangeFields = ['sideA','sideB'].map(side=>{
       const path = `flanges.${side}`;
       return `<div class="side-title">Фланець · ${esc(node.connection[side].name || (side === 'sideA' ? 'Деталь А' : 'Деталь Б'))}</div>${selectField(path+'.mode',`Перевірка фланця ${side === 'sideA' ? 'А' : 'Б'}`,[['pending','Оберіть застосовність…'],['flange','Розраховувати як фланець'],['none','Ця перевірка не застосовується']])}${node.flanges[side].mode === 'flange' ? `<div class="field-row">${field(path+'.innerDiameter','Внутрішній діаметр D','мм')}${field(path+'.boltCircle','Коло кріплень Dw','мм')}</div><div class="field-row">${field(path+'.outerDiameter','Зовнішній діаметр Df','мм')}${field(path+'.holeDiameter','Отвір під кріплення d₀','мм',{placeholder:'Авто',help:'Порожнє поле: d+3 при d≥27; d+2 при 10<d<27; інакше d+1. Можна ввести фактичний діаметр.'})}</div><div class="field-row">${field(path+'.height','Висота фланця hf','мм')}${field(path+'.coneHeight','Висота конуса h₂','мм',{positive:false})}</div><div class="field-row">${field(path+'.wallCylinder','Товщина стінки s₁','мм')}${field(path+'.wallCone','Товщина конуса s₂','мм')}</div>${node.gasket.mode === 'area' ? field(path+'.gasketDiameter','Розрахунковий діаметр Dm','мм',{help:'Для ручних площ задайте діаметр, потрібний для плеча e₂.'}) : '<p class="field-help">Dm береться за середнім діаметром кільцевої прокладки. Матеріал — із відповідної деталі з’єднання.</p>'}` : ''}`;
     }).join('');
-    return Object.entries({operating,gasket:gasket + gasketReference(),fastener:fastener + axialHole + torque,connection:connection + heightFields + areaFields + flangeFields,nut:nut + nutThreadHeight,washers,extras}).map(([key,body]) => section(key,body,openSections.includes(key),statuses)).join('');
+    let partitions = '';
+    if (node.gasket.mode === 'ring') {
+      partitions = selectField('gasket.partitionPattern','Схема перегородок',Object.entries(C.gasketPartitions));
+      if ((node.gasket.partitionPattern ?? 'none') !== 'none') {
+        partitions += field('gasket.partitionWidth','Ширина смуги w','мм',{help:'Висота смуги дорівнює товщині прокладки. Формули Excel враховують кільцеве поле й отвори під кріплення.'});
+      }
+    }
+    return Object.entries({operating,gasket:gasket + partitions + gasketReference(),fastener,nut:nut + nutThreadHeight,washers,connection:connection + heightFields + areaFields + flangeFields,extras}).map(([key,body]) => section(key,body,openSections.includes(key),statuses)).join('');
+  }
+  function setupEditorSteps() {
+    const body = main.querySelector('.editor-body');
+    for (const summary of body.querySelectorAll('.settings-section > summary')) {
+      summary.tabIndex = -1;
+      summary.addEventListener('click',event => event.preventDefault());
+    }
+    const nav = document.createElement('nav');
+    nav.className = 'node-steps';
+    nav.setAttribute('aria-label','Кроки створення вузла');
+    nav.innerHTML = editorSteps.map((key,index) => `<button type="button" data-action="editor-step" data-step="${key}"><span>${index+1}.</span>${sectionNames[key] || 'Розрахунок'}</button>`).join('');
+    body.prepend(nav);
+    const preview = document.createElement('section');
+    preview.id = 'component-preview';
+    preview.className = 'component-preview';
+    preview.innerHTML = '<header class="preview-heading"><h2 id="preview-title"></h2></header><div id="component-scene"></div>';
+    body.append(preview);
+    const controls = document.createElement('div');
+    controls.className = 'step-controls';
+    controls.innerHTML = '<button class="button secondary" data-action="editor-previous">Назад</button><button class="button primary" data-action="editor-next">Далі</button>';
+    body.querySelector('.settings').append(controls);
+    selectEditorStep(editorStep);
+  }
+  function selectEditorStep(key) {
+    if (!editorSteps.includes(key)) return;
+    editorStep = key;
+    const calculation = key === 'results';
+    main.querySelector('.editor-body').classList.toggle('show-calculation',calculation);
+    for (const section of main.querySelectorAll('.settings-section')) {
+      section.hidden = section.dataset.section !== key;
+      section.open = !section.hidden;
+    }
+    for (const button of main.querySelectorAll('.node-steps button')) button.setAttribute('aria-current',button.dataset.step === key ? 'step' : 'false');
+    main.querySelector('.settings').hidden = calculation;
+    main.querySelector('#results').hidden = !calculation;
+    main.querySelector('#component-preview').hidden = calculation;
+    main.querySelector('[data-action="editor-previous"]').disabled = key === editorSteps[0];
+    main.querySelector('[data-action="editor-next"]').textContent = key === 'extras' ? 'До розрахунку' : 'Далі';
+    main.querySelector('.settings').scrollTop = 0;
+    refreshComponentPreview();
+  }
+  function assemblyPanel(node,scope) {
+    const bolt = node.fastener.type === 'bolt', parts = [];
+    const d = C.number(node.fastener.nominalDiameter);
+    const pitch = C.threadPitch(standardsDb,node.fastener.threadStandardId,d,node.fastener.pitch)?.pitchMm;
+    const nut = C.nutDimensions(standardsDb,node.nut.standardId,d,node.nut.typeId);
+    const capped = node.nut.typeId === 'B' && Boolean(standardsDb.nuts[node.nut.standardId]?.types?.B);
+    const nutName = capped ? 'Ковпачкова гайка' : 'Гайка';
+    const nutDetail = nut ? [`${nut.heightSymbol} = ${displayNumber(nut.heightMm)}`,nut.acrossFlatsMm && `S = ${displayNumber(nut.acrossFlatsMm)}`].filter(Boolean).join(' · ')+' мм' : '';
+    function add(kind,name,width,above,below,detail='') { parts.push({kind,name,width,above,below,detail}); }
+    function side(key,letter) {
+      const member = node.connection[key], flange = node.flanges?.[key];
+      const active = flange?.mode === 'flange';
+      let above = 55, below = 70;
+      const dims = [];
+      if (active) {
+        const outer = C.number(flange.outerDiameter), circle = C.number(flange.boltCircle), inner = C.number(flange.innerDiameter);
+        if (outer > circle && circle > inner && inner > 0) {
+          const scale = 65 / Math.max(outer-circle,circle-inner);
+          above = 12 + (outer-circle)*scale;
+          below = 12 + (circle-inner)*scale;
+        }
+        for (const [field,label] of [['outerDiameter','Ø зовн.'],['innerDiameter','Ø внутр.'],['boltCircle','Ø кола'],['height','h']]) {
+          if (C.positive(flange[field])) dims.push(label+' '+displayNumber(flange[field]));
+        }
+      }
+      add('side',letter+' · '+(member.name || (active ? 'Фланець' : 'Деталь')),58,above,below,dims.length ? dims.join(' · ')+' мм' : '');
+    }
+    const placement = node.washers.placement;
+    parts.push(bolt ? {kind:'head',name:'Головка болта'} : {kind:'nut',name:nutName,detail:nutDetail});
+    if (['a','both'].includes(placement)) add('washer','Шайба, бік А',9,29,29);
+    side('sideA','А');
+    add('gasket','Прокладка',8,node.gasket.hasHoles ? 42 : 0,64);
+    for (const extra of node.extras) add('extra',extra.name || 'Додатковий елемент',18,45,65);
+    side('sideB','Б');
+    if (['b','both'].includes(placement)) add('washer','Шайба, бік Б',9,29,29);
+    if (bolt) parts.push({kind:'nut',name:nutName,detail:nutDetail});
+    const fastener = (bolt ? 'Болт' : 'Шпилька') + (C.positive(node.fastener.nominalDiameter) ? ' М'+displayNumber(node.fastener.nominalDiameter) : '');
+    return `<div class="assembly-panel assembly-passport"><div class="assembly-caption"><strong>Пакет деталей з’єднання</strong><span>${fastener}${C.positive(node.fastener.count) ? ' · '+displayNumber(node.fastener.count)+' шт.' : ''}</span></div>
+      <div class="assembly-scroll">${window.FlangeComponentVisuals.assembly(parts,{bolt,diameter:d,pitch,axialHole:C.number(node.fastener.axialHoleDiameter),nutHeight:nut?.heightMm,capped},scope)}</div>
+      <ol class="assembly-key">${parts.map(p=>`<li>${esc(p.name)}${p.detail ? '<small>'+esc(p.detail)+'</small>' : ''}</li>`).join('')}</ol></div>`;
+  }
+  function refreshComponentPreview() {
+    const scene = main.querySelector('#component-scene');
+    if (!scene || !currentNode || editorStep === 'results') return;
+    const node = currentNode;
+    const visual = window.FlangeComponentVisuals;
+    main.querySelector('#preview-title').textContent = sectionNames[editorStep];
+    scene.className = 'component-scene passport';
+    const message = text => { scene.innerHTML = `<p class="preview-empty">${esc(text)}</p>`; };
+    const d = C.number(node.fastener.nominalDiameter);
+    const pitch = C.threadPitch(standardsDb,node.fastener.threadStandardId,d,node.fastener.pitch)?.pitchMm;
+    const geometry = window.FlangeCalculations.nodeGeometry(node,standardsDb);
+    let key,part;
+    if (editorStep === 'fastener') {
+      if (!(d > 0 && pitch > 0)) { message('Задайте діаметр і допустимий крок різьби.'); return; }
+      key = 'stud';
+      part = {name:node.fastener.type === 'bolt' ? 'Болт' : 'Шпилька',diameter:d,outer:d,inner:0,h:d*4.7,spec:`М${displayNumber(d)} × ${displayNumber(pitch)}`,count:C.number(node.fastener.count),bolt:node.fastener.type === 'bolt',axialHole:C.number(node.fastener.axialHoleDiameter)};
+      if (part.axialHole >= geometry.thread.values.rootDiameter || part.axialHole < 0) { message('Уточніть діаметр поздовжнього отвору.'); return; }
+    } else if (editorStep === 'gasket') {
+      if (node.gasket.mode === 'area') {
+        scene.innerHTML = `<div class="preview-metrics"><h3>Прокладка з довільною формою</h3><dl><dt>Ефективна площа Aпр</dt><dd>${displayNumber(node.gasket.effectiveArea)} мм²</dd><dt>Площа дії тиску A</dt><dd>${displayNumber(node.gasket.pressureArea)} мм²</dd><dt>Товщина</dt><dd>${displayNumber(node.gasket.thickness)} мм</dd></dl></div>`;
+        return;
+      }
+      if (geometry.gasket.issues.length || !C.positive(node.gasket.thickness)) { message(geometry.gasket.issues[0] || 'Задайте товщину прокладки.'); return; }
+      key = 'gasket';
+      part = {name:'Прокладка',outer:C.number(node.gasket.outerDiameter),inner:C.number(node.gasket.innerDiameter),h:C.number(node.gasket.thickness),hasHoles:node.gasket.hasHoles,holeDiameter:C.number(node.gasket.holeDiameter),count:C.number(node.fastener.count)};
+      part.partitionPattern = node.gasket.partitionPattern ?? 'none';
+      if (part.partitionPattern !== 'none') {
+        const issue = C.validateInputs(node,standardsDb).errors['gasket.partitionWidth'];
+        if (issue || !C.positive(node.gasket.partitionWidth)) { message(issue || 'Вкажіть ширину смуги перегородки.'); return; }
+        part.partitionWidth = C.number(node.gasket.partitionWidth);
+      }
+      if (part.hasHoles && part.count > 240) { message('Розміри прокладки задано. Кількість отворів завелика для детального попереднього перегляду.'); return; }
+      if (part.hasHoles) {
+        const circles = [node.flanges.sideA,node.flanges.sideB].filter(side => side.mode === 'flange')
+          .map(side => C.number(side.boltCircle)).filter(value => value > 0);
+        const circle = circles[0];
+        if (circles.length && circles.every(value => value === circle) &&
+            circle - part.holeDiameter >= part.inner && circle + part.holeDiameter <= part.outer) part.pitchCircle = circle;
+      }
+    } else if (editorStep === 'nut') {
+      const dimensions = C.nutDimensions(standardsDb,node.nut.standardId,d,node.nut.typeId);
+      if (!dimensions) { message('Оберіть діаметр кріплення, стандарт і виконання гайки.'); return; }
+      key = 'nut';
+      part = {name:'Гайка',diameter:d,outer:d*1.75,inner:d,h:dimensions.heightMm,heightSymbol:dimensions.heightSymbol,acrossFlats:dimensions.acrossFlatsMm,capped:dimensions.typeId === 'B',spec:'М'+displayNumber(d)};
+      main.querySelector('#preview-title').textContent = 'Гайка М'+displayNumber(d);
+    } else if (editorStep === 'washers') {
+      if (node.washers.placement === 'none') { message('У цьому вузлі шайби не застосовуються.'); return; }
+      const dimensions = C.washerDimensions(standardsDb,node.washers.standardId,d,node.washers.accuracyClass,node.washers.execution);
+      if (!dimensions) { message('Оберіть сумісні діаметр, виконання та клас точності шайби.'); return; }
+      key = 'washer';
+      part = {name:'Шайба',diameter:d,outer:dimensions.outerDiameterMm,inner:dimensions.innerDiameterMm,h:dimensions.thicknessMm,execution:node.washers.execution};
+    } else if (editorStep === 'operating') {
+      const refId = node.gasket.referenceId || C.DEFAULT_GASKET_REFERENCE_ID;
+      scene.innerHTML = `<div class="preview-metrics"><h3>Нормативні характеристики умов роботи</h3><dl>${[['normal','Нормальні умови експлуатації (НУЕ)'],['hydro','Гідровипробування (ГВ)']].map(([mode,label]) => {
+        const state = node.operating[mode];
+        const m = C.gasketMediumCoefficient(standardsDb, refId, state.medium);
+        const a = C.gasketExpansionAt(standardsDb, refId, state.temperature);
+        const p = displayNumber(state.pressure);
+        const t = displayNumber(state.temperature);
+        return `<dt>${label}</dt><dd>${p ? p + ' МПа' : 'Тиск не задано'}, ${t ? t + ' °C' : 'Температура не задана'}</dd><dt>Середовище</dt><dd>${esc(state.medium || 'Не обрано')}</dd><dt>Коефіцієнт середовища m (табл. Б.1)</dt><dd>${m ? displayNumber(m.value) : '—'}</dd><dt>Коефіцієнт розширення α (табл. Б.2)</dt><dd>${a ? `${displayNumber(a.value)} × 10⁻⁶/°C` : '—'}</dd>`;
+      }).join('')}</dl></div>`;
+      return;
+    } else if (editorStep === 'connection') {
+      scene.innerHTML = assemblyPanel(node,'preview');
+      return;
+    } else {
+      const rows = node.extras.map(item => [item.name,item.thickness,item.area]);
+      scene.innerHTML = `<div class="preview-metrics">${rows.map(([name,height,area]) => `<h3>${esc(name || 'Додаткова деталь')}</h3><dl><dt>Висота</dt><dd>${displayNumber(height)} мм</dd><dt>Площа перерізу</dt><dd>${C.positive(area) ? displayNumber(area)+' мм²' : 'За геометрією прокладки'}</dd></dl>`).join('') || '<p>Додайте деталі, що входять до пакета з’єднання.</p>'}</div>`;
+      return;
+    }
+    part.spec ||= `Ø ${displayNumber(part.outer)} × Ø ${displayNumber(part.inner)} × ${displayNumber(part.h)}`;
+    part.detail = {stud:'Профіль різьби',nut:'Внутрішня різьба',gasket:'Кромка прокладки',washer:'Кромка отвору'}[key];
+    scene.replaceChildren(visual.create('passport',key,part,pitch || 1));
   }
   function renderEditor(preserve = false) {
+    if (!preserve) editorStep = 'operating';
     const oldSettings = document.querySelector('.settings');
     const scroll = preserve ? oldSettings?.scrollTop || 0 : 0;
     const openSections = preserve ? [...document.querySelectorAll('.settings-section[open]')].map(item => item.dataset.section) : ['operating'];
     const oldResults = preserve ? resultsState() : null;
     const node = currentNode;
-    main.innerHTML = `<section class="editor"><div class="node-topbar"><div class="node-title"><button class="icon-button" data-action="open-equipment" data-id="${currentEquipment.id}" aria-label="Назад до вузлів">${icon('arrow')}</button><span class="file-icon">${icon('file')}</span><div><h1>${esc(node.name)}</h1><p>${esc(currentEquipment.name)} · ${kindName(node.connection.kind)}</p></div><button class="icon-button" data-action="edit-node" data-id="${node.id}" aria-label="Перейменувати вузол">${icon('edit')}</button></div><div class="torque-bar" aria-label="Межі моменту затягування"><div class="torque-item"><div class="torque-label">Мінімальний момент</div><div class="torque-value">Ще не розраховано</div></div><div class="torque-item"><div class="torque-label">Максимальний момент</div><div class="torque-value">Ще не розраховано</div></div><span class="torque-unit">Н·м</span></div></div><div class="editor-body"><aside class="settings" aria-label="Налаштування вузла"><div class="settings-heading"><div>${icon('settings')}Параметри вузла</div><small id="progress-count"></small></div><div id="input-validation" class="input-validation" role="status" hidden></div>${settingsContent(openSections)}<p class="settings-bottom">Зміни зберігаються автоматично. Незавершену анкету можна доповнити пізніше.</p></aside><div class="results" id="results"></div></div></section>`;
+    main.innerHTML = `<section class="editor"><div class="node-topbar"><div class="node-title"><button class="icon-button" data-action="open-equipment" data-id="${currentEquipment.id}" aria-label="Назад до вузлів">${icon('arrow')}</button><span class="file-icon">${icon('file')}</span><div><h1>${esc(node.name)}</h1><p>${esc(currentEquipment.name)} · ${kindName(node.connection.kind)}</p></div><button class="icon-button" data-action="edit-node" data-id="${node.id}" aria-label="Перейменувати вузол">${icon('edit')}</button></div><div class="torque-bar" aria-label="Межі моменту затягування"><div class="torque-item"><div class="torque-label">Мінімальний момент</div><div class="torque-value">Ще не розраховано</div></div><div class="torque-item"><div class="torque-label">Максимальний момент</div><div class="torque-value">Ще не розраховано</div></div></div></div><div class="editor-body"><aside class="settings" aria-label="Налаштування вузла"><div class="settings-heading"><div>${icon('settings')}Параметри вузла</div><small id="progress-count"></small></div><div id="input-validation" class="input-validation" role="status" hidden></div>${settingsContent(openSections)}</aside><div class="results" id="results"></div></div></section>`;
     document.querySelector('.settings').scrollTop = scroll;
+    setupEditorSteps();
     refreshResults(oldResults);
     updateStatuses();
   }
@@ -525,14 +829,11 @@
     return { open:[...document.querySelectorAll('.calc-block[open]')].map(item => item.dataset.calc), scroll:document.querySelector('#results')?.scrollTop || 0 };
   }
   function refreshResults(previous = resultsState()) {
+    refreshComponentPreview();
     const target = document.querySelector('#results');
     if (!target) return;
     const node = currentNode;
     const p = C.progress(node,materials,standardsDb);
-    const washerA = ['a','both'].includes(node.washers.placement);
-    const washerB = ['b','both'].includes(node.washers.placement);
-    const piece = (type,text,title) => `<span class="stack-piece ${type}" title="${esc(title)}">${text}</span>`;
-    const assembly = `${piece('nut','',node.fastener.type === 'bolt' ? 'Головка болта' : 'Гайка')}${washerA ? piece('washer','','Шайба, бік А') : ''}${piece('','А',node.connection.sideA.name)}${piece('gasket','','Прокладка')}${node.extras.map(item => piece('extra','',item.name || 'Додатковий елемент')).join('')}${piece('','Б',node.connection.sideB.name)}${washerB ? piece('washer','','Шайба, бік Б') : ''}${node.fastener.type === 'bolt' ? piece('nut','','Гайка') : ''}`;
     const blocks = [
       ['load','Розрахунок коефіцієнта навантаження',[['Податливість кріплення','мм/Н'],['Податливість прокладки','мм/Н'],['Податливість з’єднуваних деталей','мм/Н'],['Податливість додаткових елементів','мм/Н'],['Коефіцієнт навантаження χ','']]],
       ['thermal','Розрахунок лінійного розширення матеріалів',[['Подовження кріплення','мм'],['Розширення пакета деталей','мм'],['Температурне зусилля','Н']]],
@@ -544,7 +845,7 @@
       ['flanges','Розрахунок міцності фланців',[]]
     ];
     const open = previous ? previous.open : ['geometry','load','parameters','stud'];
-    target.innerHTML = `<div class="results-title"><h2>Розрахунок вузла</h2><button class="button secondary" data-action="excel-export" data-scope="node">Експорт Excel</button><span class="outline-badge">${p.done === p.total ? 'Анкета заповнена' : 'Анкета в роботі'}</span></div><p class="calculation-notice">${icon('info')}<span>Обчислюються геометрія, податливість, коефіцієнт навантаження та температурний внесок. Міцність і межі затягування — наступні блоки.</span></p><div class="assembly-panel"><div class="assembly-caption"><strong>Склад з’єднання</strong><span>${C.positive(node.fastener.count) ? `${displayNumber(node.fastener.count)} ${node.fastener.type === 'bolt' ? 'болтів' : 'шпильок'}${C.positive(node.fastener.nominalDiameter) ? ` М${displayNumber(node.fastener.nominalDiameter)}` : ''}` : 'Кріплення не задано'}</span></div><div class="assembly-drawing"><div class="stack-visual" role="img" aria-label="Умовна схема: ${esc(node.connection.sideA.name)}, прокладка, ${esc(node.connection.sideB.name)}${node.extras.length ? `; додаткових елементів: ${node.extras.length}` : ''}; ${washerA || washerB ? 'із шайбами' : 'без шайб'}">${assembly}</div><div class="assembly-legend"><span><i class="legend-dot"></i>${esc(node.connection.sideA.name || 'Деталь А')} / ${esc(node.connection.sideB.name || 'Деталь Б')}</span><span><i class="legend-dot gasket"></i>Прокладка</span>${washerA || washerB ? '<span><i class="legend-dot washer"></i>Шайби</span>' : ''}${node.extras.length ? `<span><i class="legend-dot extra"></i>Додаткові: ${node.extras.length}</span>` : ''}</div></div></div>${blocks.map(([key,title,rows]) => `<details class="calc-block" data-calc="${key}" ${open.includes(key) ? 'open' : ''}><summary>${icon('chevron')}${title}<small>Ще не розраховано</small></summary>${rows.length ? `<table class="result-table"><thead><tr><th scope="col">Параметр</th><th scope="col">НУЕ</th><th scope="col">ГВ</th></tr></thead><tbody>${rows.map(([label,unit]) => `<tr><td>${label}${unit ? `<span>, ${unit}</span>` : ''}</td><td aria-label="Не розраховано">—</td><td aria-label="Не розраховано">—</td></tr>`).join('')}</tbody></table>` : '<p class="calc-footer">Геометрію фланців і перевірки перерізів А–А, В–В та С–С додаємо наступним етапом.</p>'}</details>`).join('')}<p class="results-end">${icon('file')}Редагований Excel із формулами — кнопка «Експорт Excel» над розрахунком.</p>`;
+    target.innerHTML = `<div class="results-title"><h2>Розрахунок вузла</h2><button class="button secondary" data-action="excel-export" data-scope="node">Експорт Excel</button><span class="outline-badge">${p.done === p.total ? 'Анкета заповнена' : 'Анкета в роботі'}</span></div><p class="calculation-notice">${icon('info')}<span>Обчислюються геометрія, податливість, коефіцієнт навантаження та температурний внесок. Міцність і межі затягування — наступні блоки.</span></p>${assemblyPanel(node,'results')}${blocks.map(([key,title,rows]) => `<details class="calc-block" data-calc="${key}" ${open.includes(key) ? 'open' : ''}><summary>${icon('chevron')}${title}<small>Ще не розраховано</small></summary>${rows.length ? `<table class="result-table"><thead><tr><th scope="col">Параметр</th><th scope="col">НУЕ</th><th scope="col">ГВ</th></tr></thead><tbody>${rows.map(([label,unit]) => `<tr><td>${label}${unit ? `<span>, ${unit}</span>` : ''}</td><td aria-label="Не розраховано">—</td><td aria-label="Не розраховано">—</td></tr>`).join('')}</tbody></table>` : '<p class="calc-footer">Геометрію фланців і перевірки перерізів А–А, В–В та С–С додаємо наступним етапом.</p>'}</details>`).join('')}<p class="results-end">${icon('file')}Редагований Excel із формулами — кнопка «Експорт Excel» над розрахунком.</p>`;
     target.querySelector('.assembly-panel').insertAdjacentHTML('afterend',geometryBlock(open.includes('geometry')));
     target.querySelector('[data-calc="load"]').outerHTML = complianceBlock(open.includes('load'));
     target.querySelector('[data-calc="thermal"]').outerHTML = thermalBlock(open.includes('thermal'));
@@ -568,6 +869,14 @@
     document.querySelectorAll('.torque-label')[1].textContent = limits.flanges.configured ? 'Максимальний момент' : limits.maximum.scope === 'fastener-thread-only' ? 'Максимум без фланців' : 'Попередній максимум';
     maximum.title = limits.flanges.configured ? 'Верхня межа за обмеженнями всіх заданих деталей. Перевірте контроль округлених меж.' : 'Застосовність фланців ще не визначена для обох деталей. Це попередня верхня межа.';
     target.querySelector('.calculation-notice span').textContent = Object.keys(limits.inputErrors).length ? 'Виправте позначені помилки введення в анкеті. Розрахунок не підтверджений.' : limits.rangePassed ? 'Усі задані перевірки округлених меж виконані за перенесеною методикою Excel.' : limits.maximum.omitted.length ? 'Межі визначені як в Excel. Внутрішню різьбу чавунного корпусу без Rp пропущено; її міцність не підтверджена.' : limits.flanges.configured ? 'Фланці включені за вибраною застосовністю. Перевірте дані, сумісність і контроль округлених меж: підтвердженого діапазону поки немає.' : 'Для повного розрахунку визначте застосовність фланцевих перевірок для деталей А та Б. Наявні обмеження враховані; округлені межі перевіряються окремо.';
+    if (!limits.complete) {
+      const issue = nextInputIssue(node,limits);
+      if (issue) {
+        const notice = target.querySelector('.calculation-notice span');
+        if (limits.maximum.omitted.length) notice.insertAdjacentHTML('beforeend',issueMarkup(issue,node));
+        else notice.innerHTML = issueMarkup(issue,node);
+      }
+    }
     target.scrollTop = previous?.scroll || 0;
   }
   function forcesBlock(calculated,open) {
@@ -756,10 +1065,11 @@
       const destination = form.get('destination') || null;
       if (destination && !foldersById.has(destination)) return;
       if (folder) {
-        if (folderPath(foldersById.get(destination)).includes(folder)) return;
-        folder.parentId = destination;
-      } else equipment.folderId = destination;
-      (folder || equipment).updatedAt = C.timestamp();
+        if (!moveFolder(folder,destination)) return;
+      } else {
+        equipment.folderId = destination;
+        equipment.updatedAt = C.timestamp();
+      }
       nextHash = destination ? `folder/${destination}` : '';
     } else if (type === 'new-folder') {
       const created = {id:C.id(),name,parentId:currentFolder?.id ?? null,updatedAt:C.timestamp()};
@@ -868,13 +1178,78 @@
     document.querySelector('#kp-trigger')?.setAttribute('aria-expanded','false');
   }
 
+  function canMoveFolder(folder,destination) {
+    return folder && destination !== folder.parentId && (destination === null ||
+      (foldersById.has(destination) && !folderPath(foldersById.get(destination)).includes(folder)));
+  }
+  function moveFolder(folder,destination) {
+    if (!canMoveFolder(folder,destination)) return false;
+    folder.parentId = destination;
+    folder.updatedAt = C.timestamp();
+    return true;
+  }
+  function markDropCard(card) {
+    if (dropCard === card) return;
+    dropCard?.classList.remove('drop-target');
+    dropCard = card;
+    dropCard?.classList.add('drop-target');
+  }
+  function endFolderDrag() {
+    draggedFolder = null;
+    markDropCard(null);
+  }
+  main.addEventListener('dragstart', event => {
+    const button = event.target.closest('[draggable="true"][data-action="open-folder"]');
+    if (!button) return;
+    draggedFolder = foldersById.get(button.dataset.id);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('application/x-flange-folder',button.dataset.id);
+  });
+  main.addEventListener('dragover', event => {
+    if (!draggedFolder) return;
+    const card = event.target.closest('[data-folder-id]');
+    const allowed = card && canMoveFolder(draggedFolder,card.dataset.folderId);
+    markDropCard(allowed ? card : null);
+    if (allowed) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    }
+  });
+  main.addEventListener('dragleave', event => {
+    if (dropCard?.contains(event.target) && !dropCard.contains(event.relatedTarget)) markDropCard(null);
+  });
+  main.addEventListener('dragend',endFolderDrag);
+  main.addEventListener('drop', event => {
+    const card = event.target.closest('[data-folder-id]');
+    const folder = draggedFolder;
+    endFolderDrag();
+    if (!folder || !card || event.dataTransfer.getData('application/x-flange-folder') !== folder.id) return;
+    event.preventDefault();
+    if (!moveFolder(folder,card.dataset.folderId)) return;
+    save();
+    renderDesktopContent();
+    if (!saveFailed) toast(`«${folder.name}» переміщено в «${foldersById.get(folder.parentId).name}».`);
+  });
+
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-action]');
     if (!button || button.disabled) return;
     const action = button.dataset.action;
-    if (action === 'first-input-error') {
+    if (action === 'editor-step') selectEditorStep(button.dataset.step);
+    else if (action === 'editor-next' || action === 'editor-previous') {
+      selectEditorStep(editorSteps[editorSteps.indexOf(editorStep)+(action === 'editor-next' ? 1 : -1)]);
+    }
+    else if (action === 'focus-input') {
+      if (fileDialog.open) fileDialog.close();
+      if (currentNode?.id === button.dataset.id) focusInput(button.dataset.path);
+      else if (currentEquipment?.nodes.some(node => node.id === button.dataset.id)) {
+        pendingField = {nodeId:button.dataset.id,path:button.dataset.path};
+        navigate(`node/${currentEquipment.id}/${pendingField.nodeId}`);
+      }
+    }
+    else if (action === 'first-input-error') {
       const input = document.querySelector('[data-field][aria-invalid="true"]');
-      if (input) { const section = input.closest('.settings-section'); if (section) section.open = true; input.focus(); }
+      if (input) { const section = input.closest('.settings-section'); if (section) selectEditorStep(section.dataset.section); input.focus(); }
     }
     else if (action === 'project-file') openProjectFile();
     else if (action === 'close-file') fileDialog.close();
@@ -961,18 +1336,6 @@
     if (!currentNode || !input.dataset.field || input.type === 'checkbox' || input.tagName === 'SELECT') return;
     C.set(currentNode,input.dataset.field,input.value);
     touchedFields.add(`${currentNode.id}:${input.dataset.field}`);
-    if (input.dataset.field === 'fastener.nominalDiameter') {
-      const oldStd = C.standardTorque(standardsDb, currentNode.fastener.nominalDiameter);
-      const isAuto = (!currentNode.fastener.targetTorqueMinNm && !currentNode.fastener.targetTorqueMaxNm) ||
-        (oldStd && Number(currentNode.fastener.targetTorqueMinNm) === oldStd.minNm && Number(currentNode.fastener.targetTorqueMaxNm) === oldStd.maxNm);
-      currentNode.fastener.pitch = '';
-      currentNode.nut.threadedHeight = '';
-      const newStd = C.standardTorque(standardsDb, input.value);
-      if (newStd && isAuto) {
-        currentNode.fastener.targetTorqueMinNm = String(newStd.minNm);
-        currentNode.fastener.targetTorqueMaxNm = String(newStd.maxNm);
-      }
-    }
     changed();
     updateStatuses(); refreshResults();
   });
@@ -980,7 +1343,21 @@
     const input = event.target;
     if (input.matches('[data-list-sort]')) { sortBy = input.value; renderDesktopContent(); return; }
     if (input.id === 'material-select') { picker.materialIndex = Number(input.value); picker.gradeIndex = 0; renderGradePicker(); return; }
-    if (currentNode && input.dataset.field === 'fastener.nominalDiameter') { renderEditor(true); return; }
+    if (currentNode && input.dataset.field === 'fastener.nominalDiameter') {
+      const oldStd = C.standardTorque(standardsDb,currentNode.fastener.nominalDiameter);
+      const isAuto = (!currentNode.fastener.targetTorqueMinNm && !currentNode.fastener.targetTorqueMaxNm) ||
+        (oldStd && Number(currentNode.fastener.targetTorqueMinNm) === oldStd.minNm && Number(currentNode.fastener.targetTorqueMaxNm) === oldStd.maxNm);
+      currentNode.fastener.nominalDiameter = input.value;
+      currentNode.fastener.pitch = '';
+      currentNode.nut.threadedHeight = '';
+      const newStd = C.standardTorque(standardsDb,input.value);
+      if (newStd && isAuto) {
+        currentNode.fastener.targetTorqueMinNm = String(newStd.minNm);
+        currentNode.fastener.targetTorqueMaxNm = String(newStd.maxNm);
+      }
+      touchedFields.add(`${currentNode.id}:fastener.nominalDiameter`);
+      changed(); renderEditor(true); return;
+    }
     if (!currentNode || !input.dataset.field || (input.tagName !== 'SELECT' && input.type !== 'checkbox')) return;
     if (input.dataset.field === 'connection.kind') {
       const old = currentNode.connection.kind;

@@ -1,0 +1,383 @@
+// Shared component graphics for the node editor and the style gallery.
+(function(root) {
+  root.FlangeComponentVisuals = {
+    styles: [
+  {id:'paper',name:'Креслення',desc:'Прямі проєкції, осьові лінії та розміри для читання геометрії.'},
+  {id:'passport',name:'Гібридний паспорт',desc:'Поєднання вигляду, перерізу й виносного елемента.'}
+],
+    assembly(parts,fastener,scope) {
+      const {bolt,capped} = fastener;
+      const profile = root.PassportProfiles;
+      const d = fastener.diameter > 0 && (fastener.pitch || fastener.nutHeight) ? fastener.diameter : 24;
+      const shaftRadius = 12, gap = shaftRadius + 1;
+      const {shankRadius:halfD, headRadius, headHeight} = profile.boltMetrics(d);
+      const scale = shaftRadius / halfD;
+      const hole = fastener.axialHole > 0 && fastener.axialHole < d ? halfD * fastener.axialHole / d : 0;
+      const height = fastener.nutHeight || d;
+      const nut = profile.buildHexNutMetrics(0,0,d,capped ? 'B' : 'A',{nutM:height,nutCapH:height});
+      const nutScale = shaftRadius / (nut.threadRadius + 2);
+      const nutWidth = nut.hPx * nutScale;
+      const steel = 'assembly-steel-'+scope, hatch = 'assembly-hatch-'+scope, nutHatch = 'assembly-nut-hatch-'+scope;
+      let x = 26;
+      const shapes = [], markers = [];
+      for (const [index,part] of parts.entries()) {
+        const {kind} = part;
+        const width = kind === 'head' ? headHeight*scale : kind === 'nut' ? nutWidth : part.width;
+        const above = kind === 'head' ? headRadius*scale : kind === 'nut' ? nut.halfE*nutScale : part.above;
+        const below = kind === 'head' || kind === 'nut' ? above : part.below;
+        const left = x, right = x + width, mid = (left + right)/2;
+        const y = 110, top = y-above, bottom = y+below;
+        if (kind === 'head') {
+          const headTop = -headHeight;
+          shapes.push(`<g class="assembly-fastener" transform="matrix(0 ${scale} ${scale} 0 ${right} ${y})">
+            ${profile.boltHead(0,headTop,headRadius,0,steel)}
+            ${hole ? `<path d="M ${-hole} ${headTop} V 0 M ${hole} ${headTop} V 0" fill="none" stroke="#3c5866" stroke-dasharray="4 3"/>` : ''}</g>`);
+        } else if (kind === 'nut') {
+          const seat = bolt ? left : right;
+          shapes.push(`<g class="assembly-fastener" transform="matrix(0 ${nutScale} ${bolt ? -nutScale : nutScale} 0 ${seat} ${y})">${profile.nutSide(nut,steel,nutHatch)}</g>`);
+        } else {
+          const fill = kind === 'gasket' ? '#596c74' : `url(#${hatch})`;
+          if (above > gap) shapes.push(`<rect x="${left}" y="${top}" width="${width}" height="${above-gap}" fill="${fill}"/>`);
+          if (below > gap) shapes.push(`<rect x="${left}" y="${y+gap}" width="${width}" height="${below-gap}" fill="${fill}"/>`);
+        }
+        const up = index % 2 === 0, labelY = up ? 17 : 215;
+        const anchor = up && above > gap ? top : up ? y+gap : bottom;
+        markers.push(`<path d="M ${mid} ${anchor} V ${labelY}" stroke="#006d73" stroke-width=".8"/><circle cx="${mid}" cy="${labelY}" r="8" fill="#f7faf9" stroke="#006d73"/><text x="${mid}" y="${labelY+3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="#005f66">${index+1}</text>`);
+        x = right;
+      }
+      // З боку ковпачка кінець кріплення входить у глуху різьбову порожнину.
+      const shaftStart = bolt ? 26 + headHeight*scale : capped ? 26 + nutWidth*.5 : 15;
+      const shaftEnd = bolt ? (capped ? x - nutWidth*.5 : x+12) : x-15;
+      const length = (shaftEnd-shaftStart)/scale;
+      const threadLength = Math.min((nutWidth+18)/scale,length*.35);
+      const shaft = profile.buildFastenerGeometry(0,0,length,halfD,fastener.pitch || 2,threadLength,!bolt);
+      return `<svg viewBox="0 0 ${x+30} 232" width="${(x+30)*1.65}" role="img" aria-label="Переріз пакета вздовж кріплення">
+        <defs>${profile.steelGradient(steel)}${profile.steelHatch(nutHatch, .65/nutScale)}
+        <pattern id="${hatch}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#d5e1e4"/><path d="M-1 1l2 -2 M0 6l6 -6 M5 7l2 -2" stroke="#6a818b" stroke-width=".8"/></pattern></defs>
+        <g stroke="#2b434f" stroke-width="1.5" stroke-linejoin="round">
+          <g class="assembly-fastener" transform="matrix(0 ${scale} ${scale} 0 ${shaftStart} 110)">
+            <path d="${shaft.bodyPath}" fill="url(#${steel})" stroke-width="2"/>
+            <path d="${shaft.threadLines}" fill="none" stroke="#3c5866" stroke-width=".85"/>
+            ${hole ? `<path d="M ${-hole} 0 V ${length} M ${hole} 0 V ${length}" fill="none" stroke="#3c5866" stroke-dasharray="4 3"/>` : ''}
+          </g>${shapes.join('')}</g>
+        <path d="M 6 110 H ${x+22}" stroke="#c56b1a" stroke-width=".85" stroke-dasharray="12 4 2 4"/>${markers.join('')}</svg>`;
+    },
+    create(style,key,part,threadPitch) {
+      const parts = {[key]:part};
+      const d=part.diameter || part.outer;
+      const pitch=threadPitch;
+      const number=n=>n.toLocaleString('uk-UA');
+      const styles=this.styles;
+const TAU = Math.PI*2;
+const clamp = (x,min,max) => Math.max(min,Math.min(max,x));
+
+// A meridian swept around the vertical axis. The thread radius also varies with angle.
+function surface(part,key,cut) {
+  const rows=[], triangles=[], n=120;
+  const r=part.outer/2, hole=part.inner/2, h=part.h;
+  const begin=cut ? -Math.PI*.28 : 0, span=cut ? Math.PI*1.49 : TAU;
+  const hex=a => r*Math.cos(Math.PI/6)/Math.cos(((a+TAU+Math.PI/6)%(Math.PI/3))-Math.PI/6);
+  function threadDepth(z,a) {
+    const phase=((z/pitch-a/TAU)%1+1)%1;
+    return clamp((Math.abs(phase-.5)-.07)*2.75,0,1);
+  }
+  function outside(z,a) {
+    if(key==='nut') return Math.min(hex(a),r*.84+Math.min(z,h-z)*1.6);
+    if(key==='stud') {
+      const threaded=clamp(Math.max((h*.31-z)/pitch,(z-h*.70)/pitch),0,1);
+      return Math.min(r*.88+Math.min(z,h-z)*1.3,r-1.65*threaded*threadDepth(z,a));
+    }
+    const bevel=key==='washer'?.5:.18;
+    return r-Math.max(0,bevel-Math.min(z,h-z));
+  }
+  function inside(z,a) {
+    if(key==='nut') return hole-pitch*.52+pitch*.52*threadDepth(z,a)+Math.max(0,Math.min(1.05,pitch*.3)-Math.min(h-z,z));
+    return hole+(hole?Math.max(0,(key==='washer'?.45:.12)-Math.min(z,h-z)):0);
+  }
+  const slices = key==='stud' || key==='nut' ? Math.ceil(h/pitch*9) : 8;
+  // Include the bevel boundaries even on thin components.
+  const levels = [...new Set([0,h,...Array.from({length:slices-1},(_,i)=>h*(i+1)/slices)])].sort((a,b)=>a-b);
+  function row(z,radius) {
+    return Array.from({length:n+1},(_,i)=>{
+      const a=begin+span*i/n, length=radius(z,a);
+      return [length*Math.cos(a),length*Math.sin(a),z-h/2];
+    });
+  }
+  function strip(a,b,material) {
+    for(let i=0;i<a.length-1;i++) {
+      triangles.push([a[i],a[i+1],b[i],material],[a[i+1],b[i+1],b[i],material]);
+    }
+  }
+  for(const z of levels) rows.push(row(z,outside));
+  for(let i=1;i<rows.length;i++) strip(rows[i-1],rows[i],0);
+  const innerRows=levels.map(z=>row(part.capped?Math.min(z,h-pitch):z,inside));
+  if(hole) for(let i=1;i<innerRows.length;i++) strip(innerRows[i],innerRows[i-1],1);
+  strip(rows.at(-1),part.capped ? rows.at(-1).map(()=>[0,0,h/2]) : innerRows.at(-1),2);
+  if(part.capped) {
+    const bottom=innerRows.at(-1);
+    const center=bottom.map(()=>[0,0,h/2-pitch]);
+    strip(bottom,center,1);
+  }
+  strip(innerRows[0],rows[0],2);
+  if(cut) for(const edge of [0,n]) {
+    const outerEdge=rows.map(r=>r[edge]), innerEdge=innerRows.map(r=>r[edge]);
+    if(edge===0) strip(innerEdge,outerEdge,3); else strip(outerEdge,innerEdge,3);
+  }
+  if(part.hasHoles) {
+    const radius=(part.outer+part.inner)/4,hr=part.holeDiameter/2;
+    for(let j=0;j<part.count;j++) {
+      const angle=TAU*j/part.count,ox=radius*Math.cos(angle),oy=radius*Math.sin(angle);
+      const ring=z=>Array.from({length:33},(_,i)=>[ox+hr*Math.cos(TAU*i/32),oy+hr*Math.sin(TAU*i/32),z]);
+      strip(ring(-h/2),ring(h/2),1);
+    }
+  }
+  return triangles;
+}
+
+// Rasterize the opaque surfaces into a depth buffer. Reuse the depth and normals
+// for the contour plate so that internal threads stay correctly occluded.
+function renderPart(key,style) {
+  const part=parts[key], cut=style==='section', wire=style==='blue', macro=style==='macro';
+  const side=450, height=510;
+  const canvas=document.createElement('canvas');
+  canvas.width=side; canvas.height=height;
+  const ctx=canvas.getContext('2d');
+  const triangles=surface(part,key,cut);
+  const elevation=key==='stud'?.16:(key==='nut'?.53:.66);
+  const tilt=wire?elevation+.10:elevation;
+  const sn=Math.sin(tilt),cs=Math.cos(tilt),az=.13;
+  const ca=Math.cos(az),sa=Math.sin(az);
+  let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity;
+  const projected=new Map();
+  function project(v) {
+    if(!projected.has(v)) {
+      const x=v[0]*ca-v[1]*sa, y=v[0]*sa+v[1]*ca;
+      const point=[x,-y*sn-v[2]*cs,-y*cs+v[2]*sn];
+      xmin=Math.min(xmin,x);xmax=Math.max(xmax,x);ymin=Math.min(ymin,point[1]);ymax=Math.max(ymax,point[1]);
+      projected.set(v,point);
+    }
+    return projected.get(v);
+  }
+  for(const [a,b,c] of triangles){project(a);project(b);project(c)}
+  const scale=Math.min(side*(macro?.67:.78)/(xmax-xmin),height*(macro?.65:.76)/(ymax-ymin));
+  const midX=(xmin+xmax)/2,midY=(ymin+ymax)/2;
+  const cx=side*(macro?.44:.48),cy=height*(macro?.57:.49);
+  for(const p of projected.values()){p[0]=cx+(p[0]-midX)*scale;p[1]=cy+(p[1]-midY)*scale;p[2]*=scale}
+  const zbuf=new Float32Array(side*height).fill(-Infinity);
+  const holes=[];
+  if(part.hasHoles) for(let i=0;i<part.count;i++) {
+    const a=TAU*i/part.count, radius=(part.outer+part.inner)/4;
+    holes.push([radius*Math.cos(a),radius*Math.sin(a)]);
+  }
+  const tone=new Float32Array(zbuf.length);
+  const material=new Uint8Array(zbuf.length);
+  const normal=new Float32Array(zbuf.length);
+  for(const [va,vb,vc,mat] of triangles) {
+    const a=projected.get(va),b=projected.get(vb),c=projected.get(vc);
+    const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
+    const area=ux*vy-uy*vx;
+    if(Math.abs(area)<.00001) continue;
+    let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=area;
+    const length=Math.hypot(nx,ny,nz);
+    const sign=nz<0?-1:1;
+    nx*=sign/length;ny*=sign/length;nz*=sign/length;
+    const diffuse=clamp(.48-.27*nx-.31*ny+.18*nz,0,1);
+    const softbox=Math.exp(-((nx+.38)**2)/.035);
+    const rim=Math.exp(-((nx-.79)**2)/.015);
+    const reflected=clamp(diffuse*.67+.30*softbox+.20*rim-.08*Math.exp(-(nx*nx)/.018),0,1);
+    const value=mat===1?reflected*.69:reflected;
+    const x0=Math.max(0,Math.floor(Math.min(a[0],b[0],c[0]))),x1=Math.min(side-1,Math.ceil(Math.max(a[0],b[0],c[0])));
+    const y0=Math.max(0,Math.floor(Math.min(a[1],b[1],c[1]))),y1=Math.min(height-1,Math.ceil(Math.max(a[1],b[1],c[1])));
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) {
+      const dx=x+.5-a[0],dy=y+.5-a[1];
+      const s=(dx*vy-dy*vx)/area,t=(ux*dy-uy*dx)/area;
+      if(s<0||t<0||s+t>1)continue;
+      const i=y*side+x,z=a[2]+s*uz+t*vz;
+      if(z<=zbuf[i])continue;
+      if(holes.length && mat!==1) {
+        const px=va[0]+s*(vb[0]-va[0])+t*(vc[0]-va[0]);
+        const py=va[1]+s*(vb[1]-va[1])+t*(vc[1]-va[1]);
+        if(holes.some(([hx,hy])=>(px-hx)**2+(py-hy)**2<(part.holeDiameter/2)**2))continue;
+      }
+      zbuf[i]=z;material[i]=mat;tone[i]=value;normal[i]=nx*.61+ny*.73+nz*.24;
+    }
+  }
+  const bitmap=ctx.createImageData(side,height), pixels=bitmap.data;
+  const graphite=key==='gasket';
+  for(let i=0;i<zbuf.length;i++) {
+    if(zbuf[i]===-Infinity)continue;
+    const x=i%side,y=Math.floor(i/side),value=tone[i],mat=material[i];
+    let hash=Math.imul(i+3107,0x45d9f3b);
+    hash=Math.imul(hash^(hash>>>16),0x45d9f3b);
+    const grain=((hash>>>22)/1024-.5)*(graphite?17:3);
+    const u=(x-cx)/((xmax-xmin)*scale), v=(y-cy)/((ymax-ymin)*scale);
+    let rgb;
+    if(wire) {
+      const outline=[i-1,i+1,i-side,i+side].some(j=>!Number.isFinite(zbuf[j])||Math.abs(zbuf[i]-zbuf[j])>6||Math.abs(normal[i]-normal[j])>.24);
+      rgb=outline?[188,236,244]:[20+24*value,62+42*value,81+46*value];
+    } else if(mat===3) {
+      const hatch=(x+y)%13<2?-.19:0;
+      rgb=[172+62*(value+hatch),90+78*(value+hatch),47+80*(value+hatch)];
+    } else if(graphite) {
+      const light=36+value*75+grain-21*u-17*v+4*Math.sin((x*.53+y)*1.2);
+      rgb=[light,light+5,light+7];
+    } else {
+      const band=u*.91+v*.43;
+      const sweep=47*Math.exp(-((band+.24)**2)/.016)-29*Math.exp(-((band-.15)**2)/.045);
+      const radial=Math.hypot(x-cx,(y-cy)/sn);
+      const brushing=mat===2?2.6*Math.sin(radial*1.75):1.3*Math.sin(y*2.1);
+      const light=31+219*value+grain+sweep+brushing-15*v;
+      rgb=[light+1+6*Math.max(0,-u),light+5,light+9+6*Math.max(0,u)];
+    }
+    const j=4*i;pixels[j]=rgb[0];pixels[j+1]=rgb[1];pixels[j+2]=rgb[2];pixels[j+3]=255;
+  }
+  const model=document.createElement('canvas');model.width=side;model.height=height;
+  model.getContext('2d').putImageData(bitmap,0,0);
+  const base=cy+(ymax-ymin)*scale/2, radius=(xmax-xmin)*scale/2;
+  if(!wire) {
+    ctx.save();ctx.translate(cx,base+4);ctx.scale(radius*.95,Math.max(6,radius*.085));
+    const shadow=ctx.createRadialGradient(0,0,0,0,0,1);
+    shadow.addColorStop(0,'#25333154');shadow.addColorStop(1,'#25333100');ctx.fillStyle=shadow;ctx.fillRect(-1,-1,2,2);ctx.restore();
+  }
+  ctx.drawImage(model,0,0);
+  if(macro) {
+    const sx=cx+radius*(key==='stud'?.68:key==='nut'?.17:.24);
+    const sy=cy+(key==='stud'?-.31*(ymax-ymin)*scale:key==='nut'?-.25*(ymax-ymin)*scale:
+      key==='gasket'?radius*sn*Math.sqrt(1-.24**2):radius*sn*Math.sqrt((part.inner/part.outer)**2-.24**2)-part.h*cs*scale/2);
+    const mx=side-80,my=89,mr=60;
+    ctx.strokeStyle='#23625d';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(mx-34,my+43);ctx.stroke();
+    ctx.beginPath();ctx.arc(sx,sy,11,0,TAU);ctx.stroke();
+    ctx.save();ctx.beginPath();ctx.arc(mx,my,mr,0,TAU);ctx.clip();ctx.fillStyle='#f6f8f3';ctx.fillRect(mx-mr,my-mr,2*mr,2*mr);
+    ctx.drawImage(model,sx-25,sy-25,50,50,mx-mr,my-mr,2*mr,2*mr);ctx.restore();
+    ctx.beginPath();ctx.arc(mx,my,mr,0,TAU);ctx.stroke();
+    ctx.fillStyle='#254c48';ctx.font='18px "Segoe UI",sans-serif';ctx.textAlign='right';ctx.fillText(part.detail,side-16,23);
+  }
+  // The horizontal axis on screen follows the diameter through the centre.
+  // At its right end, the two face planes project to the same x coordinate.
+  const axisX=cx-midX*scale, topY=cy+(-part.h*cs/2-midY)*scale;
+  const bottomY=topY+part.h*cs*scale;
+  const overlay=dimensionOverlay(key,{axisX,topY,bottomY,scale,sn,cs,base,macro});
+  const plate=document.createElement('div');
+  plate.className='plate';
+  plate.setAttribute('role','img');
+  plate.setAttribute('aria-label',part.name+' · '+styles.find(s=>s.id===style).name+' · '+part.spec+' мм');
+  plate.append(canvas,overlay);
+  return plate;
+}
+
+function dimensionOverlay(key,{axisX,topY,bottomY,scale,sn,cs,base,macro}) {
+  const p=parts[key],r=p.outer*scale/2,bore=p.inner*scale/2;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 450 510');
+  svg.setAttribute('preserveAspectRatio','none');
+  svg.setAttribute('aria-hidden','true');
+  svg.classList.add('dimensions');
+  const lines=[],labels=[];
+  function path(d,cls='') { lines.push(`<path class="${cls}" d="${d}"/>`) }
+  function text(x,y,value,anchor='middle',rotation=0) {
+    labels.push(`<text transform="translate(${x} ${y}) rotate(${rotation})" text-anchor="${anchor}">${value}</text>`);
+  }
+  function leader(x,y,labelX,labelY,value) {
+    path(`M${x} ${y} L${labelX+38} ${labelY+8} H${labelX}`);
+    lines.push(`<circle cx="${x}" cy="${y}" r="2.7"/>`);
+    text(labelX,labelY,value,'start');
+  }
+  function diameter(radius,edgeY,dimensionY) {
+    const left=axisX-radius,right=axisX+radius;
+    path(`M${left} ${edgeY+3} V${dimensionY+7} M${right} ${edgeY+3} V${dimensionY+7}`,'extension');
+    path(`M${left} ${dimensionY} H${right}`);
+    path(`M${left} ${dimensionY} l8 -3 v6 Z M${right} ${dimensionY} l-8 -3 v6 Z`,'tips');
+    text(axisX,dimensionY-9,'Ø '+number(p.outer));
+  }
+  if(key==='stud') {
+    const threadY=topY+p.h*.16*cs*scale;
+    leader(axisX-r+2,threadY,20,macro?85:42,'М'+d+' × '+number(pitch));
+    diameter(r,bottomY,Math.min(490,base+42));
+  } else {
+    const ring=key!=='nut';
+    // The rear-left quadrant is visible in both the full and cutaway models.
+    leader(axisX-bore*.72,topY-bore*.694*sn,23,macro?114:57,ring?'Ø '+number(p.inner):'М'+d);
+    const edgeX=axisX+r*(ring?1:.84),dimX=axisX+r+13;
+    path(`M${edgeX+2} ${topY} H${dimX+6} M${edgeX+2} ${bottomY} H${dimX+6}`,'extension');
+    if(ring) {
+      path(`M${dimX} ${topY-18} V${bottomY+19}`);
+      path(`M${dimX} ${topY} l-3 -8 h6 Z M${dimX} ${bottomY} l-3 8 h6 Z`,'tips');
+      const labelY=Math.max(bottomY+39,base-4);
+      path(`M${dimX} ${bottomY+15} V${labelY-7} l-8 8 h-39`);
+      text(dimX-10,labelY-5,'s = '+number(p.h),'end');
+      diameter(r,topY,Math.min(484,base+60));
+    } else {
+      path(`M${dimX} ${topY} V${bottomY}`);
+      path(`M${dimX} ${topY} l-3 8 h6 Z M${dimX} ${bottomY} l-3 -8 h6 Z`,'tips');
+      text(dimX+22,(topY+bottomY)/2,'m = '+number(p.h),'middle',-90);
+    }
+  }
+  svg.innerHTML=lines.join('')+labels.join('');
+  return svg;
+}
+
+function drawing(key) {
+  const p=parts[key], ns='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(ns,'svg');
+  svg.setAttribute('viewBox','0 0 300 338');svg.setAttribute('role','img');svg.setAttribute('aria-label','Креслення · '+p.name);
+  const stroke='#283e42', accent='#147165';
+  const line=(x1,y1,x2,y2,color=stroke,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-dasharray="${dash}"/>`;
+  const label=(x,y,text)=>`<text x="${x}" y="${y}" fill="${accent}" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="14" font-weight="600">${text}</text>`;
+  function horizontal(x1,x2,y,markY,text) {
+    return line(x1,markY,x1,y+5,accent)+line(x2,markY,x2,y+5,accent)+line(x1,y,x2,y,accent)
+      +`<path d="M${x1} ${y} l7 -2 v4 z M${x2} ${y} l-7 -2 v4 z" fill="${accent}"/>`+label((x1+x2)/2,y-7,text);
+  }
+  const axis=(x1,y1,x2,y2)=>line(x1,y1,x2,y2,'#c56b1a','10 3 2 3');
+  let art='';
+  if(key==='stud') {
+    art=p.bolt ? '<path d="M96 33 h80 l4 4 v26 h-16 v215 l-4 4 h-48 l-4 -4 V63 H92 V37 Z" fill="#e1e9e4" stroke="#283e42" stroke-width="2"/>' : '<path d="M112 33 h48 l4 4 v241 l-4 4 h-48 l-4 -4 V37 z" fill="#e1e9e4" stroke="#283e42" stroke-width="2"/>';
+    for(const [start,end] of (p.bolt ? [[205,277]] : [[40,109],[205,277]])) {
+      for(let y=start;y<end;y+=7) art+=line(109,y+4,163,y,'#526d68');
+    }
+    art+=axis(136,19,136,291)+horizontal(108,164,312,279,'Ø '+d);
+    const threadY=p.bolt?223:69;
+    art+=line(163,threadY,191,threadY-21,accent)+line(191,threadY-21,257,threadY-21,accent)+label(224,threadY-27,'М'+d+' × '+number(pitch));
+    if(p.axialHole>0) {
+      const half=28*p.axialHole/d;
+      art+=line(136-half,34,136-half,282,stroke,'4 3')+line(136+half,34,136+half,282,stroke,'4 3');
+      art+=line(136+half,155,195,139,accent)+label(229,135,'Ø '+number(p.axialHole));
+    }
+  } else {
+    const cx=150,cy=123,r=87,inside=r*p.inner/p.outer;
+    if(key==='nut') {
+      const points=Array.from({length:6},(_,i)=>[cx+r*Math.cos(TAU*i/6),cy+r*Math.sin(TAU*i/6)].join(',')).join(' ');
+      art+=`<polygon points="${points}" fill="#e1e9e4" stroke="${stroke}" stroke-width="2"/><circle cx="${cx}" cy="${cy}" r="${r*.86}" fill="none" stroke="${stroke}"/>`;
+    } else art+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${key==='gasket'?'#b7c5bf':'#e1e9e4'}" stroke="${stroke}" stroke-width="2"/>`;
+    art+=`<circle cx="${cx}" cy="${cy}" r="${inside}" fill="#f4f6f0" stroke="${stroke}" stroke-width="1.8"/>`;
+    if(key==='nut') art+=`<path d="M150 ${cy-inside-5} a${inside+5} ${inside+5} 0 1 1 ${-inside-5} ${inside+5}" fill="none" stroke="${stroke}"/>`;
+    if(p.hasHoles) {
+      const radius=(r+inside)/2,hr=r*p.holeDiameter/p.outer;
+      for(let i=0;i<p.count;i++) {
+        const a=TAU*i/p.count;
+        art+=`<circle cx="${cx+radius*Math.cos(a)}" cy="${cy+radius*Math.sin(a)}" r="${hr}" fill="#f4f6f0" stroke="${stroke}"/>`;
+      }
+    }
+    art+=axis(44,cy,256,cy)+axis(cx,20,cx,218);
+    art+=line(cx+inside*.7,cy-inside*.7,223,46,accent)+line(223,46,282,46,accent)+label(252,39,key==='nut'?'М'+d:'Ø '+p.inner);
+    if(key!=='nut')art+=horizontal(cx-r,cx+r,234,cy+7,'Ø '+p.outer);
+    const x=63,y=267,h=key==='nut'?37:key==='gasket'?5:14,width=r-inside;
+    for(const left of [x,cx+inside]) art+=`<rect x="${left}" y="${y}" width="${width}" height="${h}" fill="url(#hatch-${key})" stroke="${stroke}" stroke-width="1.5"/>`;
+    art+=line(239,y,259,y,accent)+line(239,y+h,259,y+h,accent)+line(254,y-11,254,y+h+12,accent);
+    art+=`<path d="M254 ${y} l-2 -6 h4 z M254 ${y+h} l-2 6 h4 z" fill="${accent}"/>`
+      +line(254,y+h+12,249,y+h+17,accent)+line(249,y+h+17,190,y+h+17,accent)
+      +label(220,y+h+13,(key==='nut'?'m':'s')+' = '+number(p.h));
+  }
+  svg.innerHTML=`<defs><pattern id="hatch-${key}" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M-1 1l2 -2 M0 7l7 -7 M6 8l2 -2" stroke="#81918a"/></pattern></defs>`+art;
+  return svg;
+}
+
+
+      if(style==='passport') return root.ImportedComponentStyles(style,part.bolt ? 'bolt' : key,part,pitch);
+      if(part.bolt || part.axialHole>0) return drawing(key);
+      if(style==='cad') return root.ImportedComponentStyles(style,key,part,pitch);
+      if(part.capped && style==='paper') return root.ImportedComponentStyles('passport',key,part,pitch);
+      return style==='paper'?drawing(key):renderPart(key,style);
+    }
+  };
+})(globalThis);

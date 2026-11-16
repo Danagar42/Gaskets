@@ -23,6 +23,8 @@
           node.connection[side].area ??= '';
         }
         node.gasket.referenceId ||= C.DEFAULT_GASKET_REFERENCE_ID;
+        node.gasket.partitionPattern ??= 'none';
+        node.gasket.partitionWidth ??= '';
         node.nut = {...C.createNode('').nut,...node.nut};
         node.washers = {...C.createNode('').washers,...node.washers};
       }

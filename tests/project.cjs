@@ -4,6 +4,7 @@ const C = require('../core.js'), P = require('../project.js');
 const equipment = C.createEquipment('Насос','Н-101'), node = C.createNode('Кришка');
 equipment.nodes.push(node);
 node.fastener.material = {name:'Сталь',kp:'590',description:'Виконання'};
+Object.assign(node.gasket,{partitionPattern:'tee',partitionWidth:'8,5'});
 node.extras.push({id:C.id(),name:'Проставка',thickness:'2',area:'100',material:null});
 const original = {version:1,equipment:[equipment],preferences:{recent:['Сталь'],favorites:[]}};
 const serialized = P.serialize(original), restored = P.parse('\uFEFF'+serialized);
@@ -51,10 +52,19 @@ assert.throws(() => P.parse(JSON.stringify(injected)));
 const legacy=JSON.parse(serialized);
 delete legacy.equipment[0].nodes[0].flanges;
 delete legacy.equipment[0].nodes[0].fastener.threadStandardId;
+delete legacy.equipment[0].nodes[0].gasket.partitionPattern;
+delete legacy.equipment[0].nodes[0].gasket.partitionWidth;
 legacy.preferences={favorites:'bad',recent:[12,'Сталь']};
 const migrated=P.parse(JSON.stringify(legacy));
 assert.equal(migrated.equipment[0].nodes[0].flanges.sideA.mode,'pending');
 assert.equal(migrated.equipment[0].nodes[0].fastener.threadStandardId,'gost-24705-2004');
+assert.equal(migrated.equipment[0].nodes[0].gasket.partitionPattern,'none');
+assert.equal(migrated.equipment[0].nodes[0].gasket.partitionWidth,'');
+for (const change of [{partitionPattern:'hex'}, {partitionWidth:[]}]) {
+  const damaged = structuredClone(restored);
+  Object.assign(damaged.equipment[0].nodes[0].gasket,change);
+  assert.throws(() => P.normalize(damaged));
+}
 assert.deepEqual(migrated.preferences,{recent:['Сталь'],favorites:[]});
 assert.equal(JSON.stringify(original),before);
 for (const entity of ['equipment','node','extra']) for (const field of ['createdAt','updatedAt']) {

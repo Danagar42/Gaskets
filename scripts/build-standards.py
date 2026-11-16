@@ -59,8 +59,8 @@ def validate_nut(record, filename):
             raise ValueError(f"{filename}: invalid nominal diameter {designation}")
         if record.get("types"):
             kinds = record["types"]
-            if set(row) != {"heightsByTypeMm"}:
-                raise ValueError(f"{filename}: typed nut rows must hold only heightsByTypeMm at M{designation}")
+            if set(row) != {"heightsByTypeMm", "acrossFlatsByTypeMm"}:
+                raise ValueError(f"{filename}: typed nut rows require heights and wrench sizes at M{designation}")
             heights = row.get("heightsByTypeMm", {})
             if set(heights) != set(kinds):
                 raise ValueError(f"{filename}: expected exact nut types {list(kinds)} at M{designation}")
@@ -69,12 +69,21 @@ def validate_nut(record, filename):
             for type_id, height in heights.items():
                 if height is not None and (type(height) not in (float, int) or not math.isfinite(height) or height <= 0):
                     raise ValueError(f"{filename}: invalid nut height for type {type_id} at M{designation}")
+            wrench_sizes = row["acrossFlatsByTypeMm"]
+            if set(wrench_sizes) != set(kinds):
+                raise ValueError(f"{filename}: wrench sizes must cover the exact nut types at M{designation}")
+            if any((value is None) != (heights[kind] is None) for kind, value in wrench_sizes.items()):
+                raise ValueError(f"{filename}: wrench-size availability differs from nut-height availability at M{designation}")
         else:
             height = row.get("heightMm")
             if type(height) not in (float, int) or not math.isfinite(height) or height <= 0:
                 raise ValueError(f"{filename}: invalid nut height at M{designation}")
-            if set(row) != {"heightMm"}:
-                raise ValueError(f"{filename}: nut catalog stores only heightMm at M{designation}")
+            if set(row) != {"heightMm", "acrossFlatsMm"}:
+                raise ValueError(f"{filename}: nut row requires height and wrench size at M{designation}")
+            wrench_sizes = {"A": row["acrossFlatsMm"]}
+        for value in wrench_sizes.values():
+            if value is not None and (type(value) not in (float, int) or not math.isfinite(value) or value <= 0):
+                raise ValueError(f"{filename}: invalid wrench size at M{designation}")
         diameters.add(nominal)
     nonpreferred = record.get("nonPreferredDiametersMm", [])
     if any(d not in diameters for d in nonpreferred) or len(set(nonpreferred)) != len(nonpreferred):

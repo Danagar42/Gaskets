@@ -6,9 +6,9 @@ const deferred=()=>{let resolve,reject;const promise=new Promise((ok,no)=>{resol
 
 // Isolated document/storage doubles: exercise the real app event handlers,
 // without touching the user's browser, files or localStorage.
-function app() {
-  const equipment=[C.createEquipment('Насос А'),C.createEquipment('Насос Б')];
-  equipment.forEach(item=>item.nodes.push(C.createNode('Кришка')));
+function app(options={}) {
+  const equipment=options.equipment || [C.createEquipment('Насос А'),C.createEquipment('Насос Б')];
+  if (!options.equipment) equipment.forEach(item=>item.nodes.push(C.createNode('Кришка')));
   const original={version:1,equipment,preferences:{recent:[],favorites:[]}};
   const storage=new Map([[KEY,JSON.stringify(original)]]), elements=new Map(), downloads=[], blobs=new Map();
   const documentEvents={},windowEvents={},pendingExport=deferred();
@@ -32,8 +32,8 @@ function app() {
   const location={hash:`#equipment/${equipment[0].id}`};
   const window={FlangeCore:C,FlangeProject:P,FlangeStandardsDB:{},
     FlangeExcel:{inspect:()=>({errors:[],warnings:[],limits:{maximum:{roundedTorqueNm:100}}}),create:()=>pendingExport.promise},
-    addEventListener:(event,handler)=>{windowEvents[event]=handler;}};
-  const context=vm.createContext({window,document,location,materialsDB:[],Blob,FormData,
+    addEventListener:(event,handler)=>{windowEvents[event]=handler;},...options.window};
+  const context=vm.createContext({window,document,location,materialsDB:options.materials || [],Blob,FormData,
     URL:{createObjectURL(blob){const url=`blob:${blobs.size}`;blobs.set(url,blob);return url;},revokeObjectURL(){}},
     localStorage:{getItem(key){if(faults.read)throw new Error('Storage access denied');return storage.get(key)||null;},
       setItem(key,value){if(faults.write===key)throw new Error('Quota exceeded');storage.set(key,value);}},setTimeout:()=>0,clearTimeout(){}});
@@ -52,6 +52,21 @@ function app() {
 const importJson=()=>P.serialize({version:1,equipment:[C.createEquipment('Імпортований насос')]});
 
 (async()=>{
+  const sample=require('../examples/pump-600v-first-three.json');
+  const readAppFile=name=>fs.readFileSync(require('node:path').join(__dirname,'..',name),'utf8');
+  const sampleApp=app({equipment:sample.equipment,materials:vm.runInNewContext(readAppFile('data.js')+';materialsDB'),
+    window:{FlangeStandardsDB:vm.runInNewContext(readAppFile('standards.bundle.js')+';FlangeStandardsDB'),
+      FlangeCalculations:require('../calculations.js'),FlangeExcel:require('../excel-export.js')}});
+  sampleApp.click('excel-export',{scope:'equipment'});
+  const cards=sampleApp.dialog.innerHTML.split('<section class="export-node">').slice(1).map(card=>card.split('</section>')[0]);
+  assert.equal(cards.length,3);
+  for (const index of [0,2]) {
+    assert(cards[index].includes('data-id="'+sample.equipment[0].nodes[index].id+'" data-path="connection.sideB.material"'));
+    assert(cards[index].includes('НУЕ (45 °C) — E; ГВ (20 °C) — E.'),'A stud uses body modulus in both modes and excludes body expansion');
+    assert(cards[index].includes('Деталі перевірки'));
+  }
+  assert(!cards[1].includes('focus-input'),'A complete node has no correction link');
+
   let state=app();state.faults.read=true;
   assert.doesNotThrow(()=>state.click('project-file'),'Storage read failure must not prevent saving an in-memory project to JSON');
   assert(state.dialog.open);
