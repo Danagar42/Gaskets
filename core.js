@@ -3,6 +3,23 @@
   const sections = ['operating', 'gasket', 'fastener', 'connection', 'nut', 'washers', 'extras'];
   const DEFAULT_GASKET_REFERENCE_ID = 'graphite-annex-b1-b2-unidentified';
   const gasketPartitions = Object.freeze({none:'Без перегородок',single:'Одна смуга',cross:'Навхрест',tee:'Т-подібна',parallel:'Дві паралельні смуги'});
+  const arrangements = Object.freeze({
+    stud:{label:'Шпилька в корпусі з гайкою', ends:['nut','body']},
+    'through-stud':{label:'Шпилька з двома гайками', ends:['nut','nutB']},
+    'body-bolt':{label:'Болт у корпусі', ends:['head','body']},
+    bolt:{label:'Наскрізний болт із гайкою', ends:['head','nut']}
+  });
+  function mounting(node) {
+    const f = node.fastener, config = arrangements[f.type];
+    const [a,b] = f.reversed ? [...config.ends].reverse() : config.ends;
+    const body = a === 'body' ? 'sideA' : b === 'body' ? 'sideB' : null;
+    const nuts = config.ends.filter(end=>end.startsWith('nut'));
+    const engagement = body && (f.type === 'stud' && f.engagement === undefined ? node.connection[body].height : f.engagement);
+    return {a,b,body,nuts,engagement,bolt:config.ends.includes('head'),label:config.label};
+  }
+  function nutAt(node,end) {
+    return end === 'nutB' && node.fastener.differentNuts ? node.nutB : node.nut;
+  }
   const id = () => root.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   const timestamp = () => new Date().toISOString();
   function createEquipment(name, designation = '') {
@@ -208,6 +225,48 @@
       description: reason
     };
   }
+  function automaticHoleDiameter(nominalDiameter) {
+    const d = number(nominalDiameter);
+    if (!d || d <= 0) return null;
+    return d + (d >= 27 ? 3 : d > 10 ? 2 : 1);
+  }
+  function flangeGeometryAdvisories({boltCircle, count, holeDiameter, outerDiameter, innerDiameter} = {}) {
+    const Dw = number(boltCircle);
+    const z = number(count);
+    const d0 = number(holeDiameter);
+    const Df = number(outerDiameter);
+    const D = number(innerDiameter);
+
+    const pitch = (Dw > 0 && z > 0) ? (Math.PI * Dw) / z : null;
+    const pitchRatio = (pitch !== null && d0 > 0) ? pitch / d0 : null;
+    const edgeOuter = (Df > 0 && Dw > 0) ? (Df - Dw) / 2 : null;
+    const edgeInner = (Dw > 0 && D > 0) ? (Dw - D) / 2 : null;
+
+    const warnings = [];
+    if (pitchRatio !== null) {
+      if (pitchRatio < 2.5) {
+        warnings.push(`Крок кріплень малий (t_b = ${pitch.toFixed(1).replace('.', ',')} мм, ${pitchRatio.toFixed(2).replace('.', ',')} d₀ < 2,5 d₀): ускладнений монтаж ключем.`);
+      } else if (pitchRatio > 6) {
+        warnings.push(`Крок кріплень великий (t_b = ${pitch.toFixed(1).replace('.', ',')} мм, ${pitchRatio.toFixed(2).replace('.', ',')} d₀ > 6 d₀): ризик нерівномірного обтиснення прокладки.`);
+      }
+    }
+    if (d0 > 0) {
+      if (edgeOuter !== null && edgeOuter > 0 && edgeOuter < d0) {
+        warnings.push(`Зовнішня кромка фланця мала (${edgeOuter.toFixed(1).replace('.', ',')} мм < d₀ = ${d0} мм).`);
+      }
+      if (edgeInner !== null && edgeInner > 0 && edgeInner < d0) {
+        warnings.push(`Внутрішня кромка фланця мала (${edgeInner.toFixed(1).replace('.', ',')} мм < d₀ = ${d0} мм).`);
+      }
+    }
+
+    return {
+      boltPitch: pitch,
+      pitchRatio,
+      edgeOuter,
+      edgeInner,
+      warnings
+    };
+  }
   function validateInputs(node, catalog) {
     const errors = {}, missing = {};
     const fail = (path,message) => { errors[path] ||= message; };
@@ -297,7 +356,7 @@
       const path = `flanges.${side}.`;
       const inner = numeric(path+'innerDiameter'), circle = numeric(path+'boltCircle'), outer = numeric(path+'outerDiameter');
       const enteredHole = numeric(path+'holeDiameter',{optional:true});
-      const hole = String(flange.holeDiameter || '').trim() === '' && d !== null ? d+(d >= 27 ? 3 : d > 10 ? 2 : 1) : enteredHole;
+      const hole = String(flange.holeDiameter || '').trim() === '' ? automaticHoleDiameter(d) : enteredHole;
       for (const key of ['height','wallCylinder','wallCone']) numeric(path+key);
       numeric(path+'coneHeight',{zero:true});
       const dm = node.gasket.mode === 'ring' ? mean : numeric(path+'gasketDiameter');
@@ -307,9 +366,17 @@
       if (dm !== null && inner !== null && dm <= inner) fail(node.gasket.mode === 'area' ? path+'gasketDiameter' : path+'innerDiameter','Розрахунковий діаметр прокладки Dm має бути більшим за D.');
       if (dm !== null && outer !== null && dm >= outer) fail(node.gasket.mode === 'area' ? path+'gasketDiameter' : path+'outerDiameter','Розрахунковий діаметр прокладки Dm має бути меншим за Df.');
     }
-    if (node.nut.typeId === 'B') {
-      const height = numeric('nut.threadedHeight'), nut = nutDimensions(catalog,node.nut.standardId,d,node.nut.typeId);
-      if (height !== null && nut && height > nut.heightMm) fail('nut.threadedHeight',`Різьбова частина не може бути вищою за гайку (${nut.heightMm} мм).`);
+    const mount = mounting(node);
+    if (mount.body && (node.fastener.type !== 'stud' || node.fastener.engagement !== undefined)) {
+      const length = numeric('fastener.engagement'), available = number(node.connection[mount.body].height);
+      if (available > 0 && length > available) fail('fastener.engagement','Зачеплення перевищує висоту деталі з різьбою.');
+    }
+    for (const key of mount.nuts) {
+      const nut = nutAt(node,key);
+      if (nut.typeId !== 'B') continue;
+      const path = (nut === node.nut ? 'nut' : 'nutB')+'.threadedHeight';
+      const height = numeric(path), size = nutDimensions(catalog,nut.standardId,d,nut.typeId);
+      if (height !== null && size && height > size.heightMm) fail(path,`Різьбова частина не може бути вищою за гайку (${size.heightMm} мм).`);
     }
     node.extras.forEach((item,index) => {
       numeric(`extras.${index}.thickness`); numeric(`extras.${index}.area`);
@@ -338,20 +405,25 @@
       if (part?.mode !== 'flange') return false;
       return ['innerDiameter','boltCircle','outerDiameter','height','wallCylinder','wallCone'].every(field => positive(part[field]))
         && number(part.coneHeight) !== null && number(part.coneHeight) >= 0
-        && (String(part.holeDiameter).trim() === '' || positive(part.holeDiameter))
+        && (String(part.holeDiameter ?? '').trim() === '' || positive(part.holeDiameter))
         && (node.gasket.mode === 'ring' || positive(part.gasketDiameter));
     });
-    const nutSize = standardsDb ? nutDimensions(standardsDb, node.nut.standardId || 'gost-5915-70', node.fastener.nominalDiameter, node.nut.typeId || 'A') : null;
-    result.nut = validMaterial(node.nut.material, ['RTm','RTp']) && (!standardsDb || !!nutSize) && (nutSize?.typeId !== 'B' || (positive(node.nut.threadedHeight) && number(node.nut.threadedHeight) <= nutSize.heightMm));
+    const mount = mounting(node);
+    if (mount.body && (node.fastener.type !== 'stud' || node.fastener.engagement !== undefined)) result.fastener &&= positive(mount.engagement);
+    if (mount.nuts.length) result.nut = mount.nuts.every(key=>{
+      const nut = nutAt(node,key), size = standardsDb && nutDimensions(standardsDb,nut.standardId,node.fastener.nominalDiameter,nut.typeId);
+      return validMaterial(nut.material,['RTm','RTp']) && (!standardsDb || !!size) && (size?.typeId !== 'B' || (positive(nut.threadedHeight) && number(nut.threadedHeight) <= size.heightMm));
+    });
     result.washers = node.washers.placement === 'none' || (validMaterial(node.washers.material, ['E','Alpha']) && (!standardsDb || !!washerDimensions(standardsDb, node.washers.standardId || 'gost-11371-78', node.fastener.nominalDiameter, node.washers.accuracyClass || 'A', node.washers.execution || '1')));
     result.extras = node.extras.every(item => !!item.name.trim() && positive(item.thickness) && positive(item.area) && validMaterial(item.material, ['E']));
-    for (const path of Object.keys(validateInputs(node,standardsDb).errors)) result[path.startsWith('flanges.') ? 'connection' : path.split('.')[0]] = false;
+    for (const path of Object.keys(validateInputs(node,standardsDb).errors)) result[path.startsWith('flanges.') ? 'connection' : path.startsWith('nutB.') ? 'nut' : path.split('.')[0]] = false;
     return result;
   }
   function progress(node, materials, standardsDb) {
     const statuses = sectionStatus(node, materials, standardsDb);
     const done = Object.values(statuses).filter(Boolean).length;
-    return { done, total: sections.length, percent: Math.round(done / sections.length * 100), statuses };
+    const total = Object.keys(statuses).length;
+    return {done,total,percent:Math.round(done / total * 100),statuses};
   }
   function validateWorkspace(value) {
     if (!value || value.version !== 1 || !Array.isArray(value.equipment)) return false;
@@ -380,7 +452,12 @@
       if (!scalarFields.every(path => typeof get(node, path) === typeof get(template, path))) return false;
       if (node.gasket.partitionPattern !== undefined && (typeof node.gasket.partitionPattern !== 'string' || !Object.hasOwn(gasketPartitions,node.gasket.partitionPattern))) return false;
       if (node.gasket.partitionWidth !== undefined && !isText(node.gasket.partitionWidth)) return false;
-      if (!['ring','area'].includes(node.gasket.mode) || !['stud','bolt'].includes(node.fastener.type) || !['body-cover','flange-flange','custom'].includes(node.connection.kind) || !['none','a','b','both'].includes(node.washers.placement)) return false;
+      if (!['ring','area'].includes(node.gasket.mode) || !Object.hasOwn(arrangements,node.fastener.type) || !['body-cover','flange-flange','custom'].includes(node.connection.kind) || !['none','a','b','both'].includes(node.washers.placement)) return false;
+      if (['reversed','differentNuts'].some(k=>node.fastener[k] !== undefined && typeof node.fastener[k] !== 'boolean')) return false;
+      if (node.fastener.engagement !== undefined && !isText(node.fastener.engagement)) return false;
+      if (node.nutB !== undefined || node.fastener.differentNuts) {
+        if (!node.nutB || !isRef(node.nutB.material) || !['standardId','typeId'].every(k=>isText(node.nutB[k])) || (node.nutB.threadedHeight !== undefined && !isText(node.nutB.threadedHeight))) return false;
+      }
       if (node.flanges !== undefined && (!node.flanges || !['sideA','sideB'].every(key => {
         const flange = node.flanges[key];
         return flange && ['pending','flange','none'].includes(flange.mode) && Object.keys(createFlange()).filter(field => field !== 'mode').every(field => isText(flange[field]));
@@ -391,7 +468,7 @@
         && (node.gasket.referenceId === undefined || isText(node.gasket.referenceId)) && ['threadStandardId','pitch','axialHoleDiameter','torqueNm','targetTorqueMinNm','targetTorqueMaxNm'].every(key => node.fastener[key] === undefined || isText(node.fastener[key])) && ['standardId','typeId','threadedHeight'].every(key => node.nut[key] === undefined || isText(node.nut[key])) && ['standardId','accuracyClass','execution'].every(key => node.washers[key] === undefined || isText(node.washers[key])) && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));
     }));
   }
-  const api = { DEFAULT_GASKET_REFERENCE_ID, gasketPartitions, id, timestamp, sections, createEquipment, createNode, createFlange, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, standardTorque, effectiveTargetTorque, compareTorqueRanges, gasketMediumCoefficient, gasketExpansionAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace, validateInputs };
+  const api = { automaticHoleDiameter, flangeGeometryAdvisories, arrangements, mounting, nutAt, DEFAULT_GASKET_REFERENCE_ID, gasketPartitions, id, timestamp, sections, createEquipment, createNode, createFlange, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, standardTorque, effectiveTargetTorque, compareTorqueRanges, gasketMediumCoefficient, gasketExpansionAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace, validateInputs };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlangeCore = api;
 })(globalThis);

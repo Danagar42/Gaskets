@@ -62,21 +62,29 @@
     return { values:{smoothLength,threadedLength,totalLength:smoothLength + threadedLength}, issues:[], parts };
   }
 
+  function engagementHeight(node,mount) {
+    if (!mount.body) return null;
+    const height = C.number(mount.engagement), available = C.number(node.connection[mount.body].height);
+    return height > 0 && !(available !== null && height > available) ? height : null;
+  }
   function nodeGeometry(node, catalog) {
     const pitch = C.threadPitch(catalog,node.fastener.threadStandardId,node.fastener.nominalDiameter,node.fastener.pitch);
-    const nut = C.nutDimensions(catalog,node.nut.standardId,node.fastener.nominalDiameter,node.nut.typeId);
+    const mount = C.mounting(node);
     const washer = C.washerDimensions(catalog,node.washers.standardId,node.fastener.nominalDiameter,node.washers.accuracyClass,node.washers.execution);
-    const nutHeight = nut?.typeId === 'B' ? C.number(node.nut.threadedHeight) : nut?.heightMm;
+    const nuts = mount.nuts.map(key=>{
+      const nut = C.nutAt(node,key), size = C.nutDimensions(catalog,nut.standardId,node.fastener.nominalDiameter,nut.typeId);
+      return {name:size?.typeId === 'B' ? 'Різьбова частина ковпачкової гайки' : 'Гайка',height:size?.typeId === 'B' ? C.number(nut.threadedHeight) : size?.heightMm,max:size?.heightMm,threaded:true};
+    });
     const parts = [
-      {name:node.connection.sideA.name || 'Деталь А', height:node.connection.sideA.height, threaded:false},
+      {name:node.connection.sideA.name || 'Деталь А', height:mount.body === 'sideA' ? engagementHeight(node,mount) : node.connection.sideA.height, threaded:mount.body === 'sideA'},
       {name:'Прокладка',height:node.gasket.thickness,threaded:false},
-      {name:node.connection.sideB.name || 'Деталь Б',height:node.connection.sideB.height,threaded:node.fastener.type === 'stud'},
-      {name:nut?.typeId === 'B' ? 'Різьбова частина ковпачкової гайки' : 'Гайка',height:nutHeight,threaded:true},
+      {name:node.connection.sideB.name || 'Деталь Б',height:mount.body === 'sideB' ? engagementHeight(node,mount) : node.connection.sideB.height,threaded:mount.body === 'sideB'},
+      ...nuts,
       ...node.extras.map(part => ({name:part.name || 'Додатковий елемент',height:part.thickness,threaded:false}))
     ];
     for (const side of ['a','b']) if ([side,'both'].includes(node.washers.placement)) parts.push({name:`Шайба, бік ${side === 'a' ? 'А' : 'Б'}`,height:washer?.thicknessMm,threaded:false});
     const lengths = packageLengths(parts);
-    if (nut?.typeId === 'B' && nutHeight > nut.heightMm) {
+    if (nuts.some(nut=>nut.height > nut.max)) {
       lengths.issues.push('Висота різьбової частини не може перевищувати загальну висоту ковпачкової гайки.');
       Object.keys(lengths.values).forEach(key => { lengths.values[key] = null; });
     }
@@ -194,7 +202,8 @@
   }
   function nodeThermal(node, materials, catalog) {
     const referenceTemperature = 20;
-    const values = {fastener:0,gasket:null,sideA:null,sideB:node.fastener.type === 'bolt' ? null : 0,washerA:0,washerB:0,extras:0,pack:null,force:null};
+    const mount = C.mounting(node);
+    const values = {fastener:0,gasket:null,sideA:0,sideB:0,washerA:0,washerB:0,extras:0,pack:null,force:null};
     const issues = [];
     const sources = [];
     const t = C.number(node.operating.normal.temperature);
@@ -215,8 +224,8 @@
       values.gasket = linearExpansion(node.gasket.thickness,gasketAlpha.value,t,referenceTemperature).value;
       if (values.gasket === null) issues.push('Прокладка: задайте товщину та коректну температуру.');
     }
-    values.sideA = metalExpansion(node.connection.sideA.material,node.connection.sideA.height,'Деталь А');
-    if (node.fastener.type === 'bolt') values.sideB = metalExpansion(node.connection.sideB.material,node.connection.sideB.height,'Деталь Б');
+    if (mount.body !== 'sideA') values.sideA = metalExpansion(node.connection.sideA.material,node.connection.sideA.height,'Деталь А');
+    if (mount.body !== 'sideB') values.sideB = metalExpansion(node.connection.sideB.material,node.connection.sideB.height,'Деталь Б');
     if (node.washers.placement !== 'none') {
       const washer = C.washerDimensions(catalog,node.washers.standardId,node.fastener.nominalDiameter,node.washers.accuracyClass,node.washers.execution);
       const expansion = metalExpansion(node.washers.material,washer?.thicknessMm,'Шайби');
@@ -384,13 +393,18 @@
       return {height:h,k1,km,area:a,...check(calc([totalForce,a],(f,a) => f/a),allowable)};
     }
     // C43/C44, C78/C79 and C96/C97: fixed source-workbook coefficients.
-    const nutYield = read(input.nutYieldMPa,'Rp гайки');
+    const hasNut = input.nutActive !== false;
+    const nutYield = hasNut ? read(input.nutYieldMPa,'Rp гайки') : null;
     const threads = {
-      fastenerNut:thread(rootDiameter,input.nutHeight,0.75,0.55,rp),
+      fastenerNut:thread(rootDiameter,input.nutHeight,0.75,0.55,rp,false,hasNut),
       fastenerBody:thread(rootDiameter,input.bodyHeight,0.75,0.65,rp,false,input.bodyThreadActive === true),
-      nut:thread(diameter,input.nutHeight,0.87,0.55,nutYield),
+      nut:thread(diameter,input.nutHeight,0.87,0.55,nutYield,false,hasNut),
       body:thread(diameter,input.bodyHeight,0.87,0.65,input.bodyYieldMPa,true,input.bodyThreadActive === true)
     };
+    if (input.secondNut) {
+      threads.fastenerNutB = thread(rootDiameter,input.secondNut.height,0.75,0.55,rp);
+      threads.nutB = thread(diameter,input.secondNut.height,0.87,0.55,read(input.secondNut.yield,'Rp другої гайки'));
+    }
     return {values,checks,threads,issues:[...new Set(issues)]};
   }
 
@@ -398,11 +412,16 @@
     const geometry = nodeGeometry(node,catalog).thread.values;
     const forces = nodeForces(node,materials,catalog);
     const compliance = nodeCompliance(node,materials,catalog);
-    const nut = C.nutDimensions(catalog,node.nut.standardId,node.fastener.nominalDiameter,node.nut.typeId);
-    let nutHeight = nut?.typeId === 'B' ? C.number(node.nut.threadedHeight) : nut?.heightMm;
-    if (nut?.typeId === 'B' && !(nutHeight > 0 && nutHeight <= nut.heightMm)) nutHeight = null;
+    const mount = C.mounting(node);
+    function heightOf(nut) {
+      const size = C.nutDimensions(catalog,nut.standardId,node.fastener.nominalDiameter,nut.typeId);
+      if (size?.typeId !== 'B') return size?.heightMm;
+      const h = C.number(nut.threadedHeight);
+      return h > 0 && h <= size.heightMm ? h : null;
+    }
+    const second = mount.nuts.length === 2 && C.nutAt(node,'nutB');
     const torsionFactor = node.fastener.lubricated === true ? 0.13 : node.fastener.lubricated === false ? 0.18 : null;
-    const bodyMaterial = C.resolveMaterial(materials,node.connection.sideB.material);
+    const bodyMaterial = C.resolveMaterial(materials,node.connection[mount.body]?.material);
     const bodyIsCastIron = /чавун|сч\s*\d/u.test(C.canonical(bodyMaterial?.material.name || ''));
     const bodyHasYieldEntry = Object.values(bodyMaterial?.grade.data?.RTp || {}).some(value => value !== null && value !== undefined && !['','—','-'].includes(String(value).trim()));
     const states = {};
@@ -422,9 +441,11 @@
       const result = strength({mode,...geometry,...forces.states[mode].values,
         diameter:node.fastener.nominalDiameter,axialHoleDiameter:node.fastener.axialHoleDiameter ?? '0',count:node.fastener.count,
         loadFactor:compliance.states[mode].values.loadFactor,thermalForce:forces.states[mode].values.thermal,
-        torsionFactor,yieldMPa:yieldStrength(node.fastener.material,'Кріплення'),nutYieldMPa:yieldStrength(node.nut.material,'Гайка'),
-        nutHeight,bodyThreadActive:node.fastener.type === 'stud',bodyHeight:node.connection.sideB.height,
-        bodyYieldMPa:node.fastener.type === 'stud' ? yieldStrength(node.connection.sideB.material,'Корпус') : null
+        torsionFactor,yieldMPa:yieldStrength(node.fastener.material,'Кріплення'),nutActive:!!mount.nuts.length,
+        nutYieldMPa:mount.nuts.length ? yieldStrength(node.nut.material,'Гайка') : null,nutHeight:heightOf(node.nut),
+        secondNut:second && {height:heightOf(second),yield:yieldStrength(second.material,'Друга гайка')},
+        bodyThreadActive:!!mount.body,bodyHeight:engagementHeight(node,mount),
+        bodyYieldMPa:mount.body ? yieldStrength(node.connection[mount.body].material,'Корпус') : null
       });
       // User chose Excel's omission for the cast-iron body with no Rp table.
       // A material with Rp at other temperatures is still pending, never skipped.
@@ -508,6 +529,51 @@
     return {values,checks,bounds,issues:[...new Set(issues)],validGeometry,cExempt,castIron:!!input.castIron};
   }
 
+  function automaticHoleDiameter(nominalDiameter) {
+    if (C.automaticHoleDiameter) return C.automaticHoleDiameter(nominalDiameter);
+    const d = C.number(nominalDiameter);
+    if (!d || d <= 0) return null;
+    return d + (d >= 27 ? 3 : d > 10 ? 2 : 1);
+  }
+
+  function flangeGeometryAdvisories({boltCircle, count, holeDiameter, outerDiameter, innerDiameter} = {}) {
+    const Dw = C.number(boltCircle);
+    const z = C.number(count);
+    const d0 = C.number(holeDiameter);
+    const Df = C.number(outerDiameter);
+    const D = C.number(innerDiameter);
+
+    const pitch = (Dw > 0 && z > 0) ? (Math.PI * Dw) / z : null;
+    const pitchRatio = (pitch !== null && d0 > 0) ? pitch / d0 : null;
+    const edgeOuter = (Df > 0 && Dw > 0) ? (Df - Dw) / 2 : null;
+    const edgeInner = (Dw > 0 && D > 0) ? (Dw - D) / 2 : null;
+
+    const warnings = [];
+    if (pitchRatio !== null) {
+      if (pitchRatio < 2.5) {
+        warnings.push(`Крок кріплень малий (t_b = ${pitch.toFixed(1).replace('.', ',')} мм, ${pitchRatio.toFixed(2).replace('.', ',')} d₀ < 2,5 d₀): ускладнений монтаж ключем.`);
+      } else if (pitchRatio > 6) {
+        warnings.push(`Крок кріплень великий (t_b = ${pitch.toFixed(1).replace('.', ',')} мм, ${pitchRatio.toFixed(2).replace('.', ',')} d₀ > 6 d₀): ризик нерівномірного обтиснення прокладки.`);
+      }
+    }
+    if (d0 > 0) {
+      if (edgeOuter !== null && edgeOuter > 0 && edgeOuter < d0) {
+        warnings.push(`Зовнішня кромка фланця мала (${edgeOuter.toFixed(1).replace('.', ',')} мм < d₀ = ${d0} мм).`);
+      }
+      if (edgeInner !== null && edgeInner > 0 && edgeInner < d0) {
+        warnings.push(`Внутрішня кромка фланця мала (${edgeInner.toFixed(1).replace('.', ',')} мм < d₀ = ${d0} мм).`);
+      }
+    }
+
+    return {
+      boltPitch: pitch,
+      pitchRatio,
+      edgeOuter,
+      edgeInner,
+      warnings
+    };
+  }
+
   function nodeFlanges(node,materials,catalog,calculatedForces) {
     const forces = calculatedForces || nodeForces(node,materials,catalog);
     const compliance = nodeCompliance(node,materials,catalog);
@@ -529,12 +595,11 @@
           if (value && value.value > 0) { sources.push({key,temperature:value.temperature,valueMPa:value.value}); return value.value; }
           return null;
         };
-        const nominal = C.number(node.fastener.nominalDiameter);
-        const automaticHole = nominal > 0 ? nominal + (nominal >= 27 ? 3 : nominal > 10 ? 2 : 1) : null;
+        const automaticHole = automaticHoleDiameter(node.fastener.nominalDiameter);
         const forceValues = forces.states[mode].values;
         const chi = compliance.states[mode].values.loadFactor;
         const calculation = flange({...config,mode,castIron,castIronC:side === 'sideB',
-          holeDiameter:String(config.holeDiameter).trim() === '' ? automaticHole : config.holeDiameter,
+          holeDiameter:String(config.holeDiameter ?? '').trim() === '' ? automaticHole : config.holeDiameter,
           gasketDiameter:node.gasket.mode === 'ring' ? mean : config.gasketDiameter,
           pressure:node.operating[mode].pressure,ultimateMPa:property('RTm'),yieldMPa:property('RTp'),
           hydrostatic:forceValues.hydrostatic,fastenerForce:forceValues.fastener,
@@ -568,10 +633,10 @@
       candidates.push({mode,key:'axial',cell:c+'66',active:true,force:base});
       // Literal N67/O67: N5/O5 (not 1.3*N5), +Ft for NUE and -Ft for HV.
       candidates.push({mode,key:'thermalAxial',cell:c+'67',active:true,force:calculate([base,thermal],(f,t) => mode === 'normal' ? f+t : f-t)});
-      for (const [key,row] of [['fastenerNut',71],['fastenerBody',72],['nut',73],['body',74]]) {
+      for (const [key,row] of [['fastenerNut',71],[state.threads?.fastenerNutB ? 'fastenerNutB' : 'fastenerBody',72],['nut',73],[state.threads?.nutB ? 'nutB' : 'body',74]]) {
         const thread = state.threads?.[key];
         const omittedFromMaximum = key === 'body' && thread?.omittedFromMaximum === 'excel-missing-cast-iron-rp';
-        const active = !omittedFromMaximum && !(['fastenerBody','body'].includes(key) && thread?.active === false);
+        const active = !omittedFromMaximum && thread?.active !== false;
         const threadArea = C.positive(thread?.area) ? C.number(thread.area) : null;
         const allowable = C.positive(thread?.allowable) ? C.number(thread.allowable) : null;
         const force = active ? calculate([threadArea,allowable,pressureLoad,thermal],(a,s,p,t) => a*s-p-t) : null;
@@ -626,7 +691,7 @@
     return {minimum:lower,maximum:upper,rawOverlap,roundedOverlap,verification,flanges,complete,inputErrors:inputValidation.errors,
       rangePassed:complete && roundedOverlap && Object.values(verification).every(result => !result.failed.length)};
   }
-  const api = { gasketGeometry, threadGeometry, packageLengths, nodeGeometry, compliance, nodeCompliance, linearExpansion, thermalForce, nodeThermal, forces, nodeForces, strength, nodeStrength, flange, nodeFlanges, maximum, nodeLimits };
+  const api = { automaticHoleDiameter, flangeGeometryAdvisories, gasketGeometry, threadGeometry, packageLengths, nodeGeometry, compliance, nodeCompliance, linearExpansion, thermalForce, nodeThermal, forces, nodeForces, strength, nodeStrength, flange, nodeFlanges, maximum, nodeLimits };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlangeCalculations = api;
 })(globalThis);

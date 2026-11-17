@@ -83,4 +83,52 @@ node.connection.sideA.area = '2000'; node.connection.sideB.area = '2000';
 assert.notEqual(G.nodeCompliance(node,materials,catalog).states.normal.values.loadFactor,null);
 node.operating.hydro.temperature = '-300';
 assert.equal(G.nodeCompliance(node,materials,catalog).states.hydro.values.loadFactor,null);
+
+// Task 3: Assembly connection variations
+// 1. Stud + nut + 2 washers
+const testNode = structuredClone(node);
+testNode.operating.hydro.temperature = '20';
+testNode.gasket.mode = 'ring';
+testNode.connection.sideA.area = '';
+testNode.connection.sideB.area = '';
+testNode.fastener.type = 'stud';
+testNode.washers.placement = 'both';
+let geo = G.nodeGeometry(testNode, catalog);
+assert.equal(geo.lengths.issues.length, 0);
+let comp = G.nodeCompliance(testNode, materials, catalog);
+assert.ok(comp.states.normal.values.loadFactor > 0);
+assert.ok(comp.states.normal.values.washerA > 0 && comp.states.normal.values.washerB > 0);
+
+// 2. Bolt + nut + 1 washer
+testNode.fastener.type = 'bolt';
+testNode.washers.placement = 'a';
+geo = G.nodeGeometry(testNode, catalog);
+assert.equal(geo.lengths.issues.length, 0);
+comp = G.nodeCompliance(testNode, materials, catalog);
+assert.ok(comp.states.normal.values.loadFactor > 0);
+assert.ok(comp.states.normal.values.washerA > 0 && comp.states.normal.values.washerB === 0);
+
+// 3. Without washers
+testNode.washers.placement = 'none';
+geo = G.nodeGeometry(testNode, catalog);
+assert.equal(geo.lengths.issues.length, 0);
+comp = G.nodeCompliance(testNode, materials, catalog);
+assert.ok(comp.states.normal.values.loadFactor > 0);
+assert.equal(comp.states.normal.values.washerA, 0);
+assert.equal(comp.states.normal.values.washerB, 0);
+assert.equal(C.sectionStatus(testNode, materials, catalog).washers, true);
+
+// 4. Bolt in tapped hole (body-bolt, no nuts)
+testNode.fastener.type = 'body-bolt';
+testNode.fastener.engagement = '25';
+geo = G.nodeGeometry(testNode, catalog);
+assert.equal(geo.lengths.issues.length, 0);
+comp = G.nodeCompliance(testNode, materials, catalog);
+assert.ok(comp.states.normal.values.loadFactor > 0);
+assert.equal(C.validateInputs(testNode, catalog).errors['fastener.engagement'], undefined);
+const bodyBoltStatus = C.sectionStatus(testNode, materials, catalog);
+assert.equal(bodyBoltStatus.nut, undefined);
+const bodyBoltProgress = C.progress(testNode, materials, catalog);
+assert.equal(bodyBoltProgress.total, 6);
+
 console.log('OK: 20 величин I/J4–18, гілка L*=6d, активні/відсутні елементи, E ГПа→МПа, температури та площі.');

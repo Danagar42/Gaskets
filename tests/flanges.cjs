@@ -75,4 +75,33 @@ assert.equal(G.nodeFlanges(node,[material],catalog).sides.sideA.states.normal.va
 assert.equal(C.validateWorkspace({version:1,equipment:[{...C.createEquipment('Тест'),nodes:[node]}]}),true);
 const bad = structuredClone(node); bad.flanges.sideA.height = 123;
 assert.equal(C.validateWorkspace({version:1,equipment:[{...C.createEquipment('Тест'),nodes:[bad]}]}),false);
+assert.equal(C.automaticHoleDiameter(10), 11);
+assert.equal(C.automaticHoleDiameter('10'), 11);
+assert.equal(C.automaticHoleDiameter(16), 18);
+assert.equal(C.automaticHoleDiameter(24), 26);
+assert.equal(C.automaticHoleDiameter(27), 30);
+assert.equal(C.automaticHoleDiameter(30), 33);
+assert.equal(C.automaticHoleDiameter(0), null);
+assert.equal(C.automaticHoleDiameter(-5), null);
+assert.equal(C.automaticHoleDiameter(''), null);
+assert.equal(G.automaticHoleDiameter(24), 26);
+
+// Test manual override vs automatic hole diameter
+const autoNode = structuredClone(node);
+autoNode.fastener.nominalDiameter = '24';
+autoNode.flanges.sideA.holeDiameter = '';
+const autoFlanges = G.nodeFlanges(autoNode,[material],catalog);
+assert.ok(autoFlanges.sides.sideA.states.normal.values.WA > 0);
+autoNode.flanges.sideA.holeDiameter = '28';
+const manualFlanges = G.nodeFlanges(autoNode,[material],catalog);
+assert.notEqual(autoFlanges.sides.sideA.states.normal.values.WA, manualFlanges.sides.sideA.states.normal.values.WA);
+
+// Test undefined and null holeDiameter fallback to automatic
+delete autoNode.flanges.sideA.holeDiameter;
+const undefinedFlanges = G.nodeFlanges(autoNode,[material],catalog);
+assert.equal(undefinedFlanges.sides.sideA.states.normal.values.WA, autoFlanges.sides.sideA.states.normal.values.WA);
+autoNode.flanges.sideA.holeDiameter = null;
+const nullFlanges = G.nodeFlanges(autoNode,[material],catalog);
+assert.equal(nullFlanges.sides.sideA.states.normal.values.WA, autoFlanges.sides.sideA.states.normal.values.WA);
+
 console.log(`OK: ${comparisons} величин фланців усіх 4 вузлів, ${bounds} верхніх обмежень, чавун, h2=0, hf=s2, нульове плече, ручний Dm і повний контроль меж.`);

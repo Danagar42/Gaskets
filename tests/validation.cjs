@@ -78,4 +78,36 @@ const limits=G.nodeLimits(node,materials,catalog);
 assert.equal(limits.rangePassed,false);assert(limits.inputErrors['fastener.torqueNm']);
 assert.equal(C.sectionStatus(node,materials,catalog).fastener,false);
 assert(X.inspect(node,materials,catalog).errors.length);
+
+// Engineering advisory checks (Task 4)
+const normalAdv = G.flangeGeometryAdvisories({boltCircle:'1200',count:'32',holeDiameter:'26',outerDiameter:'1300',innerDiameter:'1050'});
+assert.ok(Math.abs(normalAdv.boltPitch - (Math.PI * 1200 / 32)) < 1e-9);
+assert.ok(Math.abs(normalAdv.pitchRatio - ((Math.PI * 1200 / 32) / 26)) < 1e-9);
+assert.equal(normalAdv.edgeOuter, 50);
+assert.equal(normalAdv.edgeInner, 75);
+assert.equal(normalAdv.warnings.length, 0);
+
+const smallPitchAdv = G.flangeGeometryAdvisories({boltCircle:'200',count:'32',holeDiameter:'26',outerDiameter:'300',innerDiameter:'150'});
+assert.ok(smallPitchAdv.warnings.some(w => w.includes('Крок кріплень малий')));
+
+const largePitchAdv = G.flangeGeometryAdvisories({boltCircle:'1200',count:'4',holeDiameter:'20',outerDiameter:'1300',innerDiameter:'1050'});
+assert.ok(largePitchAdv.warnings.some(w => w.includes('Крок кріплень великий')));
+
+const smallEdgeAdv = G.flangeGeometryAdvisories({boltCircle:'1280',count:'32',holeDiameter:'26',outerDiameter:'1300',innerDiameter:'1050'});
+assert.ok(smallEdgeAdv.warnings.some(w => w.includes('Зовнішня кромка фланця мала')));
+
+const smallInnerEdgeAdv = G.flangeGeometryAdvisories({boltCircle:'1100',count:'32',holeDiameter:'26',outerDiameter:'1300',innerDiameter:'1080'});
+assert.ok(smallInnerEdgeAdv.warnings.some(w => w.includes('Внутрішня кромка фланця мала')));
+
+const emptyAdv = G.flangeGeometryAdvisories({});
+assert.equal(emptyAdv.boltPitch, null);
+assert.equal(emptyAdv.pitchRatio, null);
+assert.deepEqual(emptyAdv.warnings, []);
+
+// Nut standard compatibility for d > 48 (Task 5)
+for (const d of ['52','56','60']) {
+  assert.equal(C.nutDimensions(catalog,'gost-5915-70',d,'A'), null, `ГОСТ 5915-70 must not have sizes for M${d}`);
+  assert.notEqual(C.nutDimensions(catalog,'gost-9064-75',d,'A'), null, `ГОСТ 9064-75 must have sizes for M${d}`);
+}
+
 console.log(`Input validation: ${cases} invalid values, cross-field geometry, optional fields and calculation/export gates passed.`);

@@ -98,6 +98,12 @@
       used.add(name.toLowerCase()); return name;
     });
   }
+  function pendingReference(node) {
+    const mount = C.mounting(node);
+    return ['through-stud','body-bolt'].includes(node.fastener.type)
+      || (mount.body && C.number(mount.engagement) !== C.number(node.connection[mount.body].height));
+  }
+  const pendingMessage = 'Попередній розрахунок. Очікує звірки з контрольним прикладом для цієї схеми.';
   function inspect(node,materials,catalog) {
     const limits = G.nodeLimits(node,materials,catalog);
     const errors = Object.values(limits.inputErrors);
@@ -108,6 +114,7 @@
       errors.push(...compliance.states[mode].issues,...thermal[mode].issues);
     }
     const warnings = [];
+    if (pendingReference(node)) warnings.push(pendingMessage);
     if (limits.maximum.omitted.length) warnings.push('Внутрішню різьбу чавунного корпусу без Rp пропущено, як у вихідному Excel. Її міцність не підтверджена.');
     if (limits.roundedOverlap === false) warnings.push('Допустимого діапазону затягування немає.');
     if (limits.verification.minimum?.failed.length || limits.verification.maximum?.failed.length) warnings.push('На межах діапазону є невиконані перевірки.');
@@ -116,13 +123,19 @@
   }
   function inputs(node,equipment,materials,catalog,torqueNm,extraRows) {
     const v = {}, put=(address,value) => { v[address]=value; }, f=(address,value) => put(address,formula(value));
-    const n = C.number, stud = node.fastener.type === 'stud';
-    const geo = G.nodeGeometry(node,catalog), compliance = G.nodeCompliance(node,materials,catalog);
+    const n = C.number, mount = C.mounting(node), hasNut = mount.nuts.length > 0;
+    const primary = hasNut ? node.nut : null;
+    const second = mount.nuts.length === 2 ? C.nutAt(node,'nutB') : null;
+    const compliance = G.nodeCompliance(node,materials,catalog);
     const pitch = C.threadPitch(catalog,node.fastener.threadStandardId,node.fastener.nominalDiameter,node.fastener.pitch);
-    const nut = C.nutDimensions(catalog,node.nut.standardId,node.fastener.nominalDiameter,node.nut.typeId);
+    function nutHeight(config) {
+      const size = C.nutDimensions(catalog,config.standardId,node.fastener.nominalDiameter,config.typeId);
+      return size.typeId === 'B' ? n(config.threadedHeight) : size.heightMm;
+    }
     const washer = C.washerDimensions(catalog,node.washers.standardId,node.fastener.nominalDiameter,node.washers.accuracyClass,node.washers.execution);
     const gasket = catalog.gaskets[node.gasket.referenceId];
-    put('B2',`${equipment.name}${equipment.designation ? ' · '+equipment.designation : ''} · ${node.name}`);
+    put('B2',`${equipment.name}${equipment.designation ? ' · '+equipment.designation : ''} · ${node.name} · ${mount.label}`);
+    if (pendingReference(node)) put('M2',pendingMessage);
     put('C6',torqueNm*1000);
     put('C12','Прокладка'); put('C13','Терморозширений графіт'); put('C14',gasket.name); put('C15',n(node.gasket.thickness));
     put('F20',node.gasket.mode === 'ring' ? n(node.gasket.outerDiameter) : '-');
@@ -135,16 +148,41 @@
     put('C26',gasket.maximumPressureMPa);
     put('C30',node.fastener.material.name); put('C34',n(node.fastener.nominalDiameter)); put('C36',n(node.fastener.axialHoleDiameter)); put('C37',pitch.pitchMm); put('C40',n(node.fastener.count));
     put('C41',node.fastener.lubricated ? 0.26 : 0.37); put('C42',node.fastener.lubricated ? 0.13 : 0.18);
-    f('C38',`C87+C15+C60+C69+C108${stud ? '' : '+C99'}`); f('C39',`C80${stud ? '+C98' : ''}`);
-    put('C77',node.nut.material.name); put('C80',nut.typeId === 'B' ? n(node.nut.threadedHeight) : nut.heightMm); f('D80','C80');
+    const smooth = [mount.body !== 'sideA' && 'C87','C15','C60','C69','C108',mount.body !== 'sideB' && 'C99'];
+    const threaded = [hasNut && 'C80',mount.body && 'C98',second && 'C54'];
+    f('C38',smooth.filter(Boolean).join('+')); f('C39',threaded.filter(Boolean).join('+'));
+    put('C77',hasNut ? primary.material.name : '-');
+    put('C80',hasNut ? nutHeight(primary) : '-'); f('D80','C80');
+    const primarySide = mount.a === 'nut' ? 'А' : 'Б', otherSide = primarySide === 'А' ? 'Б' : 'А';
+    if (hasNut) f('B76',`"Гайка · бік ${primarySide} · М"&C34&" · "&C40&" шт. · "&C77`);
+    else put('B76','Гайка відсутня');
     put('C84',node.connection.sideA.material.name); put('C87',n(node.connection.sideA.height)); put('C89',compliance.areas.sideA);
-    put('C93',node.connection.sideB.material.name); put('C98',stud ? n(node.connection.sideB.height) : '-'); put('C99',n(node.connection.sideB.height)); put('C101',compliance.areas.sideB);
-    if (stud) f('C98','C99');
+    put('C93',node.connection.sideB.material.name); put('C99',n(node.connection.sideB.height)); put('C101',compliance.areas.sideB);
+    put('B83','Деталь А · '+node.connection.sideA.name); put('B92','Деталь Б · '+node.connection.sideB.name);
+    if (mount.body && node.fastener.engagement === undefined) f('C98',mount.body === 'sideA' ? 'C87' : 'C99');
+    else put('C98',mount.body ? n(mount.engagement) : '-');
+    if (mount.body) {
+      const side = mount.body === 'sideA' ? 'А' : 'Б';
+      put('B98',`Зачеплення з корпусом на боці ${side}, мм`);
+      put('M40',`Внутрішня різьба корпусу · бік ${side}`);
+    }
     for (const [side,cell] of [['sideA','C89'],['sideB','C101']]) {
       if (node.gasket.mode === 'ring' && String(node.connection[side].area).trim() === '') f(cell,'PI()*(C16*F22-C40*F23^2/4)');
     }
     // Inactive plate from the original workbook is not part of the constructor.
     for (const address of ['C53','C54','C55','C56','C57','I5','J5','I6','J6','I7','J7']) put(address,0);
+    if (second) {
+      f('B52',`"Гайка · бік ${otherSide} · М"&C34&" · "&C40&" шт. · "&C53`);
+      put('B53','Матеріал гайки'); put('B54','Висота робочої різьби, мм');
+      put('B55','Границя плинності Rp, МПа'); put('B56','Розмірна таблиця');
+      put('B57','Кількість гайок з обох боків, шт.'); f('C57','2*C40');
+      if (node.fastener.differentNuts) { put('C53',second.material.name); put('C54',nutHeight(second)); }
+      else { f('C53','C77'); f('C54','C80'); }
+      put('C56',catalog.nuts[second.standardId].document);
+      put('M26',`Різьба шпильки · гайка на боці ${otherSide}`); put('M72',`Різьба шпильки · гайка на боці ${otherSide}`);
+      put('M19',`Різьба шпильки · гайка на боці ${primarySide}`); put('M71',`Різьба шпильки · гайка на боці ${primarySide}`);
+      f('M40','B52'); put('M74',`Різьба гайки · бік ${otherSide}`); put('M73',`Різьба гайки · бік ${primarySide}`);
+    }
     for (const [side,row] of [['a',59],['b',68]]) {
       const active = [side,'both'].includes(node.washers.placement);
       put('C'+row,active ? node.washers.material.name : '-'); put('C'+(row+1),active ? washer.thicknessMm : 0);
@@ -186,7 +224,7 @@
       for (const [t,a] of [...alphaRows].reverse()) alpha=`IF(${col}5<=${t},${a},${alpha})`;
       f(col+'27',alpha);
       for (const [ref,rows] of [[node.fastener.material,{E:45,Alpha:46,RTm:50,RTp:51}],
-        [node.nut.material,{RTm:81,RTp:82}],[node.connection.sideA.material,{E:85,Alpha:86,RTm:90,RTp:91}],
+        [primary?.material,{RTm:81,RTp:82}],[node.connection.sideA.material,{E:85,Alpha:86,RTm:90,RTp:91}],
         [node.connection.sideB.material,{E:94,Alpha:95,RTm:102,RTp:103}]]) {
         for (const [key,row] of Object.entries(rows)) { const value=property(ref,key,mode); put(col+row,key === 'E' && typeof value === 'number' ? value*1000 : value); }
       }
@@ -197,9 +235,23 @@
       f(out+'8',`IFERROR($C$60/($C$63*${col}64*3.1415*$C$61*$C$62),0)`);
       f(out+'9',`IFERROR($C$69/($C$72*${col}73*3.1415*$C$70*$C$71),0)`);
       if (extraCount === 1) put(col+'106',property(node.extras[0].material,'E',mode)*1000);
-      put(col+'78',0.87); put(col+'79',0.55); put(col+'96',stud ? 0.87 : '-'); put(col+'97',stud ? 0.65 : '-');
+      put(col+'78',hasNut ? 0.87 : '-'); put(col+'79',hasNut ? 0.55 : '-');
+      put(col+'96',mount.body ? 0.87 : '-'); put(col+'97',mount.body ? 0.65 : '-');
       put(col+'49',0); put(out+'22',0);
-      f(out+'23',mode === 'hydro' ? '0' : `C28+C66+C75+C88${stud ? '' : '+C100'}`);
+      const expansion = ['C28','C66','C75',mount.body !== 'sideA' && 'C88',mount.body !== 'sideB' && 'C100'];
+      f(out+'23',mode === 'hydro' ? '0' : expansion.filter(Boolean).join('+'));
+      const checkCol = mode === 'normal' ? 'N' : 'O';
+      if (!hasNut) {
+        for (const row of [20,21,22,23,24,25,34,35,36,37,38,39,71,73]) put(checkCol+row,'-');
+      }
+      if (second) {
+        if (node.fastener.differentNuts) put(col+'55',property(second.material,'RTp',mode)); else f(col+'55',col+'82');
+        f(checkCol+'41','C54'); f(checkCol+'27','C54');
+        f(checkCol+'42',col+'78'); f(checkCol+'43',col+'79');
+        f(checkCol+'45',mode === 'normal' ? '(C55/2)*0.64' : 'D55*0.25');
+      } else if (mount.body === 'sideA') {
+        f(checkCol+'45',`IFERROR((${col}91/2)*0.64,"-")`);
+      }
       f(out+'32',mode === 'hydro' ? '0' : '(I23-I22)/(I4+I10+I11+I17+I5+I6+I7+I8+I9+I12)');
       // These expansions are informational in ГВ; the agreed total remains zero.
       for (const [row,height,aRow] of [[28,15,27],[66,60,65],[75,69,74],[88,87,86],[100,99,95]]) f(col+row,`IFERROR(C${height}*${col}${aRow}*(${col}5-20)*10^-6,"-")`);
@@ -216,7 +268,7 @@
         for (const [key,row] of [['innerDiameter',4],['boltCircle',5],['outerDiameter',6],['height',9],['coneHeight',10],['wallCylinder',11],['wallCone',12]]) put(c+row,n(config[key]));
         if (node.gasket.mode === 'area') put(c+'7',n(config.gasketDiameter));
         else f(c+'7','F22');
-        if (String(config.holeDiameter).trim() === '') f(c+'8','IF(C34>=27,C34+3,IF(C34>10,C34+2,C34+1))');
+        if (String(config.holeDiameter ?? '').trim() === '') f(c+'8','IF(C34>=27,C34+3,IF(C34>10,C34+2,C34+1))');
         else put(c+'8',n(config.holeDiameter));
       }
       const steel=`MIN(IFERROR((2.5-C${rpRow}/C${rmRow})*C${rpRow},2*C${rpRow}),2*C${rpRow})`;
@@ -262,7 +314,7 @@
     const names=safeNames(nodes), extraRows=[], sheetRecords=[], definedNames=[];
     const workbookOriginal=await source.read('xl/workbook.xml');
     for (let i=0;i<nodes.length;i++) {
-      const node=nodes[i], index=i+1, sourceIndex=node.fastener.type === 'bolt' ? 2 : 1;
+      const node=nodes[i], index=i+1, sourceIndex=C.mounting(node).bolt ? 2 : 1;
       const originalSheet=`xl/worksheets/sheet${sourceIndex}.xml`, targetSheet=`xl/worksheets/sheet${index}.xml`, copied=new Map();
       async function clone(part,target) {
         if (copied.has(part)) return copied.get(part);
@@ -335,7 +387,7 @@
     setXml(files,'docProps/app.xml','<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Прокладки</Application></Properties>');
     return zip(files);
   }
-  const api={create,inspect,safeNames,inputs};
+  const api={create,inspect,safeNames,inputs,pendingReference,pendingMessage};
   if (typeof module !== 'undefined' && module.exports) module.exports=api;
   else root.FlangeExcel=api;
 })(typeof window !== 'undefined' ? window : globalThis);
