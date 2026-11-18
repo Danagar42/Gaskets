@@ -142,7 +142,8 @@
       return `Гайка М${d} ГОСТ 10605-94`;
     }
     if (id === 'gost-9064-75') {
-      const typeSuffix = row.type === 'B' || row.type === 'Б' ? '.Б' : row.type === 'A' || row.type === 'А' ? '.А' : '';
+      const t = row.type || row.nutType;
+      const typeSuffix = t === 'B' || t === 'Б' ? '.Б' : t === 'A' || t === 'А' ? '.А' : '';
       return `Гайка М${d}${typeSuffix} ГОСТ 9064-75`;
     }
     if (id === 'gost-iso-4032-2014') {

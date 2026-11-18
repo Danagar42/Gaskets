@@ -382,4 +382,69 @@ assert.strictEqual(typeof browserContext.window.StandardsApp.selectStandard, 'fu
 
 console.log('HTML and UI structure tests passed');
 
+// ==========================================
+// Part 4: Exhaustive verification across all 10 standards
+// ==========================================
+let totalVerifiedRows = 0;
+const fastenerStandards = StandardsCatalogAdapter.getStandards(db, 'fasteners');
+assert.strictEqual(fastenerStandards.length, 10, 'Must verify all 10 fastener standards');
+
+for (const std of fastenerStandards) {
+  let configs = [{}];
+  if (std.id === 'gost-11371-78') {
+    configs = [
+      { execution: '1', accuracyClass: 'A' },
+      { execution: '1', accuracyClass: 'C' },
+      { execution: '2', accuracyClass: 'A' }
+    ];
+  } else if (std.id === 'gost-9064-75') {
+    configs = [
+      { type: 'A' },
+      { type: 'B' }
+    ];
+  }
+
+  for (const config of configs) {
+    const tableData = StandardsCatalogAdapter.getTableData(db, std.id, config);
+    assert.ok(tableData.rows.length > 0, `${std.id} must have rows for config ${JSON.stringify(config)}`);
+
+    for (const row of tableData.rows) {
+      totalVerifiedRows++;
+
+      // Light theme SVG
+      const lightSvg = StandardsDrawingEngine.render({
+        standardId: std.id,
+        type: std.type,
+        row,
+        theme: 'light',
+        execution: config.execution
+      });
+      assert.ok(lightSvg && lightSvg.length > 50, `${std.id} M${row.diameter} light SVG must be non-empty`);
+      assert.ok(!lightSvg.includes('NaN'), `${std.id} M${row.diameter} light SVG must not contain NaN`);
+      assert.ok(!lightSvg.includes('undefined'), `${std.id} M${row.diameter} light SVG must not contain undefined`);
+      assert.ok(!lightSvg.match(/r="-[\d.]+"/), `${std.id} M${row.diameter} light SVG must not have negative radii`);
+
+      // Dark theme SVG
+      const darkSvg = StandardsDrawingEngine.render({
+        standardId: std.id,
+        type: std.type,
+        row,
+        theme: 'dark',
+        execution: config.execution
+      });
+      assert.ok(darkSvg && darkSvg.length > 50, `${std.id} M${row.diameter} dark SVG must be non-empty`);
+      assert.ok(!darkSvg.includes('NaN'), `${std.id} M${row.diameter} dark SVG must not contain NaN`);
+      assert.ok(!darkSvg.includes('undefined'), `${std.id} M${row.diameter} dark SVG must not contain undefined`);
+      assert.ok(!darkSvg.match(/r="-[\d.]+"/), `${std.id} M${row.diameter} dark SVG must not have negative radii`);
+
+      // Callout generation
+      const callout = StandardsDrawingEngine.getStandardCallout(std.id, row, config.execution, config.accuracyClass);
+      assert.ok(typeof callout === 'string' && callout.trim().length > 0, `${std.id} M${row.diameter} callout must be a non-empty string`);
+    }
+  }
+}
+
+console.log(`Exhaustive verification of ${totalVerifiedRows} sizes across all 10 standards passed`);
+
+
 
