@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="uk" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>База знань нормативних стандартів | SuperBase</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <script>
+    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  </script>
+  <link rel="stylesheet" href="assets/tailwind-local.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="h-full flex flex-col text-slate-800 dark:text-slate-100 overflow-hidden select-none">
+
+  <!-- =========================================================================
+       Header: SuperBase Logo, Category Tabs, Theme & Navigation
+       ========================================================================= -->
+  <header class="h-16 flex-shrink-0 flex items-center justify-between px-6 border-b border-slate-200/80 dark:border-slate-800/80 glass-panel z-20">
+    <div class="flex items-center gap-6">
+      <!-- Logo and Brand Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold tracking-tight text-lg bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">SuperBase</span>
+            <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">Glass 2.0</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">База знань нормативних стандартів</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs (Categories) -->
+      <nav id="categoryTabs" class="hidden md:flex items-center gap-1.5 ml-4 p-1 rounded-xl bg-slate-200/60 dark:bg-slate-800/60 border border-slate-300/50 dark:border-slate-700/50 text-xs font-medium">
+        <button type="button" data-category="fasteners" class="px-3.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm font-semibold flex items-center gap-2 transition-all">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          Кріпильні елементи
+        </button>
+        <div class="px-3 py-1.5 rounded-lg text-slate-400 dark:text-slate-500 cursor-not-allowed flex items-center gap-1.5" title="У розробці">
+          <span>Фланці</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-300/60 dark:bg-slate-700/60 font-semibold">незабаром</span>
+        </div>
+        <div class="px-3 py-1.5 rounded-lg text-slate-400 dark:text-slate-500 cursor-not-allowed flex items-center gap-1.5" title="У розробці">
+          <span>Прокладки</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-300/60 dark:bg-slate-700/60 font-semibold">незабаром</span>
+        </div>
+      </nav>
+    </div>
+
+    <!-- Actions: Theme Toggle & Back Link -->
+    <div class="flex items-center gap-3">
+      <!-- Theme Toggle -->
+      <button id="themeToggle" type="button" class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Перемкнути тему оформлення (Світла / Темна)">
+        <!-- Sun icon (shown in dark mode) -->
+        <svg id="themeIconSun" class="w-4 h-4 hidden dark:block text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <!-- Moon icon (shown in light mode) -->
+        <svg id="themeIconMoon" class="w-4 h-4 block dark:hidden text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
+
+      <!-- Back to Prokladki Workspace -->
+      <a href="../index.html" class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 border border-slate-200 dark:border-slate-700/80 transition-all">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>← До розрахунку «Прокладки»</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       Application Layout: Left Sidebar + Central Table + Right Drawing Canvas
+       ========================================================================= -->
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- ---------------------------------------------------------------------
+         Left Collapsible Sidebar: Standards Catalog
+         --------------------------------------------------------------------- -->
+    <aside id="mainSidebar" class="w-80 flex-shrink-0 flex flex-col border-r border-slate-200/80 dark:border-slate-800/80 glass-panel z-10">
+      <!-- Search & Controls Header -->
+      <div class="p-3.5 border-b border-slate-200/80 dark:border-slate-800/80 flex items-center gap-2">
+        <div class="relative flex-1">
+          <svg class="w-4 h-4 absolute left-3 top-2.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="searchInput" placeholder="Пошук діаметра (24, М24)..." class="custom-input pl-9 pr-3 py-1.5 text-xs">
+        </div>
+        <button id="btnToggleSidebar" type="button" class="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Згорнути / розгорнути панель стандартів">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Standards Navigation List -->
+      <nav id="standardsList" class="flex-1 overflow-y-auto p-3 space-y-4">
+        <!-- Rendered dynamically by app.js -->
+      </nav>
+
+      <!-- Sidebar Footer Stats -->
+      <div class="p-3 border-t border-slate-200/80 dark:border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
+        <span class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          10 нормативних стандартів
+        </span>
+        <span class="font-mono">v1.0</span>
+      </div>
+    </aside>
+
+    <!-- ---------------------------------------------------------------------
+         Main Workspace: Central Master Content
+         --------------------------------------------------------------------- -->
+    <main class="flex-1 flex overflow-hidden bg-slate-50/50 dark:bg-transparent">
+
+      <!-- Central Scrollable Column: Passport Card + Table Controls + Dimensions Table -->
+      <div class="flex-1 flex flex-col overflow-y-auto p-6 space-y-5">
+
+        <!-- Standard Passport Card -->
+        <section id="passportCard" class="fluent-card p-5 rounded-2xl">
+          <!-- Rendered dynamically by app.js -->
+        </section>
+
+        <!-- Table Filters & Execution Bar -->
+        <div id="tableControlsBar" class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800/80 backdrop-blur-md">
+          <div id="dynamicFilters" class="flex flex-wrap items-center gap-2">
+            <!-- Rendered dynamically depending on active standard (Executions 1/2, Class A/C, Nut Type A/B) -->
+          </div>
+          <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span id="rowCountBadge" class="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 font-mono text-[11px] font-semibold">0 типорозмірів</span>
+          </div>
+        </div>
+
+        <!-- Master Dimensions Table Container -->
+        <div class="flex-1 min-h-[300px]">
+          <div id="dimensionsTable" class="table-container border border-slate-200 dark:border-slate-800/80 rounded-xl overflow-hidden glass-panel shadow-sm">
+            <!-- Rendered dynamically by app.js -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- -------------------------------------------------------------------
+           Sticky Right Sidebar: Detail CAD Vector Drawing
+           ------------------------------------------------------------------- -->
+      <aside class="w-[420px] flex-shrink-0 flex flex-col border-l border-slate-200/80 dark:border-slate-800/80 glass-panel p-5 space-y-4 overflow-y-auto z-10">
+
+        <!-- Drawing Header & Callout -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></span>
+              <h2 class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">2D Креслення деталі</h2>
+            </div>
+            <span class="text-[11px] font-mono text-slate-400">ДСТУ / ГОСТ 2.307</span>
+          </div>
+
+          <!-- Engineering Callout Badge -->
+          <div class="space-y-1.5">
+            <label class="text-[11px] font-medium text-slate-400">Нормативне позначення:</label>
+            <div id="calloutBadge" class="callout-badge text-xs font-mono font-medium truncate w-full justify-between">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Drawing Action Buttons -->
+          <div class="flex items-center gap-2 pt-1">
+            <button id="btnCopyCallout" type="button" class="flex-1 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center gap-1.5 transition-colors">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>Скопіювати</span>
+            </button>
+            <button id="btnExportSvg" type="button" class="flex-1 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700/80 flex items-center justify-center gap-1.5 transition-colors">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Експорт SVG</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic CAD Drawing Canvas -->
+        <div id="drawingContainer" class="cad-canvas relative w-full flex items-center justify-center min-h-[380px] p-2">
+          <!-- Rendered dynamically by StandardsDrawingEngine -->
+        </div>
+
+        <!-- Technical Drawing Notes & Guide -->
+        <div class="rounded-xl p-3.5 bg-slate-100/70 dark:bg-slate-900/70 border border-slate-200/60 dark:border-slate-800/60 text-xs space-y-2 text-slate-500 dark:text-slate-400">
+          <div class="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            Інженерна підказка
+          </div>
+          <p class="leading-relaxed text-[11px]">
+            Наведіть курсор на будь-який рядок таблиці розмірів для миттєвого відображення параметрів на кресленні. Клікніть на рядок, щоб зафіксувати вибір.
+          </p>
+        </div>
+
+      </aside>
+
+    </main>
+
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- =========================================================================
+       Application Scripts: Shared Bundle, Adapters, Engines & Controller
+       ========================================================================= -->
+  <script src="../standards.bundle.js"></script>
+  <script src="src/catalog-adapter.js"></script>
+  <script src="src/drawing-templates.js"></script>
+  <script src="src/drawing-engine.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>
