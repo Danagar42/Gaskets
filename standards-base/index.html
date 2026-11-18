@@ -83,7 +83,7 @@
       </button>
 
       <!-- Back to Prokladki Workspace -->
-      <a href="../index.html" class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800/80 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 border border-slate-200 dark:border-slate-700/80 transition-all">
+      <a href="../index.html" class="header-back-link flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all">
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="19" y1="12" x2="5" y2="12"></line>
           <polyline points="12 19 5 12 12 5"></polyline>
@@ -101,7 +101,7 @@
     <!-- ---------------------------------------------------------------------
          Left Collapsible Sidebar: Standards Catalog
          --------------------------------------------------------------------- -->
-    <aside id="mainSidebar" class="w-80 flex-shrink-0 flex flex-col border-r border-slate-200/80 dark:border-slate-800/80 glass-panel z-10">
+    <aside id="mainSidebar" class="sidebar-panel flex-shrink-0 flex flex-col border-r border-slate-200/80 dark:border-slate-800/80 glass-panel z-10">
       <!-- Search & Controls Header -->
       <div class="p-3.5 border-b border-slate-200/80 dark:border-slate-800/80 flex items-center gap-2">
         <div class="relative flex-1">
@@ -137,10 +137,10 @@
     <!-- ---------------------------------------------------------------------
          Main Workspace: Central Master Content
          --------------------------------------------------------------------- -->
-    <main class="flex-1 flex overflow-hidden bg-slate-50/50 dark:bg-transparent">
+    <main class="flex-1 flex min-w-0 overflow-hidden bg-slate-50/50 dark:bg-transparent">
 
       <!-- Central Scrollable Column: Passport Card + Table Controls + Dimensions Table -->
-      <div class="flex-1 flex flex-col overflow-y-auto p-6 space-y-5">
+      <div id="mainContent" class="content-panel flex-1 flex flex-col min-w-0 overflow-y-auto p-6 space-y-5">
 
         <!-- Standard Passport Card -->
         <section id="passportCard" class="fluent-card p-5 rounded-2xl">
@@ -169,7 +169,7 @@
       <!-- -------------------------------------------------------------------
            Sticky Right Sidebar: Detail CAD Vector Drawing
            ------------------------------------------------------------------- -->
-      <aside class="w-[420px] flex-shrink-0 flex flex-col border-l border-slate-200/80 dark:border-slate-800/80 glass-panel p-5 space-y-4 overflow-y-auto z-10">
+      <aside id="detailSidebar" class="detail-panel flex-shrink-0 flex flex-col border-l border-slate-200/80 dark:border-slate-800/80 glass-panel p-5 space-y-4 overflow-y-auto z-10">
 
         <!-- Drawing Header & Callout -->
         <div class="space-y-3">
@@ -191,14 +191,14 @@
 
           <!-- Drawing Action Buttons -->
           <div class="flex items-center gap-2 pt-1">
-            <button id="btnCopyCallout" type="button" class="flex-1 px-3 py-2 rounded-xl text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center gap-1.5 transition-colors">
+            <button id="btnCopyCallout" type="button" class="btn-primary flex-1 px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors">
               <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
               </svg>
               <span>Скопіювати</span>
             </button>
-            <button id="btnExportSvg" type="button" class="flex-1 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700/80 flex items-center justify-center gap-1.5 transition-colors">
+            <button id="btnExportSvg" type="button" class="btn-secondary flex-1 px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors">
               <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                 <polyline points="7 10 12 15 17 10"></polyline>

@@ -383,6 +383,106 @@ assert.strictEqual(typeof browserContext.window.StandardsApp.selectStandard, 'fu
 console.log('HTML and UI structure tests passed');
 
 // ==========================================
+// Part 3.5: Layout & CAD Scaling Excellence (ACTIVE_SPEC Rev 1)
+// ==========================================
+// 1. DOM IDs and Classes
+assert.ok(html.includes('id="detailSidebar"'), 'Must have #detailSidebar for right CAD drawing panel');
+assert.ok(html.includes('id="mainContent"'), 'Must have #mainContent for central scrollable workspace');
+assert.ok(html.includes('detail-panel'), 'Right sidebar must have .detail-panel class');
+assert.ok(html.includes('content-panel'), 'Central workspace must have .content-panel class');
+assert.ok(html.includes('sidebar-panel'), 'Left sidebar must have .sidebar-panel class');
+assert.ok(html.includes('header-back-link'), 'Back link must have .header-back-link class');
+
+// 2. CSS Layout and Glass 2.0 rules in styles.css
+const css = fs.readFileSync(path.join(__dirname, '..', 'standards-base', 'styles.css'), 'utf8');
+
+// Sidebar width rules
+assert.ok(/#mainSidebar[\s\S]*?width:\s*280px|sidebar-panel[\s\S]*?width:\s*280px/.test(css), 'styles.css must enforce 280px width on left sidebar');
+assert.ok(/#detailSidebar[\s\S]*?width:\s*420px|detail-panel[\s\S]*?width:\s*420px/.test(css), 'styles.css must enforce 420px width on #detailSidebar');
+assert.ok(/flex-shrink:\s*0/.test(css), 'styles.css must enforce flex-shrink: 0 on sidebars');
+
+// Central column flex: 1 1 auto; min-width: 0;
+assert.ok(/content-panel[\s\S]*?min-width:\s*0|#mainContent[\s\S]*?min-width:\s*0/.test(css), 'styles.css must enforce min-width: 0 on content-panel');
+
+// SVG containment inside .cad-canvas
+assert.ok(/\.cad-canvas\s+svg[\s\S]*?max-width:\s*100%/.test(css), '.cad-canvas svg must have max-width: 100%');
+
+// Table min-width
+assert.ok(/\.table-container\s+table[\s\S]*?min-width:\s*600px/.test(css), '.table-container table must have min-width: 600px to prevent squashing');
+
+// Buttons and Badges dark theme rules
+assert.ok(/html\.dark\s+[^{}]*(?:#btnCopyCallout|\.btn-primary)/.test(css), 'styles.css must define dark styles for btn-primary / btnCopyCallout');
+assert.ok(/html\.dark\s+[^{}]*(?:#btnExportSvg|\.btn-secondary)/.test(css), 'styles.css must define dark styles for btn-secondary / btnExportSvg');
+assert.ok(/html\.dark\s+[^{}]*\.header-back-link/.test(css), 'styles.css must define dark styles for .header-back-link');
+
+// 3. Parametric 2D CAD Vector Scaling
+// Tiny spring washer (ГОСТ 6402-70, M2: outerD = 3.1mm, innerD = 2.1mm, s = 0.5mm)
+const tinyGroverSvg = StandardsDrawingEngine.render({
+  standardId: 'gost-6402-70',
+  type: 'spring_washer',
+  row: { diameter: 2, innerDiameterMm: 2.1, outerDiameterMm: 3.1, thicknessMm: 0.5 },
+  theme: 'dark'
+});
+const groverArcMatch = tinyGroverSvg.match(/A\s+([\d.]+)\s+([\d.]+)\s+0\s+1\s+0/);
+assert.ok(groverArcMatch, 'Spring washer must contain outer arc');
+const tinyGroverR2 = parseFloat(groverArcMatch[1]);
+assert.ok(tinyGroverR2 >= 60 && tinyGroverR2 <= 110, `M2 spring washer outer radius must be 60..110px on canvas, got ${tinyGroverR2}px (not ~5.89px)`);
+const tinyGroverOuterD = tinyGroverR2 * 2;
+assert.ok(tinyGroverOuterD >= 130, `M2 spring washer outer diameter must be >= 130px, got ${tinyGroverOuterD}px`);
+
+// Tiny flat washer (ГОСТ 11371-78, M1: outerD = 3.5mm, innerD = 1.1mm, s = 0.3mm)
+const tinyWasherSvg = StandardsDrawingEngine.render({
+  standardId: 'gost-11371-78',
+  type: 'washer',
+  row: { diameter: 1, innerDiameterMm: 1.1, outerDiameterMm: 3.5, thicknessMm: 0.3 },
+  theme: 'light'
+});
+const tinyWasherCircleMatch = tinyWasherSvg.match(/circle\s+cx="390"\s+cy="165"\s+r="([\d.]+)"/);
+assert.ok(tinyWasherCircleMatch, 'Flat washer must contain outer top circle');
+const tinyWasherR2 = parseFloat(tinyWasherCircleMatch[1]);
+assert.ok(tinyWasherR2 >= 60 && tinyWasherR2 <= 110, `M1 washer outer radius must be 60..110px on canvas, got ${tinyWasherR2}px`);
+
+// Tiny nut (ГОСТ 5927-70, M1: widthS = 3.2mm, heightM = 1.0mm)
+const tinyNutSvg = StandardsDrawingEngine.render({
+  standardId: 'gost-5927-70',
+  type: 'hex_nut',
+  row: { diameter: 1, acrossFlatsMm: 3.2, heightMm: 1.0 },
+  theme: 'dark'
+});
+const tinyNutChamferMatch = tinyNutSvg.match(/circle\s+cx="390"\s+cy="165"\s+r="([\d.]+)"/);
+assert.ok(tinyNutChamferMatch, 'Hex nut must contain chamfer circle on top view');
+const tinyNutHalfS = parseFloat(tinyNutChamferMatch[1]);
+const tinyNutS = tinyNutHalfS * 2;
+assert.ok(tinyNutS >= 130 && tinyNutS <= 180, `M1 hex nut across-flats on canvas must be 130..180px, got ${tinyNutS}px`);
+
+// Large washer (ГОСТ 9065-75, M160: outerD = 276mm, innerD = 162mm, s = 16mm)
+const largeWasherSvg = StandardsDrawingEngine.render({
+  standardId: 'gost-9065-75',
+  type: 'washer',
+  row: { diameter: 160, innerDiameterMm: 162, outerDiameterMm: 276, thicknessMm: 16 },
+  theme: 'light'
+});
+const largeWasherCircleMatch = largeWasherSvg.match(/circle\s+cx="390"\s+cy="165"\s+r="([\d.]+)"/);
+assert.ok(largeWasherCircleMatch, 'Large washer must contain outer top circle');
+const largeWasherR2 = parseFloat(largeWasherCircleMatch[1]);
+assert.ok(largeWasherR2 <= 100 && largeWasherR2 >= 60, `M160 washer outer radius must be 60..100px, got ${largeWasherR2}px`);
+
+// Large nut (ГОСТ 10605-94, M150: widthS = 225mm, heightM = 128mm)
+const largeNutSvg = StandardsDrawingEngine.render({
+  standardId: 'gost-10605-94',
+  type: 'hex_nut',
+  row: { diameter: 150, acrossFlatsMm: 225, heightMm: 128 },
+  theme: 'dark'
+});
+const largeNutChamferMatch = largeNutSvg.match(/circle\s+cx="390"\s+cy="165"\s+r="([\d.]+)"/);
+assert.ok(largeNutChamferMatch, 'Large hex nut must contain chamfer circle');
+const largeNutHalfS = parseFloat(largeNutChamferMatch[1]);
+const largeNutS = largeNutHalfS * 2;
+assert.ok(largeNutS <= 180 && largeNutS >= 120, `M150 hex nut across-flats on canvas must be 120..180px, got ${largeNutS}px`);
+
+console.log('Layout & CAD Scaling Excellence tests passed');
+
+// ==========================================
 // Part 4: Exhaustive verification across all 10 standards
 // ==========================================
 let totalVerifiedRows = 0;

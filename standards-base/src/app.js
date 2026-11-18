@@ -56,6 +56,8 @@
     dom.dynamicFilters = document.getElementById('dynamicFilters');
     dom.rowCountBadge = document.getElementById('rowCountBadge');
     dom.mainSidebar = document.getElementById('mainSidebar');
+    dom.mainContent = document.getElementById('mainContent');
+    dom.detailSidebar = document.getElementById('detailSidebar');
   }
 
   function getAdapter() {
@@ -275,7 +277,7 @@
     if (details.accuracyClass || (details.accuracyClasses && details.accuracyClasses.length > 0)) {
       const acc = details.accuracyClass || details.accuracyClasses.join(' / ');
       accuracyBadge = `
-        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 text-xs font-semibold">
+        <span class="badge-indigo inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold">
           <svg class="w-3.5 h-3.5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="m9 12 2 2 4-4"></path>
@@ -288,7 +290,7 @@
     let executionsBadge = '';
     if (details.executions && details.executions.length > 0) {
       executionsBadge = `
-        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800/60 text-xs font-semibold">
+        <span class="badge-cyan inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold">
           Виконання: ${details.executions.map(e => `№${e}`).join(', ')}
         </span>
       `;
@@ -298,7 +300,7 @@
     if (details.nonPreferredDiametersMm && details.nonPreferredDiametersMm.length > 0) {
       const nonPrefList = details.nonPreferredDiametersMm.map(d => `М${d}`).join(', ');
       nonPreferredAlert = `
-        <div class="mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2.5">
+        <div class="badge-amber mt-3 p-3 rounded-xl text-xs flex items-start gap-2.5">
           <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="8" x2="12" y2="12"></line>
@@ -334,7 +336,7 @@
             <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
               ${escapeHtml(details.groupName || 'Стандарт')}
             </span>
-            <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60">
+            <span class="badge-emerald inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full">
               <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>
@@ -533,7 +535,7 @@
           </svg>
           <div class="text-sm font-medium">Розмірів не знайдено за запитом «<span class="font-bold text-indigo-500">${escapeHtml(state.searchQuery)}</span>»</div>
           <p class="text-xs text-slate-400">Спробуйте ввести інший діаметр або очистіть рядок пошуку.</p>
-          <button id="btnResetSearch" type="button" class="mt-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 transition-colors">
+          <button id="btnResetSearch" type="button" class="btn-primary mt-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors">
             Скинути пошук
           </button>
         </div>
@@ -594,7 +596,7 @@
         // Additional badge for first column if non-preferred
         let extraTag = '';
         if (isFirst && row.isNonPreferred) {
-          extraTag = `<span class="ml-1.5 text-[9px] px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-sans font-semibold">нерек.</span>`;
+          extraTag = `<span class="badge-amber ml-1.5 text-[9px] px-1 py-0.5 rounded font-sans font-semibold">нерек.</span>`;
         }
 
         tbodyHtml += `<td class="px-4 py-2.5 whitespace-nowrap text-xs text-slate-700 dark:text-slate-300${stickyClass}">${escapeHtml(String(displayVal))}${extraTag}</td>`;

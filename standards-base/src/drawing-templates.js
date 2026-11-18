@@ -128,8 +128,8 @@
     const cxTop = 390;
     const cyTop = 165;
 
-    // Масштаб для комфортного вписування у виділену область
-    const scale = Math.min(130 / widthS, 120 / heightM, 4.2);
+    // Масштаб для комфортного вписування у виділену область (без занижених штучних обмежень)
+    const scale = Math.min(155 / widthS, 130 / heightM, 60);
 
     const sPx = widthS * scale;
     const mPx = heightM * scale;
@@ -246,8 +246,8 @@
     const cxTop = 390;
     const cyTop = 165;
 
-    // Масштаб базується на зовнішньому діаметрі
-    const scale = Math.min(150 / outerD, 3.8);
+    // Масштаб базується на зовнішньому діаметрі (комфортне заповнення в'юпорта для всіх розмірів)
+    const scale = Math.min(170 / outerD, 60);
 
     const r2Px = (outerD / 2) * scale;
     const r1Px = (innerD / 2) * scale;
@@ -343,7 +343,8 @@
     const cxTop = 390;
     const cyTop = 165;
 
-    const scale = Math.min(150 / outerD, 3.8);
+    // Масштаб для комфортного вписування у виділену область (без занижених штучних обмежень)
+    const scale = Math.min(170 / outerD, 60);
 
     const r2Px = (outerD / 2) * scale;
     const r1Px = (innerD / 2) * scale;
