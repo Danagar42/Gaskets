@@ -58,6 +58,20 @@
     dom.mainSidebar = document.getElementById('mainSidebar');
   }
 
+  function getAdapter() {
+    if (typeof StandardsCatalogAdapter !== 'undefined') return StandardsCatalogAdapter;
+    if (typeof globalThis !== 'undefined' && globalThis.StandardsCatalogAdapter) return globalThis.StandardsCatalogAdapter;
+    if (typeof window !== 'undefined' && window.StandardsCatalogAdapter) return window.StandardsCatalogAdapter;
+    return null;
+  }
+
+  function getDrawingEngine() {
+    if (typeof StandardsDrawingEngine !== 'undefined') return StandardsDrawingEngine;
+    if (typeof globalThis !== 'undefined' && globalThis.StandardsDrawingEngine) return globalThis.StandardsDrawingEngine;
+    if (typeof window !== 'undefined' && window.StandardsDrawingEngine) return window.StandardsDrawingEngine;
+    return null;
+  }
+
   /**
    * Escape HTML utility
    */
@@ -117,9 +131,7 @@
   function renderSidebar() {
     if (!dom.standardsList) return;
 
-    const adapter = typeof StandardsCatalogAdapter !== 'undefined'
-      ? StandardsCatalogAdapter
-      : (window.StandardsCatalogAdapter || globalThis.StandardsCatalogAdapter);
+    const adapter = getAdapter();
 
     if (!adapter) {
       dom.standardsList.innerHTML = '<div class="p-4 text-xs text-rose-500">Помилка завантаження адаптера стандартів</div>';
@@ -218,9 +230,7 @@
     state.searchQuery = '';
     if (dom.searchInput) dom.searchInput.value = '';
 
-    const adapter = typeof StandardsCatalogAdapter !== 'undefined'
-      ? StandardsCatalogAdapter
-      : (window.StandardsCatalogAdapter || globalThis.StandardsCatalogAdapter);
+    const adapter = getAdapter();
 
     if (!adapter) return;
 
@@ -463,9 +473,7 @@
    * Fetch table data from catalog adapter and apply filters
    */
   function loadTableData() {
-    const adapter = typeof StandardsCatalogAdapter !== 'undefined'
-      ? StandardsCatalogAdapter
-      : (window.StandardsCatalogAdapter || globalThis.StandardsCatalogAdapter);
+    const adapter = getAdapter();
 
     if (!adapter) return;
 
@@ -486,9 +494,7 @@
    * Filter and render table
    */
   function applyFilterAndRender() {
-    const adapter = typeof StandardsCatalogAdapter !== 'undefined'
-      ? StandardsCatalogAdapter
-      : (window.StandardsCatalogAdapter || globalThis.StandardsCatalogAdapter);
+    const adapter = getAdapter();
 
     const allRows = state.currentTableData.rows || [];
     const columns = state.currentTableData.columns || [];
@@ -636,9 +642,7 @@
   function renderDrawing() {
     if (!dom.drawingContainer) return;
 
-    const engine = typeof StandardsDrawingEngine !== 'undefined'
-      ? StandardsDrawingEngine
-      : (window.StandardsDrawingEngine || globalThis.StandardsDrawingEngine);
+    const engine = getDrawingEngine();
 
     if (!engine) {
       dom.drawingContainer.innerHTML = '<div class="text-xs text-rose-500">Креслярський рушій не завантажено</div>';
@@ -735,9 +739,7 @@
     // Copy callout button
     if (dom.btnCopyCallout) {
       dom.btnCopyCallout.addEventListener('click', () => {
-        const engine = typeof StandardsDrawingEngine !== 'undefined'
-          ? StandardsDrawingEngine
-          : (window.StandardsDrawingEngine || globalThis.StandardsDrawingEngine);
+        const engine = getDrawingEngine();
 
         const displayRow = state.hoveredRow || state.activeRow;
         if (!displayRow || !engine) return;

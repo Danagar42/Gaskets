@@ -124,9 +124,10 @@
   /**
    * Генерація стандартизованого позначення для буфера обміну / заголовків
    */
-  function getStandardCallout(standardId, row = {}, execution) {
+  function getStandardCallout(standardId, row = {}, execution, accuracyClass) {
     const d = row.diameter || row.d || 24;
     const exec = execution || row.execution;
+    const acc = accuracyClass || row.accuracyClass;
     const id = String(standardId || '').toLowerCase();
 
     // Гайки
@@ -151,7 +152,8 @@
     // Шайби
     if (id === 'gost-11371-78') {
       const execPrefix = exec && String(exec) === '2' ? '2.' : '';
-      return `Шайба ${execPrefix}${d} ГОСТ 11371-78`;
+      const accSuffix = acc && String(acc).toUpperCase() === 'C' ? '.C' : '';
+      return `Шайба ${execPrefix}${d}${accSuffix} ГОСТ 11371-78`;
     }
     if (id === 'gost-6402-70') {
       return `Шайба ${d} ГОСТ 6402-70`;
