@@ -187,3 +187,155 @@ const browserStd = browserContext.window.StandardsCatalogAdapter.getStandards('f
 assert.strictEqual(browserStd.length, 10, 'Browser getStandards must return 10 standards');
 
 console.log('Catalog adapter tests passed');
+
+// ==========================================
+// Part 2: Drawing engine & templates tests
+// ==========================================
+const { StandardsDrawingEngine } = require('../standards-base/src/drawing-engine.js');
+const { StandardsDrawingTemplates } = require('../standards-base/src/drawing-templates.js');
+
+assert.ok(StandardsDrawingEngine, 'StandardsDrawingEngine must be exported');
+assert.ok(StandardsDrawingTemplates, 'StandardsDrawingTemplates must be exported');
+
+// Test Hex Nut M24 SVG
+const nutSvg = StandardsDrawingEngine.render({
+  standardId: 'gost-5915-70',
+  type: 'hex_nut',
+  row: { diameter: 24, heightMm: 21.5, acrossFlatsMm: 36 },
+  theme: 'dark'
+});
+assert.ok(nutSvg.includes('<svg'), 'Output must be an SVG element');
+assert.ok(!nutSvg.includes('NaN'), 'SVG must not contain NaN coordinates');
+assert.ok(nutSvg.includes('36'), 'SVG must display across-flats dimension 36');
+assert.ok(nutSvg.includes('21.5'), 'SVG must display height dimension 21.5');
+assert.ok(nutSvg.includes('24'), 'SVG must display nominal diameter dimension 24');
+assert.ok(!nutSvg.includes('undefined'), 'SVG must not contain undefined');
+assert.ok(nutSvg.includes('viewBox='), 'SVG must have viewBox');
+assert.ok(nutSvg.includes('preserveAspectRatio='), 'SVG must have preserveAspectRatio');
+
+// Test Washer M24 SVG
+const washerSvg = StandardsDrawingEngine.render({
+  standardId: 'gost-11371-78',
+  type: 'washer',
+  row: { diameter: 24, innerDiameterMm: 25, outerDiameterMm: 44, thicknessMm: 4 },
+  theme: 'light'
+});
+assert.ok(washerSvg.includes('<svg'), 'Washer output must be SVG');
+assert.ok(!washerSvg.includes('NaN'), 'Washer SVG must not contain NaN');
+assert.ok(washerSvg.includes('44'), 'Washer SVG must display outer diameter 44');
+assert.ok(washerSvg.includes('25'), 'Washer SVG must display inner diameter 25');
+assert.ok(washerSvg.includes('4'), 'Washer SVG must display thickness 4');
+assert.ok(!washerSvg.includes('undefined'), 'Washer SVG must not contain undefined');
+
+// Test Spring Washer (Grover)
+const groverSvg = StandardsDrawingEngine.render({
+  standardId: 'gost-6402-70',
+  type: 'spring_washer',
+  row: { diameter: 24, innerDiameterMm: 24.5, outerDiameterMm: 40, thicknessMm: 5 },
+  theme: 'dark'
+});
+assert.ok(groverSvg.includes('<svg'), 'Grover output must be SVG');
+assert.ok(!groverSvg.includes('NaN'), 'Grover SVG must not contain NaN');
+assert.ok(!groverSvg.includes('undefined'), 'Grover SVG must not contain undefined');
+
+// Test Thread Profile
+const threadSvg = StandardsDrawingEngine.render({
+  standardId: 'gost-24705-2004',
+  type: 'thread',
+  row: { diameter: 24, coarsePitchMm: 3, pitchesMm: [3, 2, 1.5, 1] },
+  theme: 'light'
+});
+assert.ok(threadSvg.includes('<svg'), 'Thread output must be SVG');
+assert.ok(!threadSvg.includes('NaN'), 'Thread SVG must not contain NaN');
+assert.ok(!threadSvg.includes('undefined'), 'Thread SVG must not contain undefined');
+
+// Test Torque infographic
+const torqueSvg = StandardsDrawingEngine.render({
+  standardId: 'universal-table-1',
+  type: 'torque',
+  row: { diameter: 24, minNm: 320, maxNm: 360, minKgfM: 32, maxKgfM: 36 },
+  theme: 'dark'
+});
+assert.ok(torqueSvg.includes('<svg'), 'Torque output must be SVG');
+assert.ok(!torqueSvg.includes('NaN'), 'Torque SVG must not contain NaN');
+assert.ok(torqueSvg.includes('320'), 'Torque SVG must contain minNm');
+assert.ok(!torqueSvg.includes('undefined'), 'Torque SVG must not contain undefined');
+
+// Test callouts
+const nutCallout = StandardsDrawingEngine.getStandardCallout('gost-5915-70', { diameter: 24 });
+assert.strictEqual(nutCallout, 'Гайка М24 ГОСТ 5915-70');
+
+const washerCallout = StandardsDrawingEngine.getStandardCallout('gost-11371-78', { diameter: 24 });
+assert.strictEqual(washerCallout, 'Шайба 24 ГОСТ 11371-78');
+
+const groverCallout = StandardsDrawingEngine.getStandardCallout('gost-6402-70', { diameter: 24 });
+assert.strictEqual(groverCallout, 'Шайба 24 ГОСТ 6402-70');
+
+const washerCalloutExec2 = StandardsDrawingEngine.getStandardCallout('gost-11371-78', { diameter: 24 }, '2');
+assert.strictEqual(washerCalloutExec2, 'Шайба 2.24 ГОСТ 11371-78');
+
+const nut9064Callout = StandardsDrawingEngine.getStandardCallout('gost-9064-75', { diameter: 24, type: 'B' });
+assert.strictEqual(nut9064Callout, 'Гайка М24.Б ГОСТ 9064-75');
+
+const threadCallout = StandardsDrawingEngine.getStandardCallout('gost-24705-2004', { diameter: 24, pitch: 3 });
+assert.strictEqual(threadCallout, 'Різьба М24×3 ГОСТ 24705-2004');
+
+const torqueCallout = StandardsDrawingEngine.getStandardCallout('universal-table-1', { diameter: 24 });
+assert.strictEqual(torqueCallout, 'Моменти затягування М24');
+
+// Type auto-inference (omitting type parameter)
+const inferredSvg = StandardsDrawingEngine.render({
+  standardId: 'gost-5915-70',
+  row: { diameter: 24, heightMm: 21.5, acrossFlatsMm: 36 },
+  theme: 'dark'
+});
+assert.ok(inferredSvg.includes('S = 36'), 'Inferred hex_nut must render across-flats S=36');
+
+// Empty row safety check
+const emptyRowSvg = StandardsDrawingEngine.render({ standardId: 'gost-5915-70' });
+assert.ok(emptyRowSvg.includes('<svg'), 'Empty row must still render SVG');
+assert.ok(!emptyRowSvg.includes('NaN'), 'Empty row must not contain NaN');
+assert.ok(!emptyRowSvg.includes('undefined'), 'Empty row must not contain undefined');
+
+// No negative radii checks
+assert.ok(!nutSvg.match(/r="-[\d.]+"/), 'No negative radii in nut SVG');
+assert.ok(!washerSvg.match(/r="-[\d.]+"/), 'No negative radii in washer SVG');
+assert.ok(!groverSvg.match(/r="-[\d.]+"/), 'No negative radii in grover SVG');
+assert.ok(!threadSvg.match(/r="-[\d.]+"/), 'No negative radii in thread SVG');
+assert.ok(!torqueSvg.match(/r="-[\d.]+"/), 'No negative radii in torque SVG');
+
+// Test rendering for all 10 standards from catalog
+for (const std of standards) {
+  const tableData = StandardsCatalogAdapter.getTableData(db, std.id);
+  const firstRow = tableData.rows[0];
+  const renderedSvg = StandardsDrawingEngine.render({
+    standardId: std.id,
+    type: std.type,
+    row: firstRow,
+    theme: 'light'
+  });
+  assert.ok(renderedSvg.includes('<svg'), `${std.id} must render SVG`);
+  assert.ok(!renderedSvg.includes('NaN'), `${std.id} SVG must not contain NaN`);
+  assert.ok(!renderedSvg.includes('undefined'), `${std.id} SVG must not contain undefined`);
+}
+
+// Test browser context in VM sandbox
+const templatesCode = fs.readFileSync(path.join(__dirname, '..', 'standards-base', 'src', 'drawing-templates.js'), 'utf8');
+const engineCode = fs.readFileSync(path.join(__dirname, '..', 'standards-base', 'src', 'drawing-engine.js'), 'utf8');
+
+vm.runInContext(templatesCode, browserContext);
+vm.runInContext(engineCode, browserContext);
+
+assert.ok(browserContext.window.StandardsDrawingTemplates, 'StandardsDrawingTemplates must be attached to window in browser');
+assert.ok(browserContext.window.StandardsDrawingEngine, 'StandardsDrawingEngine must be attached to window in browser');
+
+const browserRender = browserContext.window.StandardsDrawingEngine.render({
+  standardId: 'gost-5915-70',
+  type: 'hex_nut',
+  row: { diameter: 24, heightMm: 21.5, acrossFlatsMm: 36 },
+  theme: 'dark'
+});
+assert.ok(browserRender.includes('<svg'), 'Browser render must return SVG');
+assert.ok(!browserRender.includes('NaN'), 'Browser render must not contain NaN');
+
+console.log('Drawing engine tests passed');
