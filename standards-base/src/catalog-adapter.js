@@ -254,7 +254,7 @@
       }
       const data = this.getTableData(db,id,choices);
       let columns = data.columns;
-      if (category === 'nuts') columns = columns.map(col => col.key === 'isNonPreferred' ? {...col,key:'preferredLabel'} : col);
+      if (category === 'nuts') columns = columns.filter(col => col.key !== 'isNonPreferred');
       const capped = choices.type === 'B';
       if (capped) {
         columns = [...columns, column('bodyDiameterMm','Діаметр корпусу D₁','мм'),

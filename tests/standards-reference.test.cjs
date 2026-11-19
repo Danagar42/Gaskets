@@ -218,11 +218,15 @@ test('filter and row selection render the corresponding dimensions and drawing t
   const action = dataset => events.click({target:{closest:()=>({dataset})},preventDefault(){}});
   browser.StandardsReference.render(main,['nuts','gost-5915-70'],{navigate(){},toast(){}});
   diameter('М14');
-  assert.match(panel.innerHTML,/<td>Не рекоменд\.<\/td>/);
-  assert.doesNotMatch(panel.innerHTML,/<td>(?:true|false)<\/td>/);
+  assert.doesNotMatch(panel.innerHTML,/<th[^>]*>Ряд<\/th>/);
+  assert.match(panel.innerHTML,/aria-label="14, нерекомендований діаметр">14<sup aria-hidden="true">\*<\/sup>/);
+  assert.match(panel.innerHTML,/\* Нерекомендований діаметр/);
   browser.StandardsReference.render(main,['nuts','gost-9064-75'],{navigate(){},toast(){}});
   filter('type','B');
+  diameter('М27');
+  assert.match(panel.innerHTML,/>27<sup aria-hidden="true">\*<\/sup>/);
   diameter('М24');
+  assert.doesNotMatch(panel.innerHTML,/<sup|\* Нерекомендований діаметр/);
   assert.match(panel.innerHTML,/М24\.Б ГОСТ 9064-75/);
   assert.match(panel.innerHTML,/D₁.*40\s*мм/);
   assert.match(panel.innerHTML,/l₀.*16\s*мм/);

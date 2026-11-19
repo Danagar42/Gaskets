@@ -109,6 +109,7 @@
 .standards-reference .reference-table-block h2 { padding: 14px 16px; }
 .standards-reference .reference-table-scroll { max-height: 430px; overflow: auto; border-radius: 0 0 var(--radius) var(--radius); }
 .standards-reference .reference-table-scroll:focus-visible { outline-offset: -2px; }
+.standards-reference .reference-table-note { margin: 0; padding: 9px 12px; color: #536981; font-size: 12px; }
 .standards-reference .reference-table { width: 100%; border-spacing: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
 .standards-reference .reference-table :is(th,td) {
   padding: 9px 12px;

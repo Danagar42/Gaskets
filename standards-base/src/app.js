@@ -49,10 +49,13 @@
           const active = selectable && row.id === selectedId;
           return `<tr${active ? ' class="is-selected"' : ''}${selectable ? ` data-reference-size="${esc(row.id)}"` : ''}>${columns.map(({key},index) => {
             const value = esc(valueText(row[key]));
-            return `<td>${index === 0 && selectable ? `<button type="button" data-reference-row="${esc(row.id)}" aria-pressed="${active}">${value}</button>` : value}</td>`;
+            const marked = key === 'diameter' && row.isNonPreferred;
+            const label = marked ? `${value}<sup aria-hidden="true">*</sup>` : value;
+            const accessibleLabel = marked ? ` aria-label="${value}, нерекомендований діаметр"` : '';
+            return `<td>${index === 0 && selectable ? `<button type="button" data-reference-row="${esc(row.id)}" aria-pressed="${active}"${accessibleLabel}>${label}</button>` : label}</td>`;
           }).join('')}</tr>`;
         }).join('')}</tbody></table>
-      </div></section>`;
+      </div>${rows.some(row => row.isNonPreferred) ? '<p class="reference-table-note">* Нерекомендований діаметр</p>' : ''}</section>`;
   }
 
   function sourcesMarkup({sources,notes,related}) {
