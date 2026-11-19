@@ -189,7 +189,7 @@
    * @param {string|number} [options.execution] - Виконання деталі
    * @returns {string} Валідний SVG-рядок
    */
-  function render({ standardId, type, row = {}, theme = 'dark', execution } = {}) {
+  function render({ standardId, type, row = {}, theme = 'dark', execution, showApproximateHeight } = {}) {
     const templates = getTemplates();
     const colors = getThemeColors(theme);
     const detailType = type || inferType(standardId);
@@ -223,7 +223,7 @@
         const d2 = safeRow.outerDiameterMm ?? safeRow.outer ?? safeRow.d2 ?? (d1 + 15.5);
         const s = safeRow.thicknessMm ?? safeRow.thickness ?? safeRow.s ?? safeRow.h ?? 5;
 
-        return templates.renderSpringWasher({ d, d1, d2, s, colors });
+        return templates.renderSpringWasher({ d, d1, d2, s, colors, showApproximateHeight });
       }
 
       case 'thread': {
@@ -256,8 +256,46 @@
     }
   }
 
+  function renderReference({standardId,type,row,pitchMm,execution,accuracyClass}) {
+    const positive = value => Number.isFinite(value) && value > 0;
+    if (!row || !positive(row.diameter)) return null;
+    const templates = getTemplates();
+    const colors = getThemeColors('light');
+    const {diameter:d, heightMm:m, acrossFlatsMm:s, capProfile} = row;
+    let svg;
+    let calculated;
+    let designationRow = row;
+
+    if (type === 'capped_nut') {
+      if (!capProfile || ![m,s,capProfile.bodyDiameterMm,capProfile.headHeightMm,capProfile.boreDepthMm].every(positive)) return null;
+      const profiles = globalThis.PassportProfiles;
+      if (!profiles) return null;
+      svg = templates.renderCappedNut({d,m,s,pitch:row.pitchMm,capProfile,colors,profiles});
+    } else if (type === 'thread') {
+      const pitches = (row.pitchesMm || []).filter(positive);
+      const pitch = pitches.includes(pitchMm) ? pitchMm : row.coarsePitchMm ?? pitches[0];
+      if (!positive(pitch)) return null;
+      const theoreticalHeightMm = Math.sqrt(3) * pitch / 2;
+      calculated = {label:'Теоретична висота профілю H',value:theoreticalHeightMm,unit:'мм'};
+      designationRow = {...row,pitch:new Intl.NumberFormat('uk-UA').format(pitch)};
+      svg = templates.renderThread({d,coarsePitchMm:row.coarsePitchMm,pitchesMm:row.finePitchesMm,
+        selectedPitchMm:pitch,theoreticalHeightMm,colors});
+    } else {
+      const required = {
+        hex_nut:[m,s],
+        washer:[row.innerDiameterMm,row.outerDiameterMm,row.thicknessMm],
+        spring_washer:[row.innerDiameterMm,row.outerDiameterMm,row.thicknessMm]
+      }[type];
+      if (!required?.every(positive)) return null;
+      svg = render({standardId,type,row,theme:'light',execution,showApproximateHeight:false});
+    }
+
+    return {svg,callout:getStandardCallout(standardId,designationRow,execution,accuracyClass),calculated};
+  }
+
   return {
     render,
+    renderReference,
     getStandardCallout,
     getThemeColors,
     THEMES

@@ -86,3 +86,49 @@ test('flange surface values, conflicting sources and incompatible filters follow
   assert.ok(Object.hasOwn(neck.selectedRow.faces, neck.face));
   assert.notEqual(neck.face, '999');
 });
+
+test('the drawing uses the three selected type Б cap dimensions and a blind bore', () => {
+  require('../component-imported-styles.js');
+  const {StandardsDrawingEngine: engine} = require('../standards-base/src/drawing-engine.js');
+  assert.equal(typeof engine.renderReference, 'function');
+  const standardId = 'gost-9064-75';
+  const row = size(standardId, 24, {type:'B'});
+  const drawing = engine.renderReference({standardId,type:'capped_nut',row});
+  assert.match(drawing.svg, /D₁.*40\s*мм/);
+  assert.match(drawing.svg, /l₀.*16\s*мм/);
+  assert.match(drawing.svg, /Глибина глухого отвору/);
+  assert.match(drawing.svg, /l\s*=\s*40\s*мм/);
+  assert.doesNotMatch(drawing.svg, /NaN|undefined/);
+  assert.match(drawing.svg, /V\s+\d+(?:\.\d+)?\s+H\s+\d+" fill="url\(#hatch_/);
+  const typeA = engine.renderReference({standardId,type:'hex_nut',row:size(standardId,24,{type:'A'})});
+  assert.match(typeA.svg, />24\s*мм<\/text>/);
+  assert.doesNotMatch(typeA.svg, /Глибина глухого отвору/);
+  assert.equal(engine.renderReference({standardId,type:'capped_nut',row:{...row,capProfile:null}}),null);
+});
+
+test('missing geometry is suppressed and the chosen pitch drives the thread profile', () => {
+  const {StandardsDrawingEngine: engine} = require('../standards-base/src/drawing-engine.js');
+  assert.equal(typeof engine.renderReference, 'function');
+  const washer = 'gost-11371-78';
+  assert.equal(engine.renderReference({standardId:washer,type:'washer',row:size(washer,33,{accuracyClass:'C'})}),null);
+  const standardId = 'gost-24705-2004';
+  const row = size(standardId,24);
+  const fine = engine.renderReference({standardId,type:'thread',row,pitchMm:1.5});
+  const coarse = engine.renderReference({standardId,type:'thread',row,pitchMm:3});
+  const path = value => value.svg.match(/<path d="([^"]+)" fill="url\(#hatch_/)[1];
+  assert.notEqual(path(fine),path(coarse));
+  assert.match(fine.callout,/М24×1,5/);
+  assert.match(fine.svg,/P = 1,5 мм/);
+  assert.match(fine.svg,/Розраховано/);
+  assert.equal(fine.calculated.value, 1.299038105676658);
+});
+
+test('flange drawing flags only dimensions with recorded calculated provenance', () => {
+  const {drawCandidate} = require('../flange-picker-drawing.js');
+  require('../flange-catalog.bundle.js');
+  const row = globalThis.GostFlangeCatalog.rows[0];
+  const flagged = drawCandidate(row,'1',null,{b:{calculated:true}});
+  assert.match(flagged, /b 8 мм · Розраховано/);
+  assert.equal((flagged.match(/Розраховано/g) || []).length,1);
+  assert.doesNotMatch(drawCandidate(row,'1'), /Розраховано/);
+});

@@ -101,7 +101,7 @@
     function buildHexNutMetrics(cx, baseY, d, nutType, spec) {
       const heightMm = nutType === 'B' ? spec.nutCapH : spec.nutM;
       const cap = nutType === 'B' && spec.nutS > 0
-        ? root.FlangeStandardsDB?.nuts?.['gost-9064-75']?.sizes[d]?.capProfile : null;
+        ? spec.capProfile ?? root.FlangeStandardsDB?.nuts?.['gost-9064-75']?.sizes[d]?.capProfile : null;
       const width = cap ? cap.bodyDiameterMm : spec.nutS;
       const scale = width > 0 ? Math.min(160 / width, 202 / heightMm) : null;
       const halfE = scale ? spec.nutS * scale / Math.sqrt(3) : 56 + d * 0.68;

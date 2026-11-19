@@ -12,26 +12,27 @@
   const bound = (value, low, high) => Math.min(Math.max(value, low), high);
   const number = value => Math.round(value * 1000) / 1000;
   const available = value => Number.isFinite(value) && value > 0;
+  const withOrigin = (key, label, origins) => origins?.[key]?.calculated ? `${label} · Розраховано` : label;
 
   function line(x1, y1, x2, y2, css = '') {
     return `<line x1="${number(x1)}" y1="${number(y1)}" x2="${number(x2)}" y2="${number(y2)}" class="${css}"/>`;
   }
 
-  function hSize(key, x1, x2, y, partY, label, active) {
+  function hSize(key, x1, x2, y, partY, label, active, origins) {
     return `<g data-size="${key}" class="${active === key ? 'fp-active' : ''}">
       ${line(x1,partY,x1,y+4,'fp-extension')}${line(x2,partY,x2,y+4,'fp-extension')}
       ${line(x1,y,x2,y,'fp-measure')}${line(x1-3,y+3,x1+3,y-3,'fp-measure')}${line(x2-3,y+3,x2+3,y-3,'fp-measure')}
-      <text x="${(x1+x2)/2}" y="${y-5}" text-anchor="middle">${label}</text></g>`;
+      <text x="${(x1+x2)/2}" y="${y-5}" text-anchor="middle">${withOrigin(key,label,origins)}</text></g>`;
   }
 
-  function vSize(key, x, y1, y2, partX, label, active) {
+  function vSize(key, x, y1, y2, partX, label, active, origins) {
     return `<g data-size="${key}" class="${active === key ? 'fp-active' : ''}">
       ${line(partX,y1,x+4,y1,'fp-extension')}${line(partX,y2,x+4,y2,'fp-extension')}
       ${line(x,y1,x,y2,'fp-measure')}${line(x-3,y1+3,x+3,y1-3,'fp-measure')}${line(x-3,y2+3,x+3,y2-3,'fp-measure')}
-      <text x="${x+6}" y="${(y1+y2)/2+4}">${label}</text></g>`;
+      <text x="${x+6}" y="${(y1+y2)/2+4}">${withOrigin(key,label,origins)}</text></g>`;
   }
 
-  function axial(row, face, active) {
+  function axial(row, face, active, origins) {
     const d = row.dimensions;
     const hub = row.standard === '12821' && [d.h4, d.Dm, d.Dn].every(available);
     const cx = 158;
@@ -61,17 +62,17 @@
       <rect x="${cx-pitch-hole}" y="${top}" width="${2*hole}" height="${plane-top}" class="fp-cut"/>
       ${surface ? line(cx+bore,plane,cx+pitch-hole,plane,'fp-accent-face') : ''}
       ${pipe === null ? '' : `${line(cx-pipe,54,cx-pipe,top,'fp-axis')}${line(cx+pipe,54,cx+pipe,top,'fp-axis')}
-        ${hSize('pipeOD',cx-pipe,cx+pipe,47,54,`dₙ труби ⌀${mm(d.pipeOD)}`,active)}`}
-      ${hSize('bore',cx-bore,cx+bore,150,plane,`${hub ? 'd₁' : 'dв'} ⌀${mm(d.bore)}`,active)}
-      ${hSize('D',cx-rim,cx+rim,174,plane,`D ⌀${mm(d.D)}`,active)}
-      ${vSize('b',273,top,plane,cx+rim,`b ${mm(d.b)}`,active)}
-      ${hub ? hSize('Dn',cx-end,cx+end,39,weld,`Dₙ ⌀${mm(d.Dn)}`,active)
-       + hSize('Dm',cx-base,cx+base,91,top,`Dₘ ⌀${mm(d.Dm)}`,active)
-       + vSize('h4',327,weld,plane,cx+rim,`h₄ ${mm(d.h4)}`,active) : ''}
+        ${hSize('pipeOD',cx-pipe,cx+pipe,47,54,`dₙ труби ⌀${mm(d.pipeOD)}`,active,origins)}`}
+      ${hSize('bore',cx-bore,cx+bore,150,plane,`${hub ? 'd₁' : 'dв'} ⌀${mm(d.bore)}`,active,origins)}
+      ${hSize('D',cx-rim,cx+rim,174,plane,`D ⌀${mm(d.D)}`,active,origins)}
+      ${vSize('b',273,top,plane,cx+rim,`b ${mm(d.b)}`,active,origins)}
+      ${hub ? hSize('Dn',cx-end,cx+end,39,weld,`Dₙ ⌀${mm(d.Dn)}`,active,origins)
+       + hSize('Dm',cx-base,cx+base,91,top,`Dₘ ⌀${mm(d.Dm)}`,active,origins)
+       + vSize('h4',327,weld,plane,cx+rim,`h₄ ${mm(d.h4)}`,active,origins) : ''}
     </svg>`;
   }
 
-  function front(row, active) {
+  function front(row, active, origins) {
     const d = row.dimensions, cx = 123, cy = 112, r = 74;
     const scale = 2 * r / d.D;
     const bore = bound(d.bore * scale / 2, 8, r - 8);
@@ -88,10 +89,10 @@
       <circle cx="${cx}" cy="${cy}" r="${pitch}" class="${active === 'D1' ? 'fp-active-circle' : 'fp-axis'}"/>
       <g class="${['n','d','bolt'].includes(active) ? 'fp-active-holes' : ''}">${holes.map(a =>
         `<circle cx="${number(cx+pitch*Math.cos(a))}" cy="${number(cy-pitch*Math.sin(a))}" r="${number(hole)}" class="fp-cut"/>`).join('')}</g>
-      ${hSize('D1',cx-pitch,cx+pitch,206,cy,`D₁ ${mm(d.D1)}`,active)}
+      ${hSize('D1',cx-pitch,cx+pitch,206,cy,`D₁ ${mm(d.D1)}`,active,origins)}
       <g data-size="d" class="${['n','d','bolt'].includes(active) ? 'fp-active' : ''}">
         ${line(cx1,cy1,cx1+23,43,'fp-measure')}${line(cx1+23,43,276,43,'fp-measure')}
-        <text x="276" y="38" text-anchor="end">n ${d.n} × ⌀${format(d.d)}</text>
+        <text x="276" y="38" text-anchor="end">${withOrigin('n',`n ${d.n}`,origins)} × ${withOrigin('d',`⌀${mm(d.d)}`,origins)}</text>
       </g>
     </svg>`;
   }
@@ -112,7 +113,7 @@
       points: {D2: [202,46], D5: [88,78], D6: [161,78], h: [202,62], h2: [161,66]}},
   };
 
-  function sealView(face, values, active) {
+  function sealView(face, values, active, origins) {
     const profile = faceProfiles[face];
     if (!profile || !values) return '';
     const shown = Object.entries(values).filter(([key, value]) => profile.points[key] && available(value));
@@ -127,14 +128,15 @@
         const [px, py] = profile.points[key];
         return `<g data-size="${key}" class="${focused ? 'fp-active' : ''}">
           ${focused ? `<circle cx="${px}" cy="${py}" r="3" fill="#ac5218"/>${line(px,py,285,y-4,'fp-measure')}${line(285,y-4,x-7,y-4,'fp-measure')}` : ''}
-          <text x="${x}" y="${y}">${dimensions[key]} ${mm(value)}</text>
+          <text x="${x}" y="${y}">${withOrigin(key,`${dimensions[key]} ${mm(value)}`,origins)}</text>
         </g>`;
       }).join('')}
     </svg>`;
   }
 
-  function drawCandidate(row, face, active) {
-    return axial(row, face, active) + front(row, active) + sealView(face, row.faces?.[face], active);
+  function drawCandidate(row, face, active, dimensionOrigins) {
+    return axial(row,face,active,dimensionOrigins) + front(row,active,dimensionOrigins)
+      + sealView(face,row.faces?.[face],active,dimensionOrigins);
   }
 
   const api = {drawCandidate, dimensions};

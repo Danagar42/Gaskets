@@ -183,7 +183,7 @@
         y2: yB,
         x: xL,
         xDim: xL - 25,
-        text: `${format(heightM)}`,
+        text: `${format(heightM)} мм`,
         colors
       })}
 
@@ -192,7 +192,7 @@
         x2: xR,
         y: yB,
         yDim: yB + 30,
-        text: `${format(widthS)}`,
+        text: `${format(widthS)} мм`,
         colors
       })}
 
@@ -235,6 +235,31 @@
    * 2. ШАБЛОН: Плоска шайба (ГОСТ 11371-78, 9065-75)
    * Піврозріз/розріз + вигляд зверху
    */
+  function renderCappedNut({ d, m, s, pitch, capProfile, colors, profiles }) {
+    const cx = 246;
+    const baseY = 268;
+    const metric = profiles.buildHexNutMetrics(cx,baseY,d,'B',{nutCapH:m,nutS:s,pitch,capProfile});
+    const {topY,scale} = metric;
+    const radius = capProfile.bodyDiameterMm * scale / 2;
+    const shoulder = topY + capProfile.headHeightMm * scale;
+    const blindEnd = baseY - capProfile.boreDepthMm * scale;
+    const steel = getUniqueId('steel');
+    const guides = [
+      drawLinearHorizontal({x1:cx-radius,x2:cx+radius,y:baseY,yDim:301,text:`D₁ = ${format(capProfile.bodyDiameterMm)} мм`,colors}),
+      drawLinearVertical({y1:topY,y2:shoulder,x:cx+s*scale/2,xDim:cx+radius+92,text:`l₀ = ${format(capProfile.headHeightMm)} мм`,colors}),
+      drawLinearVertical({y1:blindEnd,y2:baseY,x:cx+radius,xDim:cx+radius+92,text:`l = ${format(capProfile.boreDepthMm)} мм`,colors}),
+      drawLinearVertical({y1:topY,y2:baseY,x:cx-radius,xDim:cx-radius-24,text:`l₁ = ${format(m)} мм`,colors})
+    ];
+    return wrapSvg({themeColors:colors,title:`Гайка М${format(d)} типу Б, піврозріз`,content:`
+      <desc>Діаметр корпусу D₁ ${format(capProfile.bodyDiameterMm)} мм. Висота головки l₀ ${format(capProfile.headHeightMm)} мм. Глибина глухого отвору l ${format(capProfile.boreDepthMm)} мм.</desc>
+      <defs>${profiles.steelGradient(steel)}</defs>
+      <text x="246" y="34" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="700" fill="${colors.line}">Піврозріз гайки</text>
+      ${profiles.nutSide(metric,steel,'__HATCH_ID__')}
+      ${drawCenterline(cx,topY-14,cx,baseY+14,colors)}
+      ${guides.join('')}
+    `});
+  }
+
   function renderWasher({ d, d1, d2, s, colors }) {
     const nomD = n(d, 24);
     const innerD = n(d1, 25);
@@ -280,7 +305,7 @@
         y2: yB,
         x: cxSection - r2Px,
         xDim: cxSection - r2Px - 25,
-        text: `${format(thickS)}`,
+        text: `${format(thickS)} мм`,
         colors
       })}
 
@@ -290,7 +315,7 @@
         x2: cxSection + r1Px,
         y: yT,
         yDim: yT - 25,
-        text: `Ø ${format(innerD)}`,
+        text: `Ø ${format(innerD)} мм`,
         colors
       })}
 
@@ -300,7 +325,7 @@
         x2: cxSection + r2Px,
         y: yB,
         yDim: yB + 30,
-        text: `Ø ${format(outerD)}`,
+        text: `Ø ${format(outerD)} мм`,
         colors
       })}
 
@@ -332,7 +357,7 @@
    * 3. ШАБЛОН: Пружинна шайба (гровер) (ГОСТ 6402-70)
    * Розріз пружинної шайби з косим стиком/замком 15°
    */
-  function renderSpringWasher({ d, d1, d2, s, colors }) {
+  function renderSpringWasher({ d, d1, d2, s, colors, showApproximateHeight = true }) {
     const nomD = n(d, 24);
     const innerD = n(d1, 24.5);
     const outerD = n(d2, 40);
@@ -392,19 +417,19 @@
         y2: yB_left,
         x: cxSection - r2Px,
         xDim: cxSection - r2Px - 25,
-        text: `s = ${format(thickS)}`,
+        text: `s = ${format(thickS)} мм`,
         colors
       })}
 
       <!-- Free Height Dimension -->
-      ${drawLinearVertical({
+      ${showApproximateHeight ? drawLinearVertical({
         y1: yT_left,
         y2: yB_right,
         x: cxSection + r2Px,
         xDim: cxSection + r2Px + 25,
         text: `h ≈ ${format(thickS * 1.6)}`,
         colors
-      })}
+      }) : ''}
 
       <!-- Outer Diameter Dimension -->
       ${drawLinearHorizontal({
@@ -412,7 +437,7 @@
         x2: cxSection + r2Px,
         y: yB_right,
         yDim: yB_right + 30,
-        text: `Ø ${format(outerD)}`,
+        text: `Ø ${format(outerD)} мм`,
         colors
       })}
 
@@ -444,16 +469,16 @@
   /**
    * 4. ШАБЛОН: Профіль метричної різьби 60° (ГОСТ 24705-2004, ГОСТ 8724-2002)
    */
-  function renderThread({ d, coarsePitchMm, pitchesMm, colors }) {
+  function renderThread({ d, coarsePitchMm, pitchesMm, colors, selectedPitchMm, theoreticalHeightMm }) {
     const nomD = n(d, 24);
-    const pitch = n(coarsePitchMm, 3);
+    const pitch = n(selectedPitchMm ?? coarsePitchMm, 3);
     const pitches = Array.isArray(pitchesMm) && pitchesMm.length ? pitchesMm : [pitch];
 
     const viewW = 560;
     const viewH = 340;
 
     // Геометрія метричного трикутного профілю різьби 60°
-    const pitchPx = 76; // графічний крок на екрані
+    const pitchPx = selectedPitchMm == null ? 76 : 34 + 42 * pitch / (coarsePitchMm || pitch);
     const heightH = (Math.sqrt(3) / 2) * pitchPx; // теоретична висота трикутника H
     const truncCrest = heightH / 8; // зріз вершини H/8
     const truncRoot = heightH / 4; // зріз западини H/4
@@ -513,14 +538,14 @@
         <text x="14" y="24" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" font-weight="700" fill="${colors.dimText}">Параметри різьби М${format(nomD)}:</text>
         
         <text x="14" y="52" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• Номінальний d: <tspan font-weight="700" fill="${colors.dimText}">${format(nomD)} мм</tspan></text>
-        <text x="14" y="74" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• Великий крок P: <tspan font-weight="700" fill="${colors.dimText}">${format(pitch)} мм</tspan></text>
+        <text x="14" y="74" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• ${selectedPitchMm == null ? 'Великий' : 'Обраний'} крок P: <tspan font-weight="700" fill="${colors.dimText}">${format(pitch)} мм</tspan></text>
         <text x="14" y="96" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• Дрібні кроки:</text>
         <text x="24" y="116" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">${pitches.map(format).join(' · ')} мм</text>
 
         <line x1="14" y1="132" x2="181" y2="132" stroke="${colors.lineThin}" stroke-width="0.5" stroke-dasharray="2,2" />
 
-        <text x="14" y="152" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="500" fill="${colors.lineThin}">Теоретична висота:</text>
-        <text x="14" y="168" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="700" fill="${colors.dimText}">H = (√3 / 2) · P = ${format(Math.sqrt(3) * pitch / 2)} мм</text>
+        <text x="14" y="152" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="500" fill="${colors.lineThin}">${theoreticalHeightMm == null ? 'Теоретична висота:' : 'Теоретична висота · Розраховано'}</text>
+        <text x="14" y="168" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="700" fill="${colors.dimText}">H = (√3 / 2) · P = ${format(theoreticalHeightMm ?? Math.sqrt(3) * pitch / 2)} мм</text>
       </g>
     `;
 
@@ -628,6 +653,7 @@
 
   return {
     renderHexNut,
+    renderCappedNut,
     renderWasher,
     renderSpringWasher,
     renderThread,
