@@ -70,7 +70,10 @@ assert(report(node).missing['fastener.pitch']);node.fastener.pitch=String(catalo
 assert(!report(node).errors['fastener.pitch']);assert(!report(node).missing['fastener.pitch']);
 node=structuredClone(base);Object.assign(node.nut,{standardId:'gost-9064-75',typeId:'B',threadedHeight:''});
 assert(report(node).missing['nut.threadedHeight']);
-node.nut.threadedHeight=String(C.nutDimensions(catalog,node.nut.standardId,'24','B').heightMm+1);
+node.fastener.nominalDiameter='24';
+node.nut.threadedHeight='40';
+assert(!report(node).errors['nut.threadedHeight']);
+node.nut.threadedHeight='41';
 assert(report(node).errors['nut.threadedHeight']);
 node=structuredClone(base);node.extras=[{id:C.id(),name:'Проставка',thickness:'-1',area:'',material:null}];
 assert(report(node).errors['extras.0.thickness']);assert(report(node).missing['extras.0.area']);

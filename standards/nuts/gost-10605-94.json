@@ -8,14 +8,15 @@
   "fields": {
     "heightMm": {
       "symbol": "m",
-      "description": "Номінальна висота гайки",
+      "description": "Максимальна висота гайки",
       "unit": "mm"
     }
   },
   "source": {
-    "url": "https://meganorm.ru/mega_doc/norm/gost_gosudarstvennyj-standart/2/gost_10605-94_mezhgosudarstvennyj_standart_gayki_shestigrannye.html",
+    "url": "https://files.stroyinf.ru/Data1/6/6023/",
     "section": "Таблиця розмірів m та S",
-    "verification": "Звірено з ГОСТ 10605-94 та базою КОМПАС-3D v25 (ПОЛИНОМ)"
+    "verification": "Звірено з ГОСТ 10605-94 та базою КОМПАС-3D v25 (ПОЛИНОМ)",
+    "notes": "У картці наведено максимальну висоту m та номінальний розмір S під ключ."
   },
   "nonPreferredDiametersMm": [
     52,

@@ -4,6 +4,8 @@ const {test} = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const core = require('../core.js');
+const picker = require('../flange-picker.js');
 const {StandardsCatalogAdapter: adapter} = require('../standards-base/src/catalog-adapter.js');
 require('../standards.bundle.js');
 require('../component-imported-styles.js');
@@ -55,6 +57,21 @@ test('nut, washer and pitch options preserve available and missing catalog data'
   assert.deepEqual(size('gost-24705-2004', 24).pitchesMm, [3, 2, 1.5, 1, 0.75]);
 });
 
+test('ГОСТ 9064-75 card matches the published dimensions for the digitized range', () => {
+  const id = 'gost-9064-75';
+  const typeA = card(id,{type:'A'}).tables[0].rows;
+  assert.deepEqual(typeA.map(row => [row.diameter,row.heightMm,row.acrossFlatsMm]),[
+    [10,10,17], [12,12,19], [16,16,24], [20,20,30], [22,22,32], [24,24,36], [27,27,41],
+    [30,30,46], [36,36,55], [42,42,65], [48,48,75], [52,52,80], [56,56,85], [60,60,90]
+  ]);
+  const typeB = card(id,{type:'B'}).tables[0].rows;
+  assert.deepEqual(typeB.map(row => [row.diameter,row.heightMm,row.acrossFlatsMm,row.bodyDiameterMm,row.headHeightMm,row.boreDepthMm]),[
+    [12,35,13,24,10,21], [16,40,17,28,12,26], [20,50,22,32,12,32], [22,55,27,36,12,36],
+    [24,65,27,40,16,40], [27,70,32,48,18,40], [30,75,32,48,20,43], [36,80,36,55,20,49],
+    [42,95,41,65,25,56], [48,105,46,75,25,64], [52,112,55,85,30,70], [56,130,55,85,35,76], [60,135,60,90,35,81]
+  ]);
+});
+
 test('gasket and torque tables show numeric values and recorded source status', () => {
   assert.equal(typeof adapter.getReferenceCard, 'function');
   const torque = card('universal-table-1');
@@ -66,6 +83,51 @@ test('gasket and torque tables show numeric values and recorded source status', 
   assert.ok(gasket.sources.some(source => source.documentId === null));
   assert.equal(gasket.tables.find(table => table.id === 'expansion').rows.find(row => row.temperature === 400).value, 1.61);
   assert.equal(gasket.drawingKind, null);
+});
+
+test('all catalog fastener sizes and options agree between reference and calculation', () => {
+  for (const standard of Object.values(db.nuts)) {
+    for (const type of Object.keys(standard.types || {A:null})) {
+      const rows = new Map(card(standard.id,{type}).tables[0].rows.map(row => [row.diameter,row]));
+      for (const diameter of Object.keys(standard.sizes).map(Number)) {
+        const shown = rows.get(diameter);
+        const used = core.nutDimensions(db,standard.id,diameter,type);
+        assert.equal(!!shown,!!used,`${standard.document} M${diameter} ${type}`);
+        if (!shown) continue;
+        assert.deepEqual([shown.heightMm,shown.acrossFlatsMm,shown.isNonPreferred],
+          [used.heightMm,used.acrossFlatsMm,used.nonPreferred]);
+        if (type === 'B') assert.equal(used.maxThreadedHeightMm,shown.boreDepthMm);
+      }
+    }
+  }
+  for (const standard of Object.values(db.washers)) {
+    for (const [execution,classes] of Object.entries(standard.executions)) {
+      for (const accuracyClass of classes) {
+        const rows = new Map(card(standard.id,{execution,accuracyClass}).tables[0].rows.map(row => [row.diameter,row]));
+        for (const diameter of Object.keys(standard.sizes).map(Number)) {
+          const shown = rows.get(diameter);
+          const used = core.washerDimensions(db,standard.id,diameter,accuracyClass,execution);
+          assert.equal(shown?.innerDiameterMm ?? null,used?.innerDiameterMm ?? null);
+          if (!used) continue;
+          assert.deepEqual([shown.outerDiameterMm,shown.thicknessMm],[used.outerDiameterMm,used.thicknessMm]);
+        }
+      }
+    }
+  }
+  for (const standard of Object.values(db.threads)) {
+    for (const row of card(standard.id).tables[0].rows) {
+      assert.equal(core.threadPitch(db,standard.id,row.diameter)?.pitchMm ?? null,row.coarsePitchMm);
+      for (const pitch of row.pitchesMm) {
+        assert.equal(core.threadPitch(db,standard.id,row.diameter,pitch)?.pitchMm,pitch);
+      }
+    }
+  }
+  for (const table of Object.values(db.torques)) {
+    for (const row of card(table.id).tables[0].rows) {
+      const used = core.standardTorque(db,row.diameter,table.id);
+      assert.deepEqual([row.minNm,row.maxNm],[used.minNm,used.maxNm]);
+    }
+  }
 });
 
 test('flange cards expose the original 925 rows and both supporting documents', () => {
@@ -110,6 +172,43 @@ test('flange surface values, conflicting sources and incompatible filters follow
   assert.equal(neck.selectedRow.pressure, 0.1);
   assert.ok(Object.hasOwn(neck.selectedRow.faces, neck.face));
   assert.notEqual(neck.face, '999');
+});
+
+test('all flange rows keep the selected figures and fill only matching questionnaire fields', () => {
+  require('../flange-catalog.bundle.js');
+  const catalog = globalThis.GostFlangeCatalog;
+  const flange = require('../standards-base/src/flange-reference.js');
+  const rejected = [];
+  for (const row of catalog.rows) {
+    const dimensions = row.dimensions;
+    const id = `gost-${row.standard}-80`;
+    const filters = {dn:row.dn,pressure:row.pressure,series:row.series,pipe:row.pipe};
+    for (const [face,surface] of Object.entries(row.faces)) {
+      const card = flange.getCard(catalog,id,{...filters,face},row.id);
+      assert.equal(card.selectedRow,row);
+      assert.equal(card.face,face);
+      const shown = Object.fromEntries(card.tables[1].rows.map(item => [item.id,item.value]));
+      for (const [key,value] of Object.entries({...dimensions,...surface})) {
+        assert.equal(shown[key],key === 'bolt' ? `М${value}` : value,`${row.id} / ${face}`);
+      }
+    }
+    const part = {mode:'pending',height:'18',wallCylinder:'7',wallCone:'10'};
+    const node = {connection:{kind:'flange-flange'},gasket:{mode:'area'},
+      fastener:{nominalDiameter:String(dimensions.bolt),count:String(dimensions.n)},
+      flanges:{sideA:{...part},sideB:{...part}}};
+    const result = picker.applyCandidate(node,row,'both');
+    if (!result.applied) {
+      rejected.push(row.id);
+      assert.ok(dimensions.d < dimensions.bolt);
+      assert.deepEqual(node.flanges,{sideA:part,sideB:part});
+      continue;
+    }
+    const expected = {...part,mode:'flange',innerDiameter:String(dimensions.bore),outerDiameter:String(dimensions.D),
+      boltCircle:String(dimensions.D1),holeDiameter:String(dimensions.d)};
+    assert.deepEqual(node.flanges,{sideA:expected,sideB:expected},row.id);
+    assert.deepEqual(node.fastener,{nominalDiameter:String(dimensions.bolt),count:String(dimensions.n)});
+  }
+  assert.deepEqual(rejected,['12820:2.5:200:-:1','12820:2.5:200:-:2','12821:2.5:200:-:1','12821:2.5:200:-:2']);
 });
 
 test('the drawing uses the three selected type Б cap dimensions and a blind bore', () => {

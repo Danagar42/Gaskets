@@ -1,26 +1,28 @@
 {
   "id": "gost-iso-4032-2014",
   "document": "ГОСТ ISO 4032-2014",
-  "title": "Гайки шестигранні нормальні (тип 1). Класи точності А і В (ISO 4032 / DIN 934)",
+  "title": "Гайки шестигранні нормальні (тип 1). Класи точності А і В",
   "type": "hex_nut",
   "unit": "mm",
   "fields": {
     "heightMm": {
       "symbol": "m",
-      "description": "Номінальна висота гайки",
+      "description": "Максимальна висота гайки",
       "unit": "mm"
     }
   },
   "source": {
-    "url": "https://meganorm.ru/mega_doc/norm/gost_gosudarstvennyj-standart/3/gost_iso_4032-2014_mezhgosudarstvennyj_standart_gayki.html",
-    "section": "Таблиця 1 розмірів m та S",
-    "verification": "Звірено з ГОСТ ISO 4032-2014 / DIN 934 та базою КОМПАС-3D v25"
+    "url": "https://meganorm.ru/mega_doc/norm/gost_gosudarstvennyj-standart/2/gost_ISO_4032-2014_mezhgosudarstvennyy_standart_gayki.html",
+    "section": "Таблиці 1 і 2 розмірів m та s",
+    "verification": "Звірено з ГОСТ ISO 4032-2014.",
+    "notes": "У картці наведено максимальну висоту m та номінальний (максимальний) розмір s під ключ для оцифрованих типорозмірів. Зірочкою позначено типорозміри з таблиці 2 для обмеженого застосування."
   },
   "nonPreferredDiametersMm": [
     14,
     18,
     22,
-    27
+    27,
+    33
   ],
   "sizes": {
     "2": {

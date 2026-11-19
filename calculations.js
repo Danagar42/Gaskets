@@ -73,7 +73,7 @@
     const washer = C.washerDimensions(catalog,node.washers.standardId,node.fastener.nominalDiameter,node.washers.accuracyClass,node.washers.execution);
     const nuts = mount.nuts.map(key=>{
       const nut = C.nutAt(node,key), size = C.nutDimensions(catalog,nut.standardId,node.fastener.nominalDiameter,nut.typeId);
-      return {name:size?.typeId === 'B' ? 'Різьбова частина ковпачкової гайки' : 'Гайка',height:size?.typeId === 'B' ? C.number(nut.threadedHeight) : size?.heightMm,max:size?.heightMm,threaded:true};
+      return {name:size?.typeId === 'B' ? 'Різьбова частина ковпачкової гайки' : 'Гайка',height:size?.typeId === 'B' ? C.number(nut.threadedHeight) : size?.heightMm,max:size?.maxThreadedHeightMm,threaded:true};
     });
     const parts = [
       {name:node.connection.sideA.name || 'Деталь А', height:mount.body === 'sideA' ? engagementHeight(node,mount) : node.connection.sideA.height, threaded:mount.body === 'sideA'},
@@ -85,7 +85,7 @@
     for (const side of ['a','b']) if ([side,'both'].includes(node.washers.placement)) parts.push({name:`Шайба, бік ${side === 'a' ? 'А' : 'Б'}`,height:washer?.thicknessMm,threaded:false});
     const lengths = packageLengths(parts);
     if (nuts.some(nut=>nut.height > nut.max)) {
-      lengths.issues.push('Висота різьбової частини не може перевищувати загальну висоту ковпачкової гайки.');
+      lengths.issues.push('Висота різьбової частини перевищує допустиму межу для ковпачкової гайки.');
       Object.keys(lengths.values).forEach(key => { lengths.values[key] = null; });
     }
     return { gasket:gasketGeometry(node.gasket,node.fastener.count), thread:threadGeometry(node.fastener.nominalDiameter,pitch?.pitchMm,node.fastener.axialHoleDiameter ?? '0'), lengths };
@@ -417,7 +417,7 @@
       const size = C.nutDimensions(catalog,nut.standardId,node.fastener.nominalDiameter,nut.typeId);
       if (size?.typeId !== 'B') return size?.heightMm;
       const h = C.number(nut.threadedHeight);
-      return h > 0 && h <= size.heightMm ? h : null;
+      return h > 0 && h <= size.maxThreadedHeightMm ? h : null;
     }
     const second = mount.nuts.length === 2 && C.nutAt(node,'nutB');
     const torsionFactor = node.fastener.lubricated === true ? 0.13 : node.fastener.lubricated === false ? 0.18 : null;

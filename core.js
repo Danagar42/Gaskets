@@ -154,6 +154,7 @@
       document: standard.document,
       nominalDiameterMm: diameter,
       heightMm: height,
+      maxThreadedHeightMm: nutType === 'B' && hasTypes ? Math.min(height, row.capProfile?.boreDepthMm ?? height) : height,
       heightSymbol: hasTypes ? type.heightSymbol : 'm',
       heightLabel: hasTypes ? type.heightLabel : 'Висота гайки',
       acrossFlatsMm: hasTypes ? row.acrossFlatsByTypeMm?.[nutType] ?? null : row.acrossFlatsMm ?? null,
@@ -409,7 +410,7 @@
       if (nut.typeId !== 'B') continue;
       const heightPath = `${path}.threadedHeight`;
       const height = numeric(heightPath), size = nutDimensions(catalog,nut.standardId,d,nut.typeId);
-      if (height !== null && size && height > size.heightMm) fail(heightPath,`Різьбова частина не може бути вищою за гайку (${formatNumber(size.heightMm)} мм).`);
+      if (height !== null && size && height > size.maxThreadedHeightMm) fail(heightPath,`Допустима висота різьбової частини — до ${formatNumber(size.maxThreadedHeightMm)} мм.`);
     }
     if (node.washers.placement !== 'none' && catalog?.washers) {
       requireText('washers.standardId','Оберіть стандарт шайб.');
@@ -492,7 +493,7 @@
     if (mount.body && (node.fastener.type !== 'stud' || node.fastener.engagement !== undefined)) result.fastener &&= positive(mount.engagement);
     if (mount.nuts.length) result.nut = mount.nuts.every(key=>{
       const nut = nutAt(node,key), size = standardsDb && nutDimensions(standardsDb,nut.standardId,node.fastener.nominalDiameter,nut.typeId);
-      return validMaterial((nut === node.nut ? 'nut' : 'nutB')+'.material') && (!standardsDb || !!size) && (size?.typeId !== 'B' || (positive(nut.threadedHeight) && number(nut.threadedHeight) <= size.heightMm));
+      return validMaterial((nut === node.nut ? 'nut' : 'nutB')+'.material') && (!standardsDb || !!size) && (size?.typeId !== 'B' || (positive(nut.threadedHeight) && number(nut.threadedHeight) <= size.maxThreadedHeightMm));
     });
     result.washers = node.washers.placement === 'none' || (validMaterial('washers.material') && (!standardsDb || !!washerDimensions(standardsDb, node.washers.standardId || 'gost-11371-78', node.fastener.nominalDiameter, node.washers.accuracyClass || 'A', node.washers.execution || '1')));
     result.extras = node.extras.every((item,index) => positive(item.thickness) && positive(item.area) && validMaterial(`extras.${index}.material`));

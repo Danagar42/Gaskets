@@ -16,9 +16,10 @@
     "1": 10
   },
   "source": {
-    "url": "https://meganorm.ru/Data2/1/4294828/4294828230.pdf",
+    "url": "https://rcsm-ural.ru/uploadedFiles/images/standarts/shaiby/9065-75.pdf",
     "section": "Таблиця розмірів, стор. 1–2",
-    "verification": "Звірено з офіційним виданням ГОСТ 9065-75 та базою КОМПАС-3D v25 (ПОЛИНОМ)"
+    "verification": "Товщину М10, М12 і М16 звірено з таблицею ГОСТ 9065-75.",
+    "notes": "Для зовнішнього діаметра d₂ шайби М22 у каталозі наведено 39 мм за відтвореннями стандарту. В окремих електронних копіях числа різняться. Для конкретного виробу звірте цей розмір з його кресленням."
   },
   "sizes": {
     "10": {
@@ -26,21 +27,21 @@
         "A": 11.0
       },
       "outerDiameterMm": 18.0,
-      "thicknessMm": 2.0
+      "thicknessMm": 2.5
     },
     "12": {
       "innerDiameterByClassMm": {
         "A": 13.0
       },
       "outerDiameterMm": 24.0,
-      "thicknessMm": 3.0
+      "thicknessMm": 2.5
     },
     "16": {
       "innerDiameterByClassMm": {
         "A": 17.0
       },
       "outerDiameterMm": 30.0,
-      "thicknessMm": 3.0
+      "thicknessMm": 2.5
     },
     "20": {
       "innerDiameterByClassMm": {

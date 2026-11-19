@@ -67,7 +67,7 @@ node.nut.standardId = 'gost-9064-75'; node.nut.typeId = 'B'; node.nut.threadedHe
 assert.equal(G.nodeStrength(node,[material],catalog).states.normal.threads.nut.actual,null);
 node.nut.threadedHeight = '20';
 assert.notEqual(G.nodeStrength(node,[material],catalog).states.normal.threads.nut.actual,null);
-node.nut.threadedHeight = '1000';
+node.nut.threadedHeight = '41';
 assert.equal(G.nodeStrength(node,[material],catalog).states.normal.threads.nut.actual,null);
 node.nut.threadedHeight = '20';
 material.grades[0].data.RTp[50] = 100;

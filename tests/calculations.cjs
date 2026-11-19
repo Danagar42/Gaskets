@@ -50,7 +50,7 @@ node.nut.standardId = 'gost-9064-75'; node.nut.typeId = 'B';
 assert.equal(G.nodeGeometry(node,catalog).lengths.values.threadedLength,null,'Do not use total cap-nut height as threaded height');
 node.nut.threadedHeight = '20';
 close(G.nodeGeometry(node,catalog).lengths.values.threadedLength,20);
-node.nut.threadedHeight = '999';
+node.nut.threadedHeight = '41';
 assert.equal(G.nodeGeometry(node,catalog).lengths.values.threadedLength,null);
 node.connection.sideA.height = '';
 assert.equal(G.nodeGeometry(node,catalog).lengths.values.smoothLength,null,'Missing height must not disappear as zero');

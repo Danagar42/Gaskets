@@ -16,9 +16,10 @@
     "1": 2
   },
   "source": {
-    "url": "https://meganorm.ru/mega_doc/norm/gost_gosudarstvennyj-standart/2/gost_6402-70_mezhgosudarstvennyj_standart_shajby_pruzhinnye.html",
+    "url": "https://opm.ru/GOSTI_PDF/gost_6402-70.pdf",
     "section": "Таблиця 1, виконання 1 (нормальні)",
-    "verification": "Звірено з ГОСТ 6402-70 та базою КОМПАС-3D v25 (ПОЛИНОМ)"
+    "verification": "Звірено з ГОСТ 6402-70 та базою КОМПАС-3D v25 (ПОЛИНОМ)",
+    "notes": "Зовнішній діаметр d₂ — розрахунковий габарит за номінальними розмірами нормальної шайби (тип Н): d₁ + 2s. У таблиці ГОСТ окремого d₂ немає."
   },
   "sizes": {
     "2": {

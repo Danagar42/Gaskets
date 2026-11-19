@@ -156,7 +156,7 @@
   background: #f7faf9;
 }
 .standards-reference .reference-canvas svg { display: block; width: 100%; height: auto; }
-.standards-reference .reference-canvas.fp-drawings { padding: 5px; background: #f4f8fb; }
+.standards-reference .reference-canvas.fp-drawings { padding: 5px; }
 .standards-reference .reference-canvas.fp-drawings svg { max-height: none; }
 .standards-reference .reference-figure figcaption { color: #536981; font-size: 12px; text-align: right; }
 .standards-reference .reference-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }

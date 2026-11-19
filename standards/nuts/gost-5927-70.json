@@ -13,11 +13,14 @@
     }
   },
   "source": {
-    "url": "https://meganorm.ru/mega_doc/norm/gost_gosudarstvennyj-standart/2/gost_5927-70_mezhgosudarstvennyj_standart_gayki.html",
-    "section": "Таблиця розмірів m та S",
-    "verification": "Звірено з ГОСТ 5927-70 та базою КОМПАС-3D v25 (ПОЛИНОМ)"
+    "url": "https://files.stroyinf.ru/Data1/6/6237/",
+    "section": "Основна таблиця розмірів m та S, додаток 2",
+    "verification": "Звірено з ГОСТ 5927-70 та базою КОМПАС-3D v25 (ПОЛИНОМ)",
+    "notes": "Для М10 і М22 каталог використовує дозволений додатком 2 розмір S (17 і 32 мм відповідно). Основна таблиця для цих розмірів дає 16 і 34 мм."
   },
   "nonPreferredDiametersMm": [
+    1,
+    1.4,
     3.5,
     14,
     18,

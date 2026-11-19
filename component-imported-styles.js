@@ -4,8 +4,8 @@
     const drafting = Object.freeze({bg:'#f7faf9', line:'#2b434f', lineThin:'#526872', axis:'#c56b1a',
       dim:'#006d73', dimText:'#005f66', hatchStroke:'#415b66', threadThin:'#006d73',
       font:'Segoe UI Variable, Segoe UI, Arial, sans-serif'});
-    const dimensionMarker = id => `<marker id="${id}" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
-      <path d="M0 0 L8 3 L0 6 Z" fill="${drafting.dim}"/>
+    const dimensionMarker = (id, fill = drafting.dim) => `<marker id="${id}" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L8 3 L0 6 Z" fill="${fill}"/>
     </marker>`;
     function buildFastenerGeometry(cx, topY, botY, halfW, pitchPx, threadLenPx, threadAtTop = true) {
       const chamfer = Math.min(5.5, halfW * 0.24);

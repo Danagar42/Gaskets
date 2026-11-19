@@ -114,6 +114,10 @@ assert.strictEqual(g24.thicknessMm, 5.5);
 
 // 8. Table Data: Flange Washer ГОСТ 9065-75
 const flangeWasherData = StandardsCatalogAdapter.getTableData(db, 'gost-9065-75');
+for (const diameter of [10, 12, 16]) {
+  assert.equal(flangeWasherData.rows.find(row => row.diameter === diameter).thicknessMm, 2.5, `ГОСТ 9065-75 М${diameter}`);
+  assert.equal(require('../core.js').washerDimensions(db, 'gost-9065-75', diameter).thicknessMm, 2.5);
+}
 const fw24 = flangeWasherData.rows.find(r => r.diameter === 24);
 assert.ok(fw24, 'Flange washer M24 must exist');
 assert.strictEqual(fw24.innerDiameterMm, 25);
