@@ -23,10 +23,16 @@
     return Number.isInteger(count) ? count : null;
   };
   const empty = value => String(value ?? '').trim() === '';
-  const intendedCircles = node => sidePair.map(side => {
-    const part = node.flanges?.[side];
-    return part?.mode === 'none' ? null : positive(part?.boltCircle);
-  });
+  const intendedCircles = node => {
+    if (node.connection?.kind === 'flange-cover') {
+      const part = node.flanges?.sideA;
+      return [part?.mode === 'none' ? null : positive(part?.boltCircle), null];
+    }
+    return sidePair.map(side => {
+      const part = node.flanges?.[side];
+      return part?.mode === 'none' ? null : positive(part?.boltCircle);
+    });
+  };
 
   function gasketFit(node, row, circle = row.dimensions.D1) {
     const gasket = node.gasket;
@@ -94,8 +100,10 @@
 
   function previewApplication(node, row, target) {
     const preview = {sides: {}, errors: [], count: 0};
-    if (node.connection?.kind !== 'flange-flange' || !['sideA', 'sideB', 'both'].includes(target)) {
-      preview.errors.push('Виберіть сторону вузла «фланець — фланець».');
+    const isFlangeFlange = node.connection?.kind === 'flange-flange';
+    const isFlangeCover = node.connection?.kind === 'flange-cover';
+    if ((!isFlangeFlange && !isFlangeCover) || !['sideA', 'sideB', 'both'].includes(target) || (isFlangeCover && target !== 'sideA')) {
+      preview.errors.push('Виберіть сторону вузла «фланець — фланець» або фланець у з’єднанні «фланець — кришка».');
       return preview;
     }
     if (!knownAttachment(node, row)) preview.errors.push('Різьба або кількість отворів фланця не відповідає кріпленню вузла.');
@@ -200,6 +208,7 @@
     const count = fastenerCount(node);
     const nominal = positive(node.fastener?.nominalDiameter);
     const ring = node.gasket?.mode === 'ring' && positive(node.gasket.outerDiameter);
+    const isFlangeCover = node.connection?.kind === 'flange-cover';
     dialog.innerHTML = `
       <div class="fp-shell">
         <header class="fp-head">
@@ -235,8 +244,8 @@
         <footer class="fp-bottom">
           <fieldset class="fp-target"><legend>Застосувати до</legend>
             <label><input type="radio" name="fp-target" value="sideA"><span>А</span></label>
-            <label><input type="radio" name="fp-target" value="sideB"><span>Б</span></label>
-            <label><input type="radio" name="fp-target" value="both"><span>Обидва</span></label>
+            <label><input type="radio" name="fp-target" value="sideB" ${isFlangeCover ? 'disabled' : ''}><span>Б</span></label>
+            <label><input type="radio" name="fp-target" value="both" ${isFlangeCover ? 'disabled' : ''}><span>Обидва</span></label>
           </fieldset>
           <div class="fp-apply-area"><span class="fp-apply-status" role="status"></span>
             <button type="button" class="fp-link fp-review" hidden>Переглянути зміни</button>
@@ -282,7 +291,7 @@
     let face = null;
     let activeSize = null;
     let measurements = {};
-    let target = sidePair.includes(side) ? side : 'sideA';
+    let target = isFlangeCover ? 'sideA' : (sidePair.includes(side) ? side : 'sideA');
     $(`input[name="fp-target"][value="${target}"]`).checked = true;
     const apply = $('.fp-apply');
     const draw = () => {
@@ -493,6 +502,7 @@
       $('.fp-candidates').children[firstAdded]?.focus();
     });
     $('.fp-target').addEventListener('change', event => {
+      if (isFlangeCover && event.target.value !== 'sideA') return;
       target = event.target.value;
       renderTransfer();
       if (selected) $('.fp-transfer').scrollIntoView({block:'nearest'});

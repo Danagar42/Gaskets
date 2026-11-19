@@ -529,50 +529,8 @@
     return {values,checks,bounds,issues:[...new Set(issues)],validGeometry,cExempt,castIron:!!input.castIron};
   }
 
-  function automaticHoleDiameter(nominalDiameter) {
-    if (C.automaticHoleDiameter) return C.automaticHoleDiameter(nominalDiameter);
-    const d = C.number(nominalDiameter);
-    if (!d || d <= 0) return null;
-    return d + (d >= 27 ? 3 : d > 10 ? 2 : 1);
-  }
-
-  function flangeGeometryAdvisories({boltCircle, count, holeDiameter, outerDiameter, innerDiameter} = {}) {
-    const Dw = C.number(boltCircle);
-    const z = C.number(count);
-    const d0 = C.number(holeDiameter);
-    const Df = C.number(outerDiameter);
-    const D = C.number(innerDiameter);
-
-    const pitch = (Dw > 0 && z > 0) ? (Math.PI * Dw) / z : null;
-    const pitchRatio = (pitch !== null && d0 > 0) ? pitch / d0 : null;
-    const edgeOuter = (Df > 0 && Dw > 0) ? (Df - Dw) / 2 : null;
-    const edgeInner = (Dw > 0 && D > 0) ? (Dw - D) / 2 : null;
-
-    const warnings = [];
-    if (pitchRatio !== null) {
-      if (pitchRatio < 2.5) {
-        warnings.push(`Крок кріплень малий (t_b = ${pitch.toFixed(1).replace('.', ',')} мм, ${pitchRatio.toFixed(2).replace('.', ',')} d₀ < 2,5 d₀): ускладнений монтаж ключем.`);
-      } else if (pitchRatio > 6) {
-        warnings.push(`Крок кріплень великий (t_b = ${pitch.toFixed(1).replace('.', ',')} мм, ${pitchRatio.toFixed(2).replace('.', ',')} d₀ > 6 d₀): ризик нерівномірного обтиснення прокладки.`);
-      }
-    }
-    if (d0 > 0) {
-      if (edgeOuter !== null && edgeOuter > 0 && edgeOuter < d0) {
-        warnings.push(`Зовнішня кромка фланця мала (${edgeOuter.toFixed(1).replace('.', ',')} мм < d₀ = ${C.formatNumber(d0)} мм).`);
-      }
-      if (edgeInner !== null && edgeInner > 0 && edgeInner < d0) {
-        warnings.push(`Внутрішня кромка фланця мала (${edgeInner.toFixed(1).replace('.', ',')} мм < d₀ = ${C.formatNumber(d0)} мм).`);
-      }
-    }
-
-    return {
-      boltPitch: pitch,
-      pitchRatio,
-      edgeOuter,
-      edgeInner,
-      warnings
-    };
-  }
+  const automaticHoleDiameter = C.automaticHoleDiameter;
+  const flangeGeometryAdvisories = C.flangeGeometryAdvisories;
 
   function nodeFlanges(node,materials,catalog,calculatedForces) {
     const forces = calculatedForces || nodeForces(node,materials,catalog);
@@ -689,9 +647,120 @@
     const verification = {minimum:verify(lower.roundedTorqueNm),maximum:verify(upper.roundedTorqueNm)};
     const complete = !Object.keys(inputValidation.errors).length && flanges.configured && lower.torqueNm !== null && upper.torqueNm !== null && Object.values(verification).every(result => result && !result.pending.length && !result.omitted.length);
     return {minimum:lower,maximum:upper,rawOverlap,roundedOverlap,verification,flanges,complete,inputErrors:inputValidation.errors,
-      rangePassed:complete && roundedOverlap && Object.values(verification).every(result => !result.failed.length)};
+      rangePassed:complete && roundedOverlap && Object.values(verification).every(result => !result.failed.length),
+      forces,strength};
   }
-  const api = { automaticHoleDiameter, flangeGeometryAdvisories, gasketGeometry, threadGeometry, packageLengths, nodeGeometry, compliance, nodeCompliance, linearExpansion, thermalForce, nodeThermal, forces, nodeForces, strength, nodeStrength, flange, nodeFlanges, maximum, nodeLimits };
+
+  function tighteningLimitsDiagnostic(limits, node, catalog) {
+    const hasMin = typeof limits?.minimum?.torqueNm === 'number' && Number.isFinite(limits.minimum.torqueNm);
+    const hasMax = typeof limits?.maximum?.torqueNm === 'number' && Number.isFinite(limits.maximum.torqueNm);
+    if (!hasMin || !hasMax) {
+      return {
+        status: 'incomplete',
+        reason: 'Неповні дані для розрахунку або межі моменту не визначені.',
+        bottleneck: 'none',
+        recommendations: []
+      };
+    }
+
+    const rawOverlap = limits.rawOverlap !== undefined ? limits.rawOverlap : (limits.minimum.torqueNm <= limits.maximum.torqueNm);
+    const roundedOverlap = limits.roundedOverlap !== undefined ? limits.roundedOverlap : (
+      (limits.minimum.roundedTorqueNm !== undefined && limits.maximum.roundedTorqueNm !== undefined)
+        ? (limits.minimum.roundedTorqueNm <= limits.maximum.roundedTorqueNm)
+        : (Math.ceil(limits.minimum.torqueNm) <= Math.floor(limits.maximum.torqueNm))
+    );
+
+    if (rawOverlap && roundedOverlap) {
+      return {
+        status: 'ok',
+        reason: 'Діапазон допустимих моментів затягування сумісний.',
+        bottleneck: null,
+        recommendations: []
+      };
+    }
+    if (rawOverlap && !roundedOverlap) {
+      const minNm = limits.minimum.torqueNm !== null ? C.formatNumber(limits.minimum.torqueNm) : '—';
+      const maxNm = limits.maximum.torqueNm !== null ? C.formatNumber(limits.maximum.torqueNm) : '—';
+      return {
+        status: 'rounding_conflict',
+        reason: 'Після цілочисельного округлення діапазон порожній: між розрахунковими межами немає цілого значення моменту в Н·м.',
+        bottleneck: 'rounding',
+        recommendations: [
+          `Розрахунковий інтервал між нижньою (${minNm} Н·м) та верхньою (${maxNm} Н·м) межами менший за 1 Н·м.`,
+          'Збільшити клас міцності або номінальний діаметр шпильок/болтів для підвищення верхньої межі.',
+          'Зменшити ширину або площу контакту прокладки для зниження нижньої межі.'
+        ]
+      };
+    }
+
+    const minGov = limits.minimum.governing || [];
+    const maxGov = limits.maximum.governing || [];
+    const minKeys = new Set((minGov || []).filter(item => item && item.key).map(item => item.key));
+    const maxKeys = new Set((maxGov || []).filter(item => item && item.key).map(item => item.key));
+    const maxSides = new Set((maxGov || []).filter(item => item && item.side).map(item => item.side));
+
+    const hasThread = maxKeys.has('fastenerNut') || maxKeys.has('fastenerNutB') || maxKeys.has('fastenerBody') || maxKeys.has('nut') || maxKeys.has('nutB') || maxKeys.has('body');
+    const hasAxial = maxKeys.has('axial') || maxKeys.has('thermalAxial');
+    const hasFlange = [...maxKeys].some(k => k && k.startsWith('bending')) || (maxGov || []).some(item => item && (item.section || item.side));
+
+    let bottleneck = 'gasket dimensions/material';
+    if (hasThread) {
+      bottleneck = 'thread shear';
+    } else if (hasAxial) {
+      bottleneck = 'stud tensile strength';
+    } else if (hasFlange) {
+      bottleneck = 'flange bending';
+    }
+
+    const recommendations = [];
+
+    if (hasThread) {
+      if (maxKeys.has('body')) {
+        recommendations.push('Збільшити довжину зачеплення різьби в корпусі або застосувати матеріал корпусу з вищою міцністю.');
+      }
+      if (maxKeys.has('nut') || maxKeys.has('nutB')) {
+        recommendations.push('Застосувати гайку вищого типу (наприклад, тип В) або матеріал гайки вищого класу міцності.');
+      }
+      if (maxKeys.has('fastenerNut') || maxKeys.has('fastenerNutB') || maxKeys.has('fastenerBody')) {
+        recommendations.push('Збільшити номінальний діаметр різьби шпильок/болтів або застосувати матеріал кріплення з вищим допустимим напруженням.');
+      }
+    }
+
+    if (hasAxial) {
+      recommendations.push('Збільшити номінальний діаметр шпильок/болтів або їх кількість.');
+      recommendations.push('Застосувати матеріал шпильок/болтів з вищою границею текучості (вищий клас міцності).');
+      if (maxKeys.has('thermalAxial')) {
+        recommendations.push('Зменшити різницю температур або застосувати матеріали з близькими коефіцієнтами лінійного розширення для зниження температурного зусилля Ft.');
+      }
+    }
+
+    if (hasFlange) {
+      const sideNames = [];
+      if (maxSides.has('sideA')) sideNames.push(node?.connection?.sideA?.name || 'сторона А');
+      if (maxSides.has('sideB')) sideNames.push(node?.connection?.sideB?.name || 'сторона Б');
+      const sideSuffix = sideNames.length ? ` (${sideNames.join(', ')})` : '';
+      recommendations.push(`Збільшити товщину тарілки фланця${sideSuffix} для підвищення опору вигину.`);
+      recommendations.push(`Збільшити товщину конічної або циліндричної втулки фланця (s₁ / s₂)${sideSuffix}.`);
+      recommendations.push('Зменшити плече дії згинального моменту шляхом наближення кола отворів до прокладки/втулки.');
+      recommendations.push(`Застосувати матеріал фланця з вищою границею текучості${sideSuffix}.`);
+    }
+
+    if (minKeys.has('seating')) {
+      recommendations.push('Зменшити ширину або площу контакту прокладки (збільшити Dвн або зменшити Dзовн) для зниження зусилля початкового обтиснення.');
+      recommendations.push('Застосувати матеріал прокладки з нижчим питомим тиском обтиснення q_обж.');
+    } else if (minKeys.has('sealingRequired') || minKeys.has('pressureRequired')) {
+      recommendations.push('Зменшити розрахункову ширину прокладки або обрати матеріал з нижчим коефіцієнтом m.');
+    }
+
+    return {
+      status: 'conflict',
+      reason: 'Нижня межа моменту перевищує верхню: необхідне зусилля герметизації більше за несучу здатність вузла.',
+      bottleneck,
+      recommendations: [...new Set(recommendations)]
+    };
+  }
+
+  const api = { automaticHoleDiameter, flangeGeometryAdvisories, gasketGeometry, threadGeometry, packageLengths, nodeGeometry, compliance, nodeCompliance, linearExpansion, thermalForce, nodeThermal, forces, nodeForces, strength, nodeStrength, flange, nodeFlanges, maximum, nodeLimits, tighteningLimitsDiagnostic };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlangeCalculations = api;
 })(globalThis);

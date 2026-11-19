@@ -38,7 +38,7 @@
     ? preciseNumber.format(value) : String(value ?? '').replaceAll('.', ',');
   const displayInputNumber = value => C.number(value) === null ? editableNumber(value) : displayNumber(value,{useGrouping:false});
   const plural = (value, words) => words[value % 10 === 1 && value % 100 !== 11 ? 0 : value % 10 >= 2 && value % 10 <= 4 && (value % 100 < 12 || value % 100 > 14) ? 1 : 2];
-  const kindName = kind => ({'body-cover':'Кришка — корпус','flange-flange':'Фланець — фланець',custom:'Інше з’єднання'}[kind] || 'З’єднання');
+  const kindName = kind => ({'body-cover':'Кришка — корпус','flange-flange':'Фланець — фланець','flange-cover':'Фланець — кришка',custom:'Інше з’єднання'}[kind] || 'З’єднання');
   const date = value => { const parsed = new Date(value); return Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString('uk-UA', {day:'2-digit',month:'2-digit',year:'numeric'}) : '—'; };
   let workspace = { version:1, folders:[], equipment:[], preferences:{ recent:[], favorites:[] } };
   let storageError = '';
@@ -62,6 +62,23 @@
   let searchText = '';
   let sortBy = 'recent';
   let saveTimer;
+  let calcDebounceTimer = null;
+  function scheduleCalculationUpdate() {
+    clearTimeout(calcDebounceTimer);
+    calcDebounceTimer = setTimeout(() => {
+      calcDebounceTimer = null;
+      updateStatuses();
+      refreshResults();
+    }, 120);
+  }
+  function flushCalculationUpdate() {
+    if (calcDebounceTimer) {
+      clearTimeout(calcDebounceTimer);
+      calcDebounceTimer = null;
+      updateStatuses();
+      refreshResults();
+    }
+  }
   let toastTimer;
   let saveFailed = false;
   let importedProject = null;
@@ -91,6 +108,12 @@
     fileShell('Файл проєкту',`<p>Збережіть папки, обладнання та анкети вузлів в окремий файл. Матеріали зберігаються як посилання на актуальну базу.</p><button class="button primary" data-action="save-project">${icon('save')}Зберегти JSON</button><hr><label class="field" for="project-upload"><strong>Відкрити резервну копію</strong><span>Спочатку покажемо вміст файла та спосіб відновлення.</span><input id="project-upload" type="file" accept=".json,application/json"></label><div id="import-preview" hidden></div>${backupAvailable ? '<button class="button secondary" data-action="download-before-import">Завантажити стан до останнього відновлення</button>' : ''}`);
   }
   fileDialog.addEventListener('change',async event => {
+    if (event.target.dataset?.excelNodeSelect !== undefined) {
+      const anyChecked = Boolean(fileDialog.querySelector('[data-excel-node-select]:checked'));
+      const downloadBtn = fileDialog.querySelector('[data-action="download-excel"]');
+      if (downloadBtn) downloadBtn.disabled = !anyChecked;
+      return;
+    }
     if (event.target.id !== 'project-upload') return;
     importedProject = null;
     document.querySelector('#import-preview').hidden = true;
@@ -126,29 +149,81 @@
       toast('Проєкт імпортовано.');
     } catch (error) { fileError(new Error(`Імпорт не виконано: ${error.message}`)); }
   }
+  let excelTemplateLoadingPromise = null;
+  function ensureExcelTemplate() {
+    if (typeof window !== 'undefined' && window.FlangeExcelTemplate) {
+      return Promise.resolve(window.FlangeExcelTemplate);
+    }
+    if (typeof globalThis !== 'undefined' && globalThis.FlangeExcelTemplate) {
+      if (typeof window !== 'undefined') window.FlangeExcelTemplate = globalThis.FlangeExcelTemplate;
+      return Promise.resolve(globalThis.FlangeExcelTemplate);
+    }
+    if (typeof document === 'undefined' || !document.head || typeof document.head.append !== 'function') {
+      return Promise.resolve(null);
+    }
+    if (excelTemplateLoadingPromise) return excelTemplateLoadingPromise;
+    excelTemplateLoadingPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[src="excel-template.bundle.js"]');
+      if (existing) {
+        existing.addEventListener('load', () => resolve(window.FlangeExcelTemplate));
+        existing.addEventListener('error', () => reject(new Error('Не вдалося завантажити шаблон Excel.')));
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'excel-template.bundle.js';
+      script.onload = () => resolve(window.FlangeExcelTemplate);
+      script.onerror = () => reject(new Error('Не вдалося завантажити файл шаблону Excel.'));
+      document.head.append(script);
+    });
+    return excelTemplateLoadingPromise;
+  }
   function openExcelExport(scope) {
     if (!currentEquipment) return;
     const nodes = scope === 'equipment' ? currentEquipment.nodes : [currentNode];
     if (!nodes.length || !nodes[0]) { toast('Спочатку додайте вузол.'); return; }
+    ensureExcelTemplate();
     excelContext = {equipment:JSON.parse(JSON.stringify(currentEquipment)),nodes:JSON.parse(JSON.stringify(nodes))};
     const reports = nodes.map(node => window.FlangeExcel.inspect(node,materials,standardsDb));
-    const blocked = reports.some(report => report.errors.length);
+    const validCount = reports.filter(r => !r.errors.length).length;
+    const blocked = validCount === 0;
     fileShell('Експорт у початковий Excel',`<p>${esc(currentEquipment.name)} · ${nodes.length} ${plural(nodes.length,['вузол','вузли','вузлів'])}. Кожен вузол матиме окремий редагований аркуш із формулами.</p><div class="export-nodes">${nodes.map((node,index) => {
       const report = reports[index];
+      const hasErrors = report.errors.length > 0;
       const torque = C.number(node.fastener.torqueNm) ?? (report.limits.maximum.roundedTorqueNm >= 0 ? report.limits.maximum.roundedTorqueNm : '');
-      const issue = report.errors.length ? nextInputIssue(node,report.limits) : null;
-      return `<section class="export-node"><h3>${esc(node.name)}</h3>${report.errors.length ? `${issue ? issueMarkup(issue,node) + '<details class="export-diagnostics"><summary>Деталі перевірки</summary>' : ''}<ul class="dialog-error">${report.errors.map(error => `<li>${esc(error)}</li>`).join('')}</ul>${issue ? '</details>' : ''}` : `<div class="field"><label for="excel-torque-${index}">Момент перевірки, Н·м</label><input id="excel-torque-${index}" data-excel-torque="${index}" inputmode="decimal" value="${esc(displayInputNumber(torque))}" data-raw-value="${esc(editableNumber(torque))}" required><small>Для C6 у файлі. ${C.number(node.fastener.torqueNm) === null ? 'Запропоновано округлений максимум.' : 'Взято з анкети.'} Анкета не зміниться.</small></div>`}${report.warnings.map(warning => `<p class="file-warning">${esc(warning)}</p>`).join('')}</section>`;
+      const issue = hasErrors ? nextInputIssue(node,report.limits) : null;
+      return `<section class="export-node"><div class="export-node-header"><label class="export-node-select"><input type="checkbox" data-excel-node-select="${index}" ${!hasErrors ? 'checked' : 'disabled'}><strong>${esc(node.name)}</strong></label>${hasErrors ? '<span class="status-badge error" style="font-size:11px;color:#b13d42;font-weight:600;">Потребує заповнення</span>' : ''}</div>${hasErrors ? `${issue ? issueMarkup(issue,node) + '<details class="export-diagnostics"><summary>Деталі перевірки</summary>' : ''}<ul class="dialog-error">${report.errors.map(error => `<li>${esc(error)}</li>`).join('')}</ul>${issue ? '</details>' : ''}` : `<div class="field"><label for="excel-torque-${index}">Момент перевірки, Н·м</label><input id="excel-torque-${index}" data-excel-torque="${index}" inputmode="decimal" value="${esc(displayInputNumber(torque))}" data-raw-value="${esc(editableNumber(torque))}" required><small>Для C6 у файлі. ${C.number(node.fastener.torqueNm) === null ? 'Запропоновано округлений максимум.' : 'Взято з анкети.'} Анкета не зміниться.</small></div>`}${report.warnings.map(warning => `<p class="file-warning">${esc(warning)}</p>`).join('')}</section>`;
     }).join('')}</div><p class="file-warning">Схеми й оформлення збережені з шаблону; зображення не перебудовуються за новими розмірами. Характеристики металів беруться з поточної бази на момент експорту. Excel перерахує формули при відкритті.</p>`, `<button class="button secondary" data-action="close-file">Закрити</button><button class="button primary" data-action="download-excel" ${blocked ? 'disabled' : ''}>${icon('file')}Завантажити XLSX</button>`);
   }
   async function exportExcel(button) {
     if (!excelContext) return;
     const context = excelContext;
-    const torques = [...fileDialog.querySelectorAll('[data-excel-torque]')].map(input => C.number(input.dataset.rawValue ?? input.value));
-    if (torques.some(value => value === null || value < 0)) { fileError(new Error('Вкажіть невід’ємний момент перевірки для кожного вузла.')); return; }
+    const checkboxList = [...fileDialog.querySelectorAll('[data-excel-node-select]')].filter(el => el.dataset?.excelNodeSelect !== undefined);
+    const checkedList = [...fileDialog.querySelectorAll('[data-excel-node-select]:checked')].filter(el => el.dataset?.excelNodeSelect !== undefined && el.checked !== false);
+    if (checkboxList.length > 0 && !checkedList.length) {
+      fileError(new Error('Оберіть хоча б один валідний вузол для експорту.'));
+      return;
+    }
+    let exportNodes = context.nodes;
+    let exportTorques;
+    if (checkboxList.length > 0 && checkedList.length > 0) {
+      const selectedIndices = checkedList.map(cb => Number(cb.dataset.excelNodeSelect));
+      exportNodes = selectedIndices.map(i => context.nodes[i]);
+      exportTorques = selectedIndices.map(i => {
+        const input = fileDialog.querySelector(`[data-excel-torque="${i}"]`);
+        return C.number(input?.dataset?.rawValue ?? input?.value);
+      });
+    } else {
+      exportTorques = [...fileDialog.querySelectorAll('[data-excel-torque]')].map(input => C.number(input.dataset?.rawValue ?? input.value));
+    }
+    if (exportTorques.some(value => value === null || value < 0)) {
+      fileError(new Error('Вкажіть невід’ємний момент перевірки для кожного вузла.'));
+      return;
+    }
     button.disabled = true; button.textContent = 'Формую файл…';
     try {
-      const result = await window.FlangeExcel.create({...context,materials,catalog:standardsDb,torques});
-      const label = `${context.equipment.name}${context.nodes.length === 1 ? ' — '+context.nodes[0].name : ''}`.replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').slice(0,160);
+      await ensureExcelTemplate();
+      const result = await window.FlangeExcel.create({equipment: context.equipment, nodes: exportNodes, materials, catalog: standardsDb, torques: exportTorques});
+      const label = `${context.equipment.name}${exportNodes.length === 1 ? ' — '+exportNodes[0].name : ''}`.replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').slice(0,160);
       download(result,`${label}.xlsx`,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       if (button.isConnected) fileDialog.close();
       toast('Excel сформовано. Формули перерахуються при відкритті файла.');
@@ -163,10 +238,14 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
       saveFailed = false;
       setSaveStatus('Збережено в цьому браузері');
+      const banner = document.querySelector('#storage-warning-banner');
+      if (banner) banner.hidden = true;
     } catch (error) {
       if (!saveFailed) toast('Не вдалося зберегти зміни. Перевірте доступне місце та налаштування браузера.');
       saveFailed = true;
       setSaveStatus('Зміни не збережено', true);
+      const banner = document.querySelector('#storage-warning-banner');
+      if (banner) banner.hidden = false;
     }
   }
   function setSaveStatus(text, error = false) {
@@ -271,7 +350,7 @@
     const axisTotal = Math.max(axisMax - axisMin, 1);
     const toPct = value => Math.max(4, Math.min(96, Math.round(((value - axisMin) / axisTotal) * 1000) / 10));
     const width = (left, right) => Math.max(2, toPct(right) - toPct(left));
-    const marker = (kind, value) => `<span class="ruler-marker-label ${kind}" style="left:${toPct(value)}%;"><span class="m-txt">${displayNumber(value)}</span></span>`;
+    const marker = (kind, value, staggered = false) => `<span class="ruler-marker-label ${kind}${staggered ? ' staggered' : ''}" style="left:${toPct(value)}%;"><span class="m-txt">${displayNumber(value)}</span></span>`;
     const tick = (kind, value, label) => `<div class="ruler-tick ${kind}" style="left:${toPct(value)}%;" title="${label}: ${displayNumber(value)} Н·м"></div>`;
     const zone = (kind, min, max, title) => `<div class="ruler-zone ${kind}" style="left:${toPct(min)}%;width:${width(min,max)}%;" title="${esc(title)}"></div>`;
     const {overlapMin, overlapMax} = comparison;
@@ -282,10 +361,13 @@
       cMin > tMin ? zone('capped-zone low',tMin,cMin,`Недостатній затяг для герметичності (потрібно ≥ ${displayNumber(cMin)} Н·м)`) : ''
     ].join('') : '';
 
+    const tuCollide = target && (tMax !== tMin) && Math.abs(toPct(tMax) - toPct(tMin)) < 12;
+    const calcCollide = (cMax !== cMin) && Math.abs(toPct(cMax) - toPct(cMin)) < 12;
+
     return `<div class="node-torque-cell"${comparison.description ? ` title="${esc(comparison.description)}"` : ''}>
       ${summary}
       <div class="torque-ruler-wrapper" aria-hidden="true">
-        ${target ? `<div class="ruler-labels-track top">${marker('tu',tMin)}${tMax === tMin ? '' : marker('tu',tMax)}</div>` : ''}
+        ${target ? `<div class="ruler-labels-track top ${tuCollide ? 'collision' : ''}">${marker('tu',tMin)}${tMax === tMin ? '' : marker('tu',tMax,tuCollide)}</div>` : ''}
         <div class="ruler-scale-track">
           ${zone('calc-zone',cMin,cMax,`Розрахунковий діапазон: ${displayNumber(cMin)}–${displayNumber(cMax)} Н·м`)}
           ${targetZones}
@@ -293,7 +375,7 @@
           ${target ? tick('tu',tMin,'Мін. за ТУ') + tick('tu',tMax,'Макс. за ТУ') : ''}
           ${tick('calc',cMax,'Макс. розрахунковий')}
         </div>
-        <div class="ruler-labels-track bottom">${marker('calc',cMin)}${cMax === cMin ? '' : marker('calc',cMax)}</div>
+        <div class="ruler-labels-track bottom ${calcCollide ? 'collision' : ''}">${marker('calc',cMin)}${cMax === cMin ? '' : marker('calc',cMax,calcCollide)}</div>
       </div>
     </div>`;
   }
@@ -398,6 +480,37 @@
     }
   }
 
+  const PRESSURE_UNITS = {
+    MPa: { id: 'MPa', label: 'МПа', toMpa: 1, fromMpa: 1 },
+    bar: { id: 'bar', label: 'bar', toMpa: 0.1, fromMpa: 10 },
+    kgf: { id: 'kgf', label: 'кгс/см²', toMpa: 0.0980665, fromMpa: 1 / 0.0980665 }
+  };
+  function getPressureUnit(key) {
+    return currentNode?.operating?.[key]?.pressureUnit || 'MPa';
+  }
+  function convertMpaToUnit(mpaValue, unit) {
+    const num = C.number(mpaValue);
+    if (num === null) return '';
+    const factor = PRESSURE_UNITS[unit]?.fromMpa ?? 1;
+    const val = num * factor;
+    return Math.round(val * 10000) / 10000;
+  }
+  function convertUnitToMpa(unitValue, unit) {
+    const num = C.number(unitValue);
+    if (num === null) return '';
+    const factor = PRESSURE_UNITS[unit]?.toMpa ?? 1;
+    const mpa = num * factor;
+    return String(Math.round(mpa * 1000000) / 1000000);
+  }
+  function pressureField(key, label) {
+    const unit = getPressureUnit(key);
+    const mpaValue = currentNode?.operating?.[key]?.pressure;
+    const displayVal = convertMpaToUnit(mpaValue, unit);
+    const path = `operating.${key}.pressure`;
+    const fieldId = `field-operating-${key}-pressure`;
+    return `<div class="field"><label for="${fieldId}">Тиск</label><div class="input-unit pressure-unit-group"><input id="${fieldId}" aria-describedby="${fieldId}-error" data-field="${path}" data-pressure-key="${key}" value="${esc(displayInputNumber(displayVal))}" data-raw-value="${esc(editableNumber(displayVal))}" inputmode="decimal" data-number="true" data-min="0" data-positive="false" autocomplete="off" placeholder="—"><select class="pressure-unit-select" data-pressure-unit="${key}" aria-label="Одиниця вимірювання тиску ${label}"><option value="MPa" ${unit === 'MPa' ? 'selected' : ''}>МПа</option><option value="bar" ${unit === 'bar' ? 'selected' : ''}>bar</option><option value="kgf" ${unit === 'kgf' ? 'selected' : ''}>кгс/см²</option></select></div><p id="${fieldId}-error" class="field-error" aria-live="polite" hidden></p></div>`;
+  }
+
   function field(path, label, unit = '', settings = {}) {
     const rawValue = C.get(currentNode,path);
     const value = unit ? displayInputNumber(rawValue) : (rawValue ?? '');
@@ -492,6 +605,7 @@
     const labels = { RTm:'Rm', RTp:'Rp', E:'E', Alpha:'α' };
     for (const button of document.querySelectorAll('.material-card')) {
       const path = button.dataset.path;
+      if (!path) continue;
       const missing = C.missingMaterialProperties(currentNode,materials,path);
       button.querySelector('.material-warning')?.remove();
       if (missing.length) {
@@ -576,7 +690,8 @@
     return '';
   }
   function operatingCoefficients(mode) {
-    const referenceId = currentNode.gasket.referenceId || C.DEFAULT_GASKET_REFERENCE_ID;
+    if (!mode || !currentNode?.operating?.[mode]) return '';
+    const referenceId = currentNode.gasket?.referenceId || C.DEFAULT_GASKET_REFERENCE_ID;
     const {medium,temperature} = currentNode.operating[mode];
     const m = C.gasketMediumCoefficient(standardsDb,referenceId,medium);
     const a = C.gasketExpansionAt(standardsDb,referenceId,temperature);
@@ -645,7 +760,7 @@
   function schemeMismatch(node) {
     if (node.connection.kind === 'custom') return false;
     const body = C.mounting(node).body;
-    return node.connection.kind === 'flange-flange' ? Boolean(body) : body !== 'sideB';
+    return ['flange-flange','flange-cover'].includes(node.connection.kind) ? Boolean(body) : body !== 'sideB';
   }
   function setFastenerArrangement(bolt,tapped) {
     currentNode.fastener.type = tapped ? (bolt ? 'body-bolt' : 'stud') : (bolt ? 'bolt' : 'through-stud');
@@ -677,7 +792,7 @@
       if (saved && !options.some(([value])=>value === saved)) options.push([saved,saved+' · немає коефіцієнта']);
       return [['','Оберіть…'],...options];
     }
-    const operating = `<div class="case-grid">${[['normal','НУЕ'],['hydro','ГВ']].map(([key,label]) => `<div><p class="case-title ${key === 'hydro' ? 'hydro' : ''}"><span></span>${label}</p>${field(`operating.${key}.pressure`,'Тиск','МПа',{positive:false})}${field(`operating.${key}.temperature`,'Температура','°C',{min:-273.15,positive:false})}${selectField(`operating.${key}.medium`,'Середовище',mediumOptions(node.operating[key].medium))}${operatingCoefficients(key)}</div>`).join('')}</div>`;
+    const operating = `<div class="case-grid">${[['normal','НУЕ'],['hydro','ГВ']].map(([key,label]) => `<div><p class="case-title ${key === 'hydro' ? 'hydro' : ''}"><span></span>${label}</p>${pressureField(key,label)}${field(`operating.${key}.temperature`,'Температура','°C',{min:-273.15,positive:false})}${selectField(`operating.${key}.medium`,'Середовище',mediumOptions(node.operating[key].medium))}${operatingCoefficients(key)}</div>`).join('')}</div>`;
     const gasket = `<p class="section-intro">Графітова прокладка · параметри з таблиць Б.1–Б.2 застосовуються автоматично.</p><div class="choice-group" role="group" aria-label="Спосіб задання прокладки"><button data-action="gasket-mode" data-value="ring" aria-pressed="${node.gasket.mode === 'ring'}">Кільцева</button><button data-action="gasket-mode" data-value="area" aria-pressed="${node.gasket.mode === 'area'}">Задати площі</button></div>${field('gasket.thickness','Товщина прокладки','мм')}${node.gasket.mode === 'ring' ? `<div class="field-row">${field('gasket.outerDiameter','Зовнішній Ø','мм')}${field('gasket.innerDiameter','Внутрішній Ø','мм')}</div><label class="check-label"><input type="checkbox" data-field="gasket.hasHoles" ${node.gasket.hasHoles ? 'checked' : ''}>Отвори під кріплення</label>${node.gasket.hasHoles ? field('gasket.holeDiameter','Діаметр отвору','мм',{help:'Кількість отворів дорівнює кількості кріплень.'}) : ''}` : `${field('gasket.effectiveArea','Ефективна площа перерізу Aпр','мм²')}${field('gasket.pressureArea','Площа дії гідростатичного зусилля A','мм²')}<div class="gasket-help">${gasketSketch()}<span>Це дві різні площі. Введіть готові значення для нестандартної форми прокладки.</span></div>`}`;
     const threadStandardOptions = Object.values(standardsDb.threads || {}).map(item => [item.id, `${item.document} — ${item.title}`]);
     const selectedThreadStandard = standardsDb.threads?.[node.fastener.threadStandardId];
@@ -696,7 +811,7 @@
       : !resolvedPitch
         ? (threadSize ? '<p class="field-help">Для цього діаметра немає великого кроку. Оберіть допустимий крок вручну.</p>' : '<p class="field-help">Крок буде доступний після введення стандартного номінального діаметра.</p>')
         : '';
-    const scheme = `${selectField('connection.kind','Що з’єднуємо?',[['flange-flange','Фланець — фланець'],['body-cover','Кришка — корпус'],['custom','Інша конструкція']])}
+    const scheme = `${selectField('connection.kind','Що з’єднуємо?',[['flange-flange','Фланець — фланець'],['flange-cover','Фланець — кришка'],['body-cover','Кришка — корпус'],['custom','Інша конструкція']])}
       ${mountingChoice}
       ${mismatch ? `<div class="scheme-mismatch" role="status"><p>У збереженому вузлі інша схема кріплення. Для цього шаблону ${expectedBody ? 'кріплення вкручується в корпус Б' : 'потрібне наскрізне кріплення'}.</p><button type="button" class="button secondary" data-action="align-fastener">Узгодити кріплення</button></div>` : ''}
       ${schemeSelect('fastener','Чим стягуємо?',[['stud','Шпилькою'],['bolt','Болтом']],mount.bolt ? 'bolt' : 'stud')}
@@ -765,7 +880,8 @@
       const holePlaceholder = autoHole ? `Авто (${displayNumber(autoHole)} мм)` : 'Авто';
       const advContent = flangeAdvisoryMarkup(side, node);
       const advisoryHtml = node.flanges[side].mode === 'flange' ? `<div class="advisory-box" data-flange-advisory="${side}" style="margin:8px 0 12px;padding:8px 12px;background:#f8faff;border:1px solid #dce5f2;border-radius:6px;${advContent ? '' : 'display:none;'}">${advContent}</div>` : '';
-      return `<h3 class="part-section-title">Геометрія фланця</h3>${node.connection.kind === 'flange-flange' && node.flanges[side].mode !== 'none' ? `<button type="button" class="button secondary fp-entry" data-action="open-flange-picker" data-side="${side}">Підібрати з каталогу</button>` : ''}${selectField(path+'.mode',`Перевірка фланця ${side === 'sideA' ? 'А' : 'Б'}`,[['pending','Оберіть застосовність…'],['flange','Розраховувати як фланець'],['none','Ця перевірка не застосовується']])}${node.flanges[side].mode === 'flange' ? `${formField}<div class="field-row">${field(path+'.innerDiameter','Внутрішній діаметр D','мм')}${field(path+'.boltCircle','Коло кріплень Dw','мм')}</div><div class="field-row">${field(path+'.outerDiameter','Зовнішній діаметр Df','мм')}${field(path+'.holeDiameter','Отвір під кріплення d₀','мм',{placeholder:holePlaceholder,help:'Порожнє поле — автоматично за діаметром кріплення.'})}</div>${advisoryHtml}<div class="field-row">${field(path+'.height','Товщина диска hf','мм')}${field(path+'.coneHeight','Висота конуса h₂','мм',{positive:form === 'conical',readOnly:form === 'flat'})}</div><p class="field-help">hf — товщина диска біля ущільнювальної поверхні. h₂ — висота конічної частини; для плоского фланця — 0.</p><div class="field-row">${field(path+'.wallCylinder','Товщина стінки s₁','мм')}${field(path+'.wallCone',form === 'conical' ? 'Товщина конуса s₂' : 'Товщина s₂','мм')}</div>${node.gasket.mode === 'area' ? field(path+'.gasketDiameter','Розрахунковий діаметр Dm','мм',{help:'Для ручних площ задайте діаметр, потрібний для плеча e₂.'}) : '<p class="field-help">Dm береться за середнім діаметром кільцевої прокладки. Матеріал — із відповідної деталі з’єднання.</p>'}` : ''}`;
+      const canPickFlange = (node.connection.kind === 'flange-flange' || (node.connection.kind === 'flange-cover' && side === 'sideA')) && node.flanges[side].mode !== 'none';
+      return `<h3 class="part-section-title">Геометрія фланця</h3>${canPickFlange ? `<button type="button" class="button secondary fp-entry" data-action="open-flange-picker" data-side="${side}">Підібрати з каталогу</button>` : ''}${selectField(path+'.mode',`Перевірка фланця ${side === 'sideA' ? 'А' : 'Б'}`,[['pending','Оберіть застосовність…'],['flange','Розраховувати як фланець'],['none','Ця перевірка не застосовується']])}${node.flanges[side].mode === 'flange' ? `${formField}<div class="field-row">${field(path+'.innerDiameter','Внутрішній діаметр D','мм')}${field(path+'.boltCircle','Коло кріплень Dw','мм')}</div><div class="field-row">${field(path+'.outerDiameter','Зовнішній діаметр Df','мм')}${field(path+'.holeDiameter','Отвір під кріплення d₀','мм',{placeholder:holePlaceholder,help:'Порожнє поле — автоматично за діаметром кріплення.'})}</div>${advisoryHtml}<div class="field-row">${field(path+'.height','Товщина диска hf','мм')}${field(path+'.coneHeight','Висота конуса h₂','мм',{positive:form === 'conical',readOnly:form === 'flat'})}</div><p class="field-help">hf — товщина диска біля ущільнювальної поверхні. h₂ — висота конічної частини; для плоского фланця — 0.</p><div class="field-row">${field(path+'.wallCylinder','Товщина стінки s₁','мм')}${field(path+'.wallCone',form === 'conical' ? 'Товщина конуса s₂' : 'Товщина s₂','мм')}</div>${node.gasket.mode === 'area' ? field(path+'.gasketDiameter','Розрахунковий діаметр Dm','мм',{help:'Для ручних площ задайте діаметр, потрібний для плеча e₂.'}) : '<p class="field-help">Dm береться за середнім діаметром кільцевої прокладки. Матеріал — із відповідної деталі з’єднання.</p>'}` : ''}`;
     }
 
     const connection = `<div class="connection-tabs" role="tablist" aria-label="Деталі з’єднання">${['sideA','sideB'].map((side,index)=>
@@ -840,7 +956,7 @@
     main.querySelector('.settings').hidden = calculation;
     main.querySelector('#results').hidden = !calculation;
     main.querySelector('#component-preview').hidden = calculation || operating;
-    main.querySelector('[data-action="editor-previous"]').disabled = key === editorSteps[0];
+    main.querySelectorAll('[data-action="editor-previous"]').forEach(btn => { btn.disabled = key === editorSteps[0]; });
     main.querySelector('[data-action="editor-next"]').textContent = key === 'extras' ? 'До розрахунку' : 'Далі';
     main.querySelector('.settings').scrollTop = 0;
     refreshComponentPreview();
@@ -883,9 +999,9 @@
       }
       const tapped = mount.body === key;
       if (tapped && C.positive(mount.engagement)) dims.push('Зачеплення '+displayNumber(mount.engagement));
-      const role = node.connection.kind === 'body-cover' ? (key === 'sideA' ? 'cover' : 'body') : node.connection.kind === 'flange-flange' ? 'flange' : 'part';
+      const role = node.connection.kind === 'body-cover' ? (key === 'sideA' ? 'cover' : 'body') : node.connection.kind === 'flange-cover' ? (key === 'sideA' ? 'flange' : 'cover') : node.connection.kind === 'flange-flange' ? 'flange' : 'part';
       parts.push({kind:'side',side:key,role,upper:key === 'sideA',tapped,engagement:tapped ? C.number(mount.engagement) : null,
-        memberHeight:C.number(member.height),flanged:active || node.connection.kind === 'flange-flange',
+        memberHeight:C.number(member.height),flanged:active || (node.connection.kind === 'flange-cover' ? key === 'sideA' : node.connection.kind === 'flange-flange'),
         flange:active ? {...Object.fromEntries(['outerDiameter','innerDiameter','boltCircle','coneHeight','wallCylinder','wallCone','holeDiameter','gasketDiameter'].map(k=>[k,C.number(flange[k])])),form:C.flangeForm(flange)} : null,
         thickness:(active && C.number(flange.height)) || C.number(member.height),
         name:letter+' · '+(member.name || (active ? 'Фланець' : 'Деталь')),detail:dims.length ? dims.join(' · ')+' мм' : ''});
@@ -993,7 +1109,8 @@
     const oldResults = preserve ? resultsState() : null;
     const node = currentNode;
     main.innerHTML = `<section class="editor"><div class="node-topbar"><div class="node-title"><button class="icon-button" data-action="open-equipment" data-id="${currentEquipment.id}" aria-label="Назад до вузлів">${icon('arrow')}</button><span class="file-icon">${icon('file')}</span><div><h1>${esc(node.name)}</h1><p>${esc(currentEquipment.name)} · ${kindName(node.connection.kind)}</p></div><button class="icon-button" data-action="edit-node" data-id="${node.id}" aria-label="Перейменувати вузол">${icon('edit')}</button></div><div class="torque-bar" role="group" aria-label="Межі моменту затягування"><div class="torque-comparison"></div><div class="torque-item"><div class="torque-label">Мінімальний момент</div><div class="torque-value">Ще не розраховано</div></div><div class="torque-item"><div class="torque-label">Максимальний момент</div><div class="torque-value">Ще не розраховано</div></div></div></div><div class="editor-body"><aside class="settings" aria-label="Налаштування вузла"><div class="settings-heading"><div>${icon('settings')}Параметри вузла</div><small id="progress-count"></small></div><div id="input-validation" class="input-validation" role="status" hidden></div>${settingsContent(openSections)}</aside><div class="results" id="results"></div></div></section>`;
-    document.querySelector('.settings').scrollTop = scroll;
+    const nextSettings = document.querySelector('.settings');
+    if (nextSettings) nextSettings.scrollTop = scroll;
     setupEditorSteps();
     refreshResults(oldResults);
     updateStatuses();
@@ -1018,16 +1135,16 @@
       ['flanges','Розрахунок міцності фланців',[]]
     ];
     const open = previous ? previous.open : ['geometry','load','parameters','stud'];
-    target.innerHTML = `<div class="results-title"><h2>Розрахунок вузла</h2><button class="button secondary" data-action="excel-export" data-scope="node">Експорт Excel</button><span class="outline-badge">${p.done === p.total ? 'Анкета заповнена' : 'Анкета в роботі'}</span></div><p class="calculation-notice">${icon('info')}<span>Обчислюються геометрія, податливість, коефіцієнт навантаження та температурний внесок. Міцність і межі затягування — наступні блоки.</span></p>${assemblyPanel(node,'results')}${blocks.map(([key,title,rows]) => `<details class="calc-block" data-calc="${key}" ${open.includes(key) ? 'open' : ''}><summary>${icon('chevron')}${title}<small>Ще не розраховано</small></summary>${rows.length ? `<table class="result-table"><thead><tr><th scope="col">Параметр</th><th scope="col">НУЕ</th><th scope="col">ГВ</th></tr></thead><tbody>${rows.map(([label,unit]) => `<tr><td>${label}${unit ? `<span>, ${unit}</span>` : ''}</td><td aria-label="Не розраховано">—</td><td aria-label="Не розраховано">—</td></tr>`).join('')}</tbody></table>` : '<p class="calc-footer">Геометрію фланців і перевірки перерізів А–А, В–В та С–С додаємо наступним етапом.</p>'}</details>`).join('')}<p class="results-end">${icon('file')}Редагований Excel із формулами — кнопка «Експорт Excel» над розрахунком.</p>`;
+    target.innerHTML = `<div class="results-title"><div class="results-title-group"><button class="button secondary" data-action="editor-previous">${icon('arrow')}Назад до параметрів</button><h2>Розрахунок вузла</h2></div><div class="results-title-actions"><button class="button secondary" data-action="excel-export" data-scope="node">Експорт Excel</button><span class="outline-badge">${p.done === p.total ? 'Анкета заповнена' : 'Анкета в роботі'}</span></div></div><p class="calculation-notice">${icon('info')}<span>Розрахунок геометрії, навантаження, температурних зусиль, міцності кріплення та рекомендованих меж моменту затягування.</span></p>${assemblyPanel(node,'results')}${blocks.map(([key,title,rows]) => `<details class="calc-block" data-calc="${key}" ${open.includes(key) ? 'open' : ''}><summary>${icon('chevron')}${title}<small>Ще не розраховано</small></summary>${rows.length ? `<table class="result-table"><thead><tr><th scope="col">Параметр</th><th scope="col">НУЕ</th><th scope="col">ГВ</th></tr></thead><tbody>${rows.map(([label,unit]) => `<tr><td>${label}${unit ? `<span>, ${unit}</span>` : ''}</td><td aria-label="Не розраховано">—</td><td aria-label="Не розраховано">—</td></tr>`).join('')}</tbody></table>` : '<p class="calc-footer">Геометрію фланців і перевірки перерізів А–А, В–В та С–С додаємо наступним етапом.</p>'}</details>`).join('')}<p class="results-end">${icon('file')}Редагований Excel із формулами — кнопка «Експорт Excel» над розрахунком.</p>`;
     target.querySelector('.assembly-panel').insertAdjacentHTML('afterend',geometryBlock(open.includes('geometry')));
     target.querySelector('[data-calc="load"]').outerHTML = complianceBlock(open.includes('load'));
     target.querySelector('[data-calc="thermal"]').outerHTML = thermalBlock(open.includes('thermal'));
-    const forces = window.FlangeCalculations.nodeForces(node,materials,standardsDb);
+    const limits = window.FlangeCalculations.nodeLimits(node,materials,standardsDb);
+    const forces = limits.forces;
+    const strength = limits.strength;
     target.querySelector('[data-calc="parameters"]').outerHTML = forcesBlock(forces,open.includes('parameters'));
     target.querySelector('[data-calc="tightness"]').outerHTML = tightnessBlock(forces,open.includes('tightness'));
-    const limits = window.FlangeCalculations.nodeLimits(node,materials,standardsDb);
     target.querySelector('[data-calc="limits"]').outerHTML = limitsBlock(limits,open.includes('limits'));
-    const strength = window.FlangeCalculations.nodeStrength(node,materials,standardsDb);
     target.querySelector('[data-calc="stud"]').outerHTML = strengthBlock(strength,open.includes('stud'));
     target.querySelector('[data-calc="thread"]').outerHTML = threadStrengthBlock(strength,open.includes('thread'));
     target.querySelector('[data-calc="flanges"]').outerHTML = flangeBlock(limits.flanges,open.includes('flanges'));
@@ -1240,6 +1357,22 @@
     }
   }
 
+  let confirmCallback = null;
+  function openConfirmDialog({title, message, confirmText = 'Підтвердити', onConfirm}) {
+    if (!editDialog || typeof editDialog.showModal !== 'function') {
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        if (window.confirm(message)) onConfirm();
+      } else {
+        onConfirm();
+      }
+      return;
+    }
+    confirmCallback = onConfirm;
+    editDialog.innerHTML = `<div class="dialog-header"><h2 id="edit-title">${esc(title)}</h2><button class="icon-button" type="button" data-action="close-edit" aria-label="Закрити">${icon('close')}</button></div><div class="dialog-body"><p class="delete-description">${esc(message)}</p></div><div class="dialog-footer"><button class="button secondary" type="button" data-action="close-edit">Скасувати</button><button class="button primary" type="button" data-action="confirm-action">${esc(confirmText)}</button></div>`;
+    editDialog.showModal();
+    editDialog.querySelector('[data-action="confirm-action"]')?.focus();
+  }
+
   function openEdit(type, targetId) {
     const [verb,kind] = type.split('-');
     const equipment = kind === 'equipment' ? workspace.equipment.find(item => item.id === targetId) : currentEquipment;
@@ -1342,6 +1475,7 @@
     if (nextHash !== undefined) navigate(nextHash);
     else renderRoute();
   });
+  editDialog.addEventListener('close', () => { confirmCallback = null; });
 
   function openMaterial(path, label) {
     const ref = C.get(currentNode,path);
@@ -1468,7 +1602,7 @@
     const action = button.dataset.action;
     if (action === 'open-flange-picker') {
       const node = currentNode;
-      if (node?.connection.kind !== 'flange-flange') return;
+      if (node?.connection.kind !== 'flange-flange' && !(node?.connection.kind === 'flange-cover' && button.dataset.side === 'sideA')) return;
       const opened = window.FlangePicker?.openPicker({
         node, side: button.dataset.side,
         isCurrent: () => currentNode === node,
@@ -1498,14 +1632,23 @@
     }
     else if (action === 'copy-connection-side') {
       const source = button.dataset.side, target = source === 'sideA' ? 'sideB' : 'sideA';
-      const name = currentNode.connection[target].name;
-      currentNode.connection[target] = {...structuredClone(currentNode.connection[source]),name};
-      currentNode.flanges[target] = structuredClone(currentNode.flanges[source]);
-      connectionSide = target;
-      connectionDimension = '';
-      changed(); renderEditor(true);
-      main.querySelector(`#tab-${target}`).focus();
-      toast('Матеріал і розміри скопійовано.');
+      const sourceLetter = source === 'sideA' ? 'А' : 'Б';
+      const targetLetter = target === 'sideA' ? 'А' : 'Б';
+      openConfirmDialog({
+        title: 'Підтвердження копіювання',
+        message: `Замінити матеріал і геометричні розміри деталі ${targetLetter} параметрами деталі ${sourceLetter}? Введені дані деталі ${targetLetter} будуть перезаписані.`,
+        confirmText: 'Скопіювати',
+        onConfirm: () => {
+          const name = currentNode.connection[target].name;
+          currentNode.connection[target] = {...structuredClone(currentNode.connection[source]), name};
+          currentNode.flanges[target] = structuredClone(currentNode.flanges[source]);
+          connectionSide = target;
+          connectionDimension = '';
+          changed(); renderEditor(true);
+          main.querySelector(`#tab-${target}`)?.focus();
+          toast(`Параметри деталі ${sourceLetter} скопійовано в деталь ${targetLetter}.`);
+        }
+      });
     }
     else if (action === 'editor-next' || action === 'editor-previous') {
       const steps = visibleSteps();
@@ -1546,7 +1689,18 @@
     else if (action === 'open-equipment') navigate(`equipment/${button.dataset.id}`);
     else if (action === 'open-node') navigate(`node/${currentEquipment.id}/${button.dataset.id}`);
     else if (['new-folder','edit-folder','delete-folder','move-folder','move-equipment','new-equipment','new-node','edit-equipment','edit-node','delete-equipment','delete-node'].includes(action)) openEdit(action,button.dataset.id);
-    else if (action === 'close-edit') editDialog.close();
+    else if (action === 'confirm-action') {
+      if (typeof editDialog.close === 'function') editDialog.close();
+      if (confirmCallback) {
+        const cb = confirmCallback;
+        confirmCallback = null;
+        cb();
+      }
+    }
+    else if (action === 'close-edit') {
+      confirmCallback = null;
+      if (typeof editDialog.close === 'function') editDialog.close();
+    }
     else if (action === 'copy-node') {
       const source = currentEquipment.nodes.find(node => node.id === button.dataset.id);
       const clone = JSON.parse(JSON.stringify(source));
@@ -1603,7 +1757,7 @@
   });
   document.addEventListener('input', event => {
     const input = event.target;
-    if (input.matches('[data-list-search]')) { searchText = input.value; renderDesktopContent(); return; }
+    if (input.matches?.('[data-list-search]')) { searchText = input.value; renderDesktopContent(); return; }
     if (input.id === 'material-search') { picker.query = input.value; updateMaterialList(); return; }
     if (input.dataset.excelTorque !== undefined) { input.dataset.rawValue = input.value; return; }
     if (!currentNode || !input.dataset.field || input.type === 'checkbox' || input.tagName === 'SELECT') return;
@@ -1612,13 +1766,40 @@
       input.value = input.value.replaceAll('.', ',');
       if (start !== null && end !== null) input.setSelectionRange(start, end);
     }
-    C.set(currentNode,input.dataset.field,input.value);
+    if (input.dataset.pressureKey) {
+      const key = input.dataset.pressureKey;
+      const unit = getPressureUnit(key);
+      const mpa = convertUnitToMpa(input.value, unit);
+      C.set(currentNode, input.dataset.field, mpa);
+      input.dataset.rawValue = input.value;
+    } else {
+      C.set(currentNode,input.dataset.field,input.value);
+    }
     changed();
-    updateStatuses(); refreshResults();
+    scheduleCalculationUpdate();
   });
   document.addEventListener('change', event => {
     const input = event.target;
-    if (input.matches('[data-list-sort]')) { sortBy = input.value; renderDesktopContent(); return; }
+    flushCalculationUpdate();
+    if (input.dataset.pressureUnit) {
+      const key = input.dataset.pressureUnit;
+      const newUnit = input.value;
+      if (currentNode?.operating?.[key]) {
+        currentNode.operating[key].pressureUnit = newUnit;
+        const mpa = currentNode.operating[key].pressure;
+        const converted = convertMpaToUnit(mpa, newUnit);
+        const pressureInput = document.querySelector(`[data-pressure-key="${key}"]`);
+        if (pressureInput) {
+          pressureInput.value = displayInputNumber(converted);
+          pressureInput.dataset.rawValue = editableNumber(converted);
+        }
+        changed();
+        updateStatuses();
+        refreshResults();
+      }
+      return;
+    }
+    if (input.matches?.('[data-list-sort]')) { sortBy = input.value; renderDesktopContent(); return; }
     if (input.id === 'material-select') { picker.materialIndex = Number(input.value); picker.gradeIndex = 0; renderGradePicker(); return; }
     if (currentNode && input.dataset.field === 'fastener.nominalDiameter') {
       const oldStd = C.standardTorque(standardsDb,currentNode.fastener.nominalDiameter);
@@ -1652,8 +1833,14 @@
     if (!currentNode || !input.dataset.field || (input.tagName !== 'SELECT' && input.type !== 'checkbox')) return;
     if (input.dataset.field === 'connection.kind') {
       const old = currentNode.connection.kind;
-      const previous = old === 'flange-flange' ? ['Фланець 1','Фланець 2'] : ['Кришка','Корпус'];
-      const next = input.value === 'flange-flange' ? ['Фланець 1','Фланець 2'] : ['Кришка','Корпус'];
+      const namesByKind = {
+        'flange-flange': ['Фланець 1','Фланець 2'],
+        'flange-cover': ['Фланець','Кришка'],
+        'body-cover': ['Кришка','Корпус'],
+        'custom': ['Деталь А','Деталь Б']
+      };
+      const previous = namesByKind[old] || ['Деталь А','Деталь Б'];
+      const next = namesByKind[input.value] || ['Деталь А','Деталь Б'];
       ['sideA','sideB'].forEach((side,index) => { if (currentNode.connection[side].name === previous[index]) currentNode.connection[side].name = next[index]; });
     }
     if (input.dataset.field === 'fastener.differentNuts' && input.checked) currentNode.nutB ??= structuredClone(currentNode.nut);
@@ -1697,7 +1884,19 @@
     const input = event.target;
     const path = input.dataset.field || input.dataset.path || '';
     if (input.dataset.excelTorque !== undefined) input.value = editableNumber(input.dataset.rawValue);
-    if (currentNode && input.dataset.number && !input.readOnly) input.value = editableNumber(C.get(currentNode,path));
+    if (currentNode && input.dataset.number && !input.readOnly) {
+      if (input.dataset.pressureKey) {
+        const key = input.dataset.pressureKey;
+        const unit = getPressureUnit(key);
+        const converted = convertMpaToUnit(C.get(currentNode, path), unit);
+        input.value = editableNumber(converted);
+      } else {
+        input.value = editableNumber(C.get(currentNode,path));
+      }
+    }
+    if ((input.dataset.number || input.dataset.excelTorque !== undefined || input.inputMode === 'decimal' || input.type === 'number') && !input.readOnly) {
+      if (typeof input.select === 'function') input.select();
+    }
     if (currentNode && editorStep === 'nut' && (path.startsWith('nut.') || path.startsWith('nutB.'))) {
       const key = path.split('.')[0];
       if (previewNut !== key) {previewNut = key; refreshComponentPreview();}
@@ -1708,10 +1907,20 @@
   });
   document.addEventListener('focusout',event => {
     const input = event.target;
+    flushCalculationUpdate();
     if (!input.isConnected) return;
     if (input.dataset.excelTorque !== undefined) input.value = displayInputNumber(input.dataset.rawValue);
     if (!currentNode || !input.dataset.field) return;
-    if (input.dataset.number) input.value = displayInputNumber(C.get(currentNode,input.dataset.field));
+    if (input.dataset.number) {
+      if (input.dataset.pressureKey) {
+        const key = input.dataset.pressureKey;
+        const unit = getPressureUnit(key);
+        const converted = convertMpaToUnit(C.get(currentNode, input.dataset.field), unit);
+        input.value = displayInputNumber(converted);
+      } else {
+        input.value = displayInputNumber(C.get(currentNode,input.dataset.field));
+      }
+    }
     updateValidation();
   });
   document.addEventListener('keydown', event => {

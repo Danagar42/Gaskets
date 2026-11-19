@@ -146,4 +146,46 @@ for (const d of ['52','56','60']) {
   assert.notEqual(C.nutDimensions(catalog,'gost-9064-75',d,'A'), null, `ГОСТ 9064-75 must have sizes for M${d}`);
 }
 
+// AUD-011: Geometric clearance check for ring gasket without holes (D_outer >= Dw - d0)
+const clearanceNode = structuredClone(base);
+// In base: boltCircle = 1200, hole = 24 => Dw - d0 = 1176.
+// Base has outerDiameter = 1300, hasHoles = true.
+assert.equal(clearanceNode.gasket.hasHoles, true);
+assert.equal(report(clearanceNode).errors['gasket.outerDiameter'], undefined, 'Gasket with holes must pass even if D_outer >= Dw - d0');
+assert.equal(report(clearanceNode).errors['flanges.sideA.boltCircle'], undefined);
+
+// When hasHoles is false and outer >= Dw - d0:
+clearanceNode.gasket.hasHoles = false;
+clearanceNode.gasket.mode = 'ring';
+const clearanceReport = report(clearanceNode);
+assert.equal(clearanceReport.errors['gasket.outerDiameter'], 'Зовнішній діаметр прокладки без отворів перекриває отвори для болтів (потрібно Dзовн < Dw − d₀).');
+assert.equal(clearanceReport.errors['flanges.sideA.boltCircle'], 'Коло кріплень замале для прокладки без отворів (потрібно Dw − d₀ > Dзовн).');
+
+// Test with both sides having mode 'flange'
+clearanceNode.flanges.sideB = structuredClone(clearanceNode.flanges.sideA);
+const bothSidesReport = report(clearanceNode);
+assert.equal(bothSidesReport.errors['flanges.sideA.boltCircle'], 'Коло кріплень замале для прокладки без отворів (потрібно Dw − d₀ > Dзовн).');
+assert.equal(bothSidesReport.errors['flanges.sideB.boltCircle'], 'Коло кріплень замале для прокладки без отворів (потрібно Dw − d₀ > Dзовн).');
+
+// When outer < Dw - d0:
+clearanceNode.gasket.outerDiameter = '1175';
+clearanceNode.gasket.innerDiameter = '1050';
+const okClearanceReport = report(clearanceNode);
+assert.equal(okClearanceReport.errors['gasket.outerDiameter'], undefined, 'Ring gasket without holes fitting inside bolt circle must pass');
+assert.equal(okClearanceReport.errors['flanges.sideA.boltCircle'], undefined);
+assert.equal(okClearanceReport.errors['flanges.sideB.boltCircle'], undefined);
+
+// AUD-010 / schema preparation: validateWorkspace allows 'flange-cover'
+const wsSample = {
+  version: 1,
+  equipment: [{
+    id: 'eq-1',
+    name: 'Апарат',
+    designation: 'Е-101',
+    nodes: [structuredClone(base)]
+  }]
+};
+wsSample.equipment[0].nodes[0].connection.kind = 'flange-cover';
+assert.equal(C.validateWorkspace(wsSample), true, 'validateWorkspace must accept flange-cover connection kind');
+
 console.log(`Input validation: ${cases} invalid values, cross-field geometry, optional fields and calculation/export gates passed.`);

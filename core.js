@@ -31,7 +31,7 @@
       operating: { normal: { pressure: '', temperature: '', medium: '' }, hydro: { pressure: '', temperature: '', medium: '' } },
       gasket: { mode: 'ring', thickness: '', outerDiameter: '', innerDiameter: '', hasHoles: false, holeDiameter: '', partitionPattern:'none', partitionWidth:'', effectiveArea: '', pressureArea: '', referenceId: DEFAULT_GASKET_REFERENCE_ID },
       fastener: { type: 'stud', nominalDiameter: '', count: '', lubricated: true, material: null, threadStandardId: 'gost-24705-2004', pitch: '', axialHoleDiameter:'0', torqueNm:'', targetTorqueMinNm:'', targetTorqueMaxNm:'' },
-      connection: { kind, sideA: { name: kind === 'flange-flange' ? 'Фланець 1' : 'Кришка', material: null, height:'', area:'' }, sideB: { name: kind === 'flange-flange' ? 'Фланець 2' : 'Корпус', material: null, height:'', area:'' } },
+      connection: { kind, sideA: { name: kind === 'flange-flange' ? 'Фланець 1' : kind === 'flange-cover' ? 'Фланець' : 'Кришка', material: null, height:'', area:'' }, sideB: { name: kind === 'flange-flange' ? 'Фланець 2' : kind === 'flange-cover' ? 'Кришка' : 'Корпус', material: null, height:'', area:'' } },
       nut: { material: null, standardId: 'gost-5915-70', typeId: 'A' }, washers: { placement: 'none', material: null, standardId: 'gost-11371-78', accuracyClass: 'A', execution: '1' }, extras: [],
       flanges:{sideA:createFlange(),sideB:createFlange()}
     };
@@ -336,11 +336,12 @@
       const rootDiameter = pitch ? d - 2*(17/24)*(0.5*pitch.pitchMm*Math.tan(Math.PI/3)) : d;
       if (axial >= rootDiameter) fail('fastener.axialHoleDiameter',pitch ? 'Поздовжній отвір має бути меншим за діаметр западин різьби d₃.' : 'Поздовжній отвір має бути меншим за номінальний діаметр кріплення.');
     }
-    let mean = null;
+    let mean = null, gasketOuter = null;
     if (node.gasket.mode === 'area') {
       numeric('gasket.effectiveArea'); numeric('gasket.pressureArea');
     } else {
       const outer = numeric('gasket.outerDiameter'), inner = numeric('gasket.innerDiameter');
+      gasketOuter = outer;
       const hole = node.gasket.hasHoles ? numeric('gasket.holeDiameter') : 0;
       const pattern = node.gasket.partitionPattern ?? 'none';
       if (pattern !== 'none') {
@@ -386,6 +387,12 @@
       if (inner !== null && outer !== null && hole !== null && outer-inner-2*hole <= 0) fail(path+'holeDiameter','Перемичка Df−D−2d₀ має бути додатною. Перевірте отвір і діаметри фланця.');
       if (dm !== null && inner !== null && dm <= inner) fail(node.gasket.mode === 'area' ? path+'gasketDiameter' : path+'innerDiameter','Розрахунковий діаметр прокладки Dm має бути більшим за D.');
       if (dm !== null && outer !== null && dm >= outer) fail(node.gasket.mode === 'area' ? path+'gasketDiameter' : path+'outerDiameter','Розрахунковий діаметр прокладки Dm має бути меншим за Df.');
+      if (node.gasket.mode === 'ring' && !node.gasket.hasHoles) {
+        if (gasketOuter !== null && circle !== null && hole !== null && gasketOuter >= circle - hole) {
+          fail('gasket.outerDiameter','Зовнішній діаметр прокладки без отворів перекриває отвори для болтів (потрібно Dзовн < Dw − d₀).');
+          fail(path+'boltCircle','Коло кріплень замале для прокладки без отворів (потрібно Dw − d₀ > Dзовн).');
+        }
+      }
     }
     const mount = mounting(node);
     if (mount.body && (node.fastener.type !== 'stud' || node.fastener.engagement !== undefined)) {
@@ -526,7 +533,7 @@
       if (!scalarFields.every(path => typeof get(node, path) === typeof get(template, path))) return false;
       if (node.gasket.partitionPattern !== undefined && (typeof node.gasket.partitionPattern !== 'string' || !Object.hasOwn(gasketPartitions,node.gasket.partitionPattern))) return false;
       if (node.gasket.partitionWidth !== undefined && !isText(node.gasket.partitionWidth)) return false;
-      if (!['ring','area'].includes(node.gasket.mode) || !Object.hasOwn(arrangements,node.fastener.type) || !['body-cover','flange-flange','custom'].includes(node.connection.kind) || !['none','a','b','both'].includes(node.washers.placement)) return false;
+      if (!['ring','area'].includes(node.gasket.mode) || !Object.hasOwn(arrangements,node.fastener.type) || !['body-cover','flange-flange','flange-cover','custom'].includes(node.connection.kind) || !['none','a','b','both'].includes(node.washers.placement)) return false;
       if (['reversed','differentNuts'].some(k=>node.fastener[k] !== undefined && typeof node.fastener[k] !== 'boolean')) return false;
       if (node.fastener.engagement !== undefined && !isText(node.fastener.engagement)) return false;
       if (node.nutB !== undefined || node.fastener.differentNuts) {
@@ -536,7 +543,7 @@
         const flange = node.flanges[key];
         return flange && ['pending','flange','none'].includes(flange.mode) && (flange.form === undefined || ['flat','conical'].includes(flange.form)) && Object.keys(createFlange()).filter(field => field !== 'mode').every(field => isText(flange[field]));
       }))) return false;
-      return ['normal','hydro'].every(key => node.operating[key] && ['pressure','temperature','medium'].every(field => isText(node.operating[key][field]))) && typeof node.gasket.hasHoles === 'boolean' && typeof node.fastener.lubricated === 'boolean'
+      return ['normal','hydro'].every(key => node.operating[key] && ['pressure','temperature','medium'].every(field => isText(node.operating[key][field])) && (node.operating[key].pressureUnit === undefined || isText(node.operating[key].pressureUnit))) && typeof node.gasket.hasHoles === 'boolean' && typeof node.fastener.lubricated === 'boolean'
         && ['fastener.material','connection.sideA.material','connection.sideB.material','nut.material','washers.material'].every(path => isRef(get(node, path)))
         && ['sideA','sideB'].every(key => ['height','area'].every(field => node.connection[key][field] === undefined || isText(node.connection[key][field])))
         && (node.gasket.referenceId === undefined || isText(node.gasket.referenceId)) && ['threadStandardId','pitch','axialHoleDiameter','torqueNm','targetTorqueMinNm','targetTorqueMaxNm'].every(key => node.fastener[key] === undefined || isText(node.fastener[key])) && ['standardId','typeId','threadedHeight'].every(key => node.nut[key] === undefined || isText(node.nut[key])) && ['standardId','accuracyClass','execution'].every(key => node.washers[key] === undefined || isText(node.washers[key])) && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));

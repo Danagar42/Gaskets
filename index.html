@@ -14,7 +14,6 @@
   <script src="core.js" defer></script>
   <script src="calculations.js" defer></script>
   <script src="project.js" defer></script>
-  <script src="excel-template.bundle.js" defer></script>
   <script src="excel-export.js" defer></script>
   <script src="component-imported-styles.js" defer></script>
   <script src="component-visuals.js" defer></script>
@@ -36,6 +35,10 @@
     <button class="button secondary project-file-button" data-action="project-file">Файл проєкту</button>
     <div class="header-status"><span class="status-dot"></span><span id="save-status" role="status">Персональний простір</span></div>
   </header>
+  <div id="storage-warning-banner" class="storage-warning-banner" role="alert" hidden>
+    <span>⚠️ Сховище браузера переповнене або недоступне. Зміни зберігаються лише в оперативній пам’яті!</span>
+    <button type="button" class="button small" data-action="save-project">Завантажити JSON проєкту</button>
+  </div>
   <main id="main" tabindex="-1"></main>
   <dialog id="edit-dialog" class="dialog edit-dialog" aria-labelledby="edit-title"></dialog>
   <dialog id="material-dialog" class="dialog material-dialog" aria-labelledby="material-title"></dialog>

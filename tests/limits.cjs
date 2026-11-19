@@ -70,9 +70,78 @@ const narrowMinimum = (Math.floor(upper.torqueNm)+upper.torqueNm)/2;
 gasket.seatingPressureMPa = narrowMinimum*32*1000/(0.26*24*G.nodeGeometry(node,catalog).gasket.values.effectiveArea);
 result = G.nodeLimits(node,[material],catalog);
 assert.equal(result.rawOverlap,true); assert.equal(result.roundedOverlap,false,'Rounding can leave no whole-Nm setting');
+
+// AUD-012: Diagnostic on rounding conflict
+const diagRounding = G.tighteningLimitsDiagnostic(result, node, catalog);
+assert.equal(diagRounding.status, 'rounding_conflict');
+assert.equal(diagRounding.bottleneck, 'rounding');
+assert.ok(diagRounding.recommendations.length >= 2);
+
 gasket.seatingPressureMPa *= 2;
-assert.equal(G.nodeLimits(node,[material],catalog).rawOverlap,false);
+result = G.nodeLimits(node,[material],catalog);
+assert.equal(result.rawOverlap,false);
+assert.ok(result.forces, 'nodeLimits must include forces (AUD-007 optimization)');
+assert.ok(result.strength, 'nodeLimits must include strength (AUD-007 optimization)');
+
+// AUD-012: Diagnostic on limits conflict (M_min > M_max)
+const diagConflict = G.tighteningLimitsDiagnostic(result, node, catalog);
+assert.equal(diagConflict.status, 'conflict');
+assert.ok(diagConflict.bottleneck, 'Diagnostic must identify bottleneck component');
+assert.ok(diagConflict.recommendations.length > 0, 'Diagnostic must produce actionable recommendations');
+assert.ok(diagConflict.recommendations.some(r => r.includes('прокладки')), 'Should recommend gasket adjustments');
+
 gasket.seatingPressureMPa = 5;
+const okLimits = G.nodeLimits(node,[material],catalog);
+const diagOk = G.tighteningLimitsDiagnostic(okLimits, node, catalog);
+assert.equal(diagOk.status, 'ok');
+assert.equal(diagOk.bottleneck, null);
+assert.deepEqual(diagOk.recommendations, []);
+const diagNull = G.tighteningLimitsDiagnostic(null, node, catalog);
+assert.equal(diagNull.status, 'incomplete');
+
+// AUD-012 edge cases hardening:
+// Defect A: malformed/null items in governing arrays must not throw
+const diagMalformedGov = G.tighteningLimitsDiagnostic({
+  minimum: { torqueNm: 200, governing: [null, undefined, { key: null }] },
+  maximum: { torqueNm: 100, governing: [null, { side: null }, { key: 'axial' }] },
+  rawOverlap: false,
+  roundedOverlap: false
+}, node, catalog);
+assert.equal(diagMalformedGov.status, 'conflict');
+assert.equal(diagMalformedGov.bottleneck, 'stud tensile strength');
+
+// Defect B: undefined / NaN torque values must return incomplete status
+const diagUndefinedTorque = G.tighteningLimitsDiagnostic({
+  minimum: { torqueNm: undefined },
+  maximum: { torqueNm: undefined }
+}, node, catalog);
+assert.equal(diagUndefinedTorque.status, 'incomplete');
+assert.equal(diagUndefinedTorque.bottleneck, 'none');
+
+const diagNaNTorque = G.tighteningLimitsDiagnostic({
+  minimum: { torqueNm: NaN },
+  maximum: { torqueNm: 100 }
+}, node, catalog);
+assert.equal(diagNaNTorque.status, 'incomplete');
+
+// Defect C: missing rawOverlap/roundedOverlap fallback calculation
+const diagOmittedOverlapOk = G.tighteningLimitsDiagnostic({
+  minimum: { torqueNm: 100 },
+  maximum: { torqueNm: 200 }
+}, node, catalog);
+assert.equal(diagOmittedOverlapOk.status, 'ok');
+
+const diagOmittedOverlapConflict = G.tighteningLimitsDiagnostic({
+  minimum: { torqueNm: 250 },
+  maximum: { torqueNm: 150 }
+}, node, catalog);
+assert.equal(diagOmittedOverlapConflict.status, 'conflict');
+
+const diagOmittedOverlapRounding = G.tighteningLimitsDiagnostic({
+  minimum: { torqueNm: 100.4 },
+  maximum: { torqueNm: 100.6 }
+}, node, catalog);
+assert.equal(diagOmittedOverlapRounding.status, 'rounding_conflict');
 material.grades[0].data.RTp = {};
 result = G.nodeLimits(node,[material],catalog);
 assert.equal(result.maximum.torqueNm,null); assert.equal(result.roundedOverlap,null);
