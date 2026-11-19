@@ -49,11 +49,28 @@ test('M24 capped nut has the same Ø40 body around the head and the blind bore',
   assert.ok(svg.includes('V ' + shoulderY), 'head must end at the shoulder');
   assert.ok(svg.includes('V ' + boreEndY), 'blind bore must end inside the cylindrical body');
   const section = svg.match(/<path d="([^"]+)" fill="url\(#v5-hatch\)"\/?>/)[1];
-  const bore = section.match(/H ([\d.]+) L ([\d.]+) [\d.]+ V ([\d.]+) H 215$/);
+  const bore = section.match(/H ([\d.]+) L ([\d.]+) [\d.]+(?: L [\d.]+ [\d.]+)* V ([\d.]+) H 215$/);
   assert.ok(bore && +bore[1] < bodyX && +bore[2] < +bore[1] && +bore[3] > shoulderY,
     'the mouth and the blind end must leave a positive wall inside the body');
   assert.match(svg,/S = 27</);
   assert.match(svg,/l₁ = 65</);
+});
+
+test('M12 nut sections show teeth on the walls of both through and blind holes', () => {
+  const draw = (capped,h,acrossFlats) => graphics.create('passport','nut',
+    {diameter:12,h,acrossFlats,capped},1.75).innerHTML;
+  const through = draw(false,12,19);
+  const blind = draw(true,35,13);
+  const section = svg => svg.match(/<path d="([^"]+)"[^>]*fill="url\(#v5-hatch\)"/)[1];
+  const throughProfile = section(through);
+  assert.match(throughProfile,/^M [\d.]+ [\d.]+(?: L [\d.]+ [\d.]+){4,}/);
+  assert.ok(!throughProfile.includes('H 215'), 'through hole must stay open at both ends');
+  const blindProfile = section(blind);
+  const boreWall = blindProfile.match(/H ([\d.]+) L ([\d.]+) [\d.]+((?: L [\d.]+ [\d.]+){4,}) V ([\d.]+) H 215$/);
+  assert.ok(boreWall,'teeth must stop before the blind floor');
+  const [outer,inner,teeth,boreEnd] = boreWall.slice(1);
+  const peaks = [...teeth.matchAll(/L ([\d.]+) ([\d.]+)/g)];
+  assert.ok(peaks.every(([,x,y],i) => x === (i % 2 === 0 ? outer : inner) && +y > +boreEnd));
 });
 
 test('assembly washer section follows the selected dimensions', () => {

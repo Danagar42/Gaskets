@@ -150,6 +150,16 @@
                      M ${cx-edge} ${bevel} V ${shoulder} M ${cx+edge} ${bevel} V ${shoulder}" fill="none" stroke-width="1.25"/>`;
     }
 
+    function nutThreadTeeth(rootX, tipX, startY, endY) {
+      const step = endY < startY ? -7 : 7;
+      const length = Math.abs(endY - startY);
+      let teeth = '';
+      for (let y = startY; Math.abs(y - startY) + 7 < length; y += step) {
+        teeth += ` L ${tipX} ${(y + step / 2).toFixed(1)} L ${rootX} ${(y + step).toFixed(1)}`;
+      }
+      return teeth;
+    }
+
     function nutSide(m, steel = 'v5-steel', hatch = 'v5-hatch') {
       const {cx,baseY,topY,halfE,edgeX,chamferDrop,centerArcDip,cap,scale} = m;
       if (m.isCapped && !cap) {
@@ -163,10 +173,13 @@
         const bevel = scale;
         const major = m.threadRadius + 2;
         const minor = major - (5 * Math.sqrt(3) / 16) * (m.spec.pitch || 1) * scale;
+        const threadStart = baseY - (major - minor);
+        // Зубці показують профіль схематично. Розмір l задано до дна отвору.
+        const teeth = nutThreadTeeth(cx+minor,cx+major,threadStart,Math.min(threadStart,boreEnd+bevel));
         // Відкриті контури закінчуються на осі, тож межу піврозрізу позначає лише осьова лінія.
         return `<g stroke="#2b434f" stroke-width="2" stroke-linejoin="round">
           <path d="M ${cx} ${topY} H ${cx-head+bevel} L ${cx-head} ${topY+bevel} V ${shoulder} H ${cx-body} V ${baseY-bevel} L ${cx-body+bevel} ${baseY} H ${cx}" fill="url(#${steel})"/>
-          <path d="M ${cx} ${topY} H ${cx+head-bevel} L ${cx+head} ${topY+bevel} V ${shoulder} H ${cx+body} V ${baseY-bevel} L ${cx+body-bevel} ${baseY} H ${cx+major} L ${cx+minor} ${baseY-(major-minor)} V ${boreEnd} H ${cx}" fill="url(#${hatch})"/>
+          <path d="M ${cx} ${topY} H ${cx+head-bevel} L ${cx+head} ${topY+bevel} V ${shoulder} H ${cx+body} V ${baseY-bevel} L ${cx+body-bevel} ${baseY} H ${cx+major} L ${cx+minor} ${threadStart}${teeth} V ${boreEnd} H ${cx}" fill="url(#${hatch})"/>
           <path d="M ${cx-head} ${shoulder} H ${cx} M ${cx-head} ${topY+bevel} Q ${cx-head/2} ${topY-bevel/2} ${cx} ${topY+bevel}" fill="none" stroke-width="1.2"/>
           <path d="M ${cx+major} ${baseY} V ${boreEnd+bevel} L ${cx+minor} ${boreEnd}" fill="none" stroke-width=".85"/>
         </g>`;
@@ -175,11 +188,7 @@
       const rMinor = m.threadRadius;
       const rMajor = rMinor + 4;
 
-      // Зубчики внутрішньої різьби на правій половині розрізу
-      let innerTeeth = `M ${cx + rMajor} ${bodyTopY + 6}`;
-      for (let yy = bodyTopY + 6; yy < baseY - 10; yy += 7) {
-        innerTeeth += ` L ${cx + rMinor} ${(yy + 3.5).toFixed(1)} L ${cx + rMajor} ${(yy + 7).toFixed(1)}`;
-      }
+      const innerTeeth = `M ${cx+rMajor} ${bodyTopY+6}${nutThreadTeeth(cx+rMajor,cx+rMinor,bodyTopY+6,Math.max(bodyTopY+6,baseY-3))}`;
 
       return `<!-- ЛІВА ПОЛОВИНА: зовнішній вигляд шестигранника -->
           <path d="M ${cx} ${bodyTopY} H ${cx - halfE + 10} L ${cx - halfE} ${bodyTopY + chamferDrop} V ${baseY - 6} L ${cx - halfE + 7} ${baseY} H ${cx}" fill="url(#${steel})" stroke="#2b434f" stroke-width="2" stroke-linejoin="round"/>
