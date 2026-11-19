@@ -28,7 +28,11 @@ test('nut, washer and pitch options preserve available and missing catalog data'
   assert.equal(typeof adapter.getReferenceCard, 'function');
   const nut = size('gost-9064-75', 24, {type:'B', diameter:'М24'});
   assert.deepEqual([nut.bodyDiameterMm, nut.headHeightMm, nut.boreDepthMm], [40, 16, 40]);
+  assert.equal(card('gost-9064-75',{type:'B'}).tables[0].rows[0].diameter,12);
+  assert.equal(card('gost-9064-75',{type:'B',diameter:'М10'}).tables[0].rows.length,0);
+  assert.ok(card('gost-9064-75').sources.some(source => source.url?.includes('docload.ru') && /Розмір під ключ/.test(source.label)));
   const washer = 'gost-11371-78';
+  assert.ok(card(washer).sources.some(source => /2006/.test(source.edition)));
   assert.equal(size(washer, 24, {accuracyClass:'A'}).innerDiameterMm, 25);
   assert.equal(size(washer, 24, {accuracyClass:'C'}).innerDiameterMm, 26);
   assert.equal(size(washer, 33, {accuracyClass:'C'}).innerDiameterMm, null);
@@ -82,6 +86,11 @@ test('flange surface values, conflicting sources and incompatible filters follow
   assert.match(d3.origin, /ГОСТ 12815-80/);
   assert.ok(flat.notes.some(note => /КОМПАС 531.*ГОСТ 631/.test(note)));
   assert.ok(flat.sources.some(source => source.label.includes('12816-80')));
+  const ptfe = flange.getCard(catalog,'gost-12820-80',{dn:600,pressure:0.1,face:'8'},id);
+  assert.equal(ptfe.tables[1].rows.find(row => row.id === 'D3').value,630);
+  assert.ok(!ptfe.notes.some(note => /КОМПАС 531.*ГОСТ 631/.test(note)));
+  const ptfeD5 = flange.getCard(catalog,'gost-12820-80',{dn:25,pressure:0.6,face:'9'},'12820:0.6:25:-:2');
+  assert.equal(ptfeD5.tables[1].rows.find(row => row.id === 'D5').origin,'ГОСТ 12815-80');
 
   const neck = flange.getCard(catalog, 'gost-12821-80', {dn:50, pressure:0.1, face:'999'}, id);
   assert.equal(neck.selectedRow.dn, 50);
@@ -124,6 +133,20 @@ test('missing geometry is suppressed and the chosen pitch drives the thread prof
   assert.match(fine.svg,/P = 1,5 мм/);
   assert.match(fine.svg,/Розраховано/);
   assert.equal(fine.calculated.value, 1.299038105676658);
+  const fineOnlyRow = size(standardId,15);
+  assert.equal(fineOnlyRow.coarsePitchMm,null);
+  const profile15 = pitchMm => engine.renderReference({standardId,type:'thread',row:fineOnlyRow,pitchMm});
+  assert.notEqual(path(profile15(1)),path(profile15(1.5)));
+});
+
+test('ГОСТ 11371-78 execution 2 adds an outside chamfer to the selected washer geometry', () => {
+  const {StandardsDrawingEngine: engine} = require('../standards-base/src/drawing-engine.js');
+  const standardId = 'gost-11371-78';
+  const draw = execution => engine.renderReference({standardId,type:'washer',row:size(standardId,24,{execution})}).svg;
+  assert.doesNotMatch(draw('1'),/data-washer-chamfer/);
+  const second = draw('2');
+  assert.match(second,/<path[^>]+data-washer-chamfer=""/);
+  assert.match(second,/>Ø 44 мм<\/text>/);
 });
 
 test('flange drawing flags only dimensions with recorded calculated provenance', () => {
@@ -166,6 +189,10 @@ test('filter and row selection render the corresponding dimensions and drawing t
   const filter = (key,value) => events.change({target:{dataset:{referenceFilter:key},value,tagName:'SELECT'}});
   const diameter = value => events.input({target:{dataset:{referenceFilter:'diameter'},value,tagName:'INPUT'}});
   const action = dataset => events.click({target:{closest:()=>({dataset})},preventDefault(){}});
+  browser.StandardsReference.render(main,['nuts','gost-5915-70'],{navigate(){},toast(){}});
+  diameter('М14');
+  assert.match(panel.innerHTML,/<td>Не рекоменд\.<\/td>/);
+  assert.doesNotMatch(panel.innerHTML,/<td>(?:true|false)<\/td>/);
   browser.StandardsReference.render(main,['nuts','gost-9064-75'],{navigate(){},toast(){}});
   filter('type','B');
   diameter('М24');
@@ -182,6 +209,9 @@ test('filter and row selection render the corresponding dimensions and drawing t
   diameter('М33');
   assert.match(panel.innerHTML,/<td[^>]*>—<\/td>/);
   assert.match(panel.innerHTML,/Недостатньо розмірів для ескізу/);
+  assert.match(panel.innerHTML,/Шайба 33\.C ГОСТ 11371-78/);
+  assert.match(panel.innerHTML,/data-reference-copy/);
+  assert.doesNotMatch(panel.innerHTML,/data-reference-export/);
   browser.StandardsReference.render(main,['flanges','gost-12820-80'],{navigate(){},toast(){}});
   filter('dn','600');
   filter('pressure','0.1');

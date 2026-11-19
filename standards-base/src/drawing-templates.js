@@ -260,7 +260,7 @@
     `});
   }
 
-  function renderWasher({ d, d1, d2, s, colors }) {
+  function renderWasher({ d, d1, d2, s, colors, execution }) {
     const nomD = n(d, 24);
     const innerD = n(d1, 25);
     const outerD = n(d2, 44);
@@ -283,6 +283,14 @@
 
     const yT = cySection - hPx / 2;
     const yB = cySection + hPx / 2;
+    const chamfer = String(execution) === '2' ? Math.min(12, hPx * 0.34, (r2Px - r1Px) * 0.35) : 0;
+    const section = (side) => {
+      const inner = cxSection + side * r1Px;
+      const outer = cxSection + side * r2Px;
+      const style = `fill="url(#__HATCH_ID__)" stroke="${colors.line}" stroke-width="1.8"`;
+      if (!chamfer) return `<rect x="${n(Math.min(inner,outer))}" y="${n(yT)}" width="${n(r2Px-r1Px)}" height="${n(hPx)}" ${style}/>`;
+      return `<path d="M ${n(inner)} ${n(yT)} H ${n(outer-side*chamfer)} L ${n(outer)} ${n(yT+chamfer)} V ${n(yB)} H ${n(inner)} Z" ${style} data-washer-chamfer=""/>`;
+    };
 
     const content = `
       <!-- View Titles -->
@@ -290,11 +298,7 @@
       <text x="${n(cxTop)}" y="40" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" font-weight="700" fill="${colors.lineThin}" letter-spacing="0.5">ВИГЛЯД ЗВЕРХУ</text>
 
       <!-- ================= SECTION VIEW ================= -->
-      <!-- Left Section Rectangle -->
-      <rect x="${n(cxSection - r2Px)}" y="${n(yT)}" width="${n(r2Px - r1Px)}" height="${n(hPx)}" fill="url(#__HATCH_ID__)" stroke="${colors.line}" stroke-width="1.8" />
-
-      <!-- Right Section Rectangle -->
-      <rect x="${n(cxSection + r1Px)}" y="${n(yT)}" width="${n(r2Px - r1Px)}" height="${n(hPx)}" fill="url(#__HATCH_ID__)" stroke="${colors.line}" stroke-width="1.8" />
+      ${section(-1)}${section(1)}
 
       <!-- Centerline Section -->
       ${drawCenterline(cxSection, yT - 18, cxSection, yB + 18, colors)}
@@ -469,7 +473,7 @@
   /**
    * 4. ШАБЛОН: Профіль метричної різьби 60° (ГОСТ 24705-2004, ГОСТ 8724-2002)
    */
-  function renderThread({ d, coarsePitchMm, pitchesMm, colors, selectedPitchMm, theoreticalHeightMm }) {
+  function renderThread({ d, coarsePitchMm, pitchesMm, colors, selectedPitchMm, referencePitchMm, theoreticalHeightMm }) {
     const nomD = n(d, 24);
     const pitch = n(selectedPitchMm ?? coarsePitchMm, 3);
     const pitches = Array.isArray(pitchesMm) && pitchesMm.length ? pitchesMm : [pitch];
@@ -478,7 +482,7 @@
     const viewH = 340;
 
     // Геометрія метричного трикутного профілю різьби 60°
-    const pitchPx = selectedPitchMm == null ? 76 : 34 + 42 * pitch / (coarsePitchMm || pitch);
+    const pitchPx = selectedPitchMm == null ? 76 : 34 + 42 * pitch / (referencePitchMm || pitch);
     const heightH = (Math.sqrt(3) / 2) * pitchPx; // теоретична висота трикутника H
     const truncCrest = heightH / 8; // зріз вершини H/8
     const truncRoot = heightH / 4; // зріз западини H/4

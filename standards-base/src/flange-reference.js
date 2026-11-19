@@ -10,6 +10,7 @@
   };
   const rule19 = 'Пункт 1.9 ГОСТ 12816-80 пояснює допустимість різної товщини фланців за однакових приєднувальних розмірів у випадках, передбачених стандартом.';
   const bodyStandards = ['12820','12821'];
+  const connectionKeys = ['D','D1','n','d','bolt'];
   const code = number => `ГОСТ ${number}-80`;
   const column = (key,label,unit = '') => ({key,label,unit});
   const labelForDimension = key => ({D:'Зовнішній діаметр D', D1:'Коло отворів D₁', bore:'Отвір фланця',
@@ -42,6 +43,15 @@
     const value = number => number == null ? '—' : format.format(number);
     return `${reference.column || 'Розмір'} · КОМПАС ${value(reference.kompas)}, ГОСТ ${value(reference.gost)}. ` +
       `${code(reference.standard)}, ${location([reference.table,reference.page])}.`;
+  }
+
+  function referenceApplies(row, face, key, reference) {
+    if (reference.standard !== '12815' || connectionKeys.includes(key)) return true;
+    const ptfe = ['8','9'].includes(face);
+    const table = ptfe ? row.refs?.ptfe?.[0] : row.refs?.connection?.[0];
+    if (String(table) !== String(reference.table)) return false;
+    const recorded = reference.used === 'kompas' ? reference.kompas : reference.gost;
+    return row.faces?.[face]?.[key] === recorded;
   }
 
   function getCard(catalog, id, filters = {}, selectedId = null) {
@@ -94,17 +104,20 @@
     card.selectedRow = row;
     card.face = face;
     card.drawingKind = 'flange';
-    card.notes.push(rule19, ...(row.notes || []));
-    for (const ref of Object.values(row.differences || {})) card.notes.push(formatConflict(ref));
+    const differences = Object.fromEntries(Object.entries(row.differences || {}).filter(([key,ref]) => referenceApplies(row,face,key,ref)));
+    card.notes.push(rule19, ...(row.notes || []).filter(note => !note.startsWith('D₅ у ГОСТ надруковано') || differences.D5));
+    for (const ref of Object.values(differences)) card.notes.push(formatConflict(ref));
     for (const [key,ref] of Object.entries(row.corrections || {})) {
-      card.notes.push(`${labelForDimension(key)} · Поправка ${format.format(ref.original)} → ${format.format(ref.gost)}. С. ${ref.correctionPage} PDF.`);
+      if (referenceApplies(row,face,key,ref)) {
+        card.notes.push(`${labelForDimension(key)} · Поправка ${format.format(ref.original)} → ${format.format(ref.gost)}. С. ${ref.correctionPage} PDF.`);
+      }
     }
 
     const importedBody = row.notes?.some(note => note.startsWith('DN 15 і розміри тіла взято з КОМПАС'));
     const faceValues = row.faces?.[face] || {};
     const dimensions = Object.entries({...row.dimensions,...faceValues}).map(([key,value]) => {
-      const connection = ['D','D1','n','d','bolt'].includes(key) || Object.hasOwn(faceValues,key);
-      const ref = row.differences?.[key];
+      const connection = connectionKeys.includes(key) || Object.hasOwn(faceValues,key);
+      const ref = differences[key];
       const fromKompas = (ref && ref.kompas === value && ref.gost !== value) || (!connection && importedBody);
       const origin = fromKompas ? 'КОМПАС' : code(connection ? '12815' : number);
       card.dimensionOrigins[key] = {label:origin};

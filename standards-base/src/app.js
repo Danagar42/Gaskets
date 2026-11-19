@@ -93,6 +93,7 @@
     let selectedId = null;
     let selectedPitch;
     let activeDrawing = null;
+    let activeCallout = null;
 
     function refreshCard(focusKey, rowAction) {
       const oldScroll = panel.querySelector('[data-reference-scroll]');
@@ -108,6 +109,7 @@
       selectedId = row?.id ?? null;
       filters = Object.fromEntries(card.filters.map(filter => [filter.key,filter.value]));
       activeDrawing = null;
+      activeCallout = null;
       if (row && card.drawingKind === 'thread') {
         const pitches = row.pitchesMm || [];
         if (!pitches.includes(selectedPitch)) selectedPitch = row.coarsePitchMm ?? pitches[0];
@@ -121,12 +123,15 @@
           activeDrawing = {svg:root.FlangePickerDrawing.drawCandidate(card.selectedRow,card.face,null,card.dimensionOrigins)};
         }
       } else if (row && card.drawingKind) {
-        activeDrawing = root.StandardsDrawingEngine?.renderReference({standardId:entryId,type:card.drawingKind,row,pitchMm:selectedPitch});
+        const engine = root.StandardsDrawingEngine;
+        activeDrawing = engine?.renderReference({standardId:entryId,type:card.drawingKind,row,pitchMm:selectedPitch});
+        activeCallout = activeDrawing?.callout || engine?.getStandardCallout(entryId,row);
       }
 
       const hasResults = Boolean(row);
       const showDrawing = card.drawingKind && table;
       const calc = activeDrawing?.calculated;
+      const copy = activeCallout ? '<button type="button" class="button secondary" data-reference-copy>Скопіювати позначення</button>' : '';
       const drawing = activeDrawing ? `<figure class="reference-figure">
         ${activeDrawing.callout ? `<div class="reference-callout">${esc(activeDrawing.callout)}</div>` : `<h2>Ескіз фланця</h2>`}
         <div class="reference-canvas${isFlange ? ' fp-drawings' : ''}">${activeDrawing.svg}</div>
@@ -134,9 +139,11 @@
         ${calc ? `<table class="reference-table reference-calculated" aria-label="Розрахований розмір"><tbody><tr>
           <th scope="row">${esc(calc.label)}</th><td>≈ ${esc(formatValueForSketch(calc.value))} ${esc(calc.unit)}</td><td>Розраховано</td></tr></tbody></table>` : ''}
         ${activeDrawing.callout ? `<div class="reference-actions">
-          <button type="button" class="button secondary" data-reference-copy>Скопіювати позначення</button>
+          ${copy}
           <button type="button" class="button secondary" data-reference-export>Експорт SVG</button></div>` : ''}
-      </figure>` : showDrawing && hasResults ? '<p class="reference-empty">Недостатньо розмірів для ескізу.</p>' : '';
+      </figure>` : showDrawing && hasResults ? `<div class="reference-empty">
+        ${activeCallout ? `<p class="reference-callout">${esc(activeCallout)}</p>` : ''}
+        <p>Недостатньо розмірів для ескізу.</p>${copy ? `<div class="reference-actions">${copy}</div>` : ''}</div>` : '';
 
       panel.innerHTML = `${card.filters.length ? `<div class="reference-filters">${card.filters.map(filterMarkup).join('')}</div>` : ''}
         ${table && !hasResults ? `<div class="reference-empty" role="status">Типорозмірів не знайдено.
@@ -218,8 +225,8 @@
       } else if (referenceRow || referenceSize) {
         selectedId = referenceRow || referenceSize;
         refreshCard(null,true);
-      } else if (referenceCopy !== undefined && activeDrawing?.callout) {
-        copyCallout(activeDrawing.callout,element).then(copied => toast(copied ? 'Позначення скопійовано.' : 'Не вдалося скопіювати позначення.'));
+      } else if (referenceCopy !== undefined && activeCallout) {
+        copyCallout(activeCallout,element).then(copied => toast(copied ? 'Позначення скопійовано.' : 'Не вдалося скопіювати позначення.'));
       } else if (referenceExport !== undefined && activeDrawing?.callout) {
         downloadSvg(activeDrawing.svg,`${entryId}-${selectedId}.svg`);
       }

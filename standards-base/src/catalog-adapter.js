@@ -223,10 +223,11 @@
       const details = this.getStandardDetails(db,id);
       const entry = referenceEntry(raw,category);
       const source = raw.source;
-      const sources = source ? [{...source, url:details.url, label:({
+      const sources = source ? [{...source, url:details.url, edition:raw.edition || source.edition, label:({
         user_supplied_table:'Таблиця, надана користувачем',
         user_supplied_screenshot:'Фрагмент, наданий користувачем. Номер ТУ й редакція невстановлені'
       })[source.kind] || entry.document}] : [];
+      if (source?.acrossFlats) sources.push({...source.acrossFlats,label:'Розмір під ключ S'});
       if (source?.pitchUrl) sources.push({label:'ГОСТ 8724-2002. Кроки різьби', url:source.pitchUrl});
       const notes = [details.scope, details.coverage?.note, source?.notes, source?.note, source?.verification,
         raw.expansionSelectionNote].filter(value => typeof value === 'string' && value);
@@ -253,6 +254,7 @@
       }
       const data = this.getTableData(db,id,choices);
       let columns = data.columns;
+      if (category === 'nuts') columns = columns.map(col => col.key === 'isNonPreferred' ? {...col,key:'preferredLabel'} : col);
       const capped = choices.type === 'B';
       if (capped) {
         columns = [...columns, column('bodyDiameterMm','Діаметр корпусу D₁','мм'),
@@ -260,7 +262,8 @@
         if (source?.capProfile) notes.push(source.capProfile);
       }
       if (category === 'torques') columns = columns.filter(col => !col.key.startsWith('torqueRange'));
-      const rows = this.filterRows(data.rows,diameter.replace(',', '.')).map(row => {
+      const applicable = raw.types ? data.rows.filter(row => row.heightMm != null || row.acrossFlatsMm != null) : data.rows;
+      const rows = this.filterRows(applicable,diameter.replace(',', '.')).map(row => {
         const profile = capped ? raw.sizes[row.diameter]?.capProfile : null;
         return {...row, ...profile, capProfile:profile, id:String(row.diameter)};
       });

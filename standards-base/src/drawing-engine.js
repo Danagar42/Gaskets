@@ -214,7 +214,7 @@
         const d2 = safeRow.outerDiameterMm ?? safeRow.outer ?? safeRow.d2 ?? (d * 1.8);
         const s = safeRow.thicknessMm ?? safeRow.thickness ?? safeRow.s ?? safeRow.h ?? 4;
 
-        return templates.renderWasher({ d, d1, d2, s, colors });
+        return templates.renderWasher({ d, d1, d2, s, colors, execution:execution ?? safeRow.execution });
       }
 
       case 'spring_washer': {
@@ -279,6 +279,7 @@
       calculated = {label:'Теоретична висота профілю H',value:theoreticalHeightMm,unit:'мм'};
       designationRow = {...row,pitch:new Intl.NumberFormat('uk-UA').format(pitch)};
       svg = templates.renderThread({d,coarsePitchMm:row.coarsePitchMm,pitchesMm:row.finePitchesMm,
+        referencePitchMm:row.coarsePitchMm ?? Math.max(...pitches),
         selectedPitchMm:pitch,theoreticalHeightMm,colors});
     } else {
       const required = {

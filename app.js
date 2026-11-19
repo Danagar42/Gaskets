@@ -289,6 +289,8 @@
     document.querySelector('#breadcrumbs').innerHTML = links.join('');
   }
   function renderRoute() {
+    clearTimeout(calcDebounceTimer);
+    calcDebounceTimer = null;
     const flangePicker = document.querySelector('#flange-picker-dialog');
     if (flangePicker?.open) flangePicker.close();
     endFolderDrag();

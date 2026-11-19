@@ -43,7 +43,8 @@ function app(options={}) {
   const context=vm.createContext({structuredClone,console,window,document,location,materialsDB:options.materials || [],Blob,FormData,
     URL:{createObjectURL(blob){const url=`blob:${blobs.size}`;blobs.set(url,blob);return url;},revokeObjectURL(){}},
     localStorage:{getItem(key){if(faults.read)throw new Error('Storage access denied');return storage.get(key)||null;},
-      setItem(key,value){if(faults.write===key)throw new Error('Quota exceeded');storage.set(key,value);}},setTimeout:()=>0,clearTimeout(){}});
+      setItem(key,value){if(faults.write===key)throw new Error('Quota exceeded');storage.set(key,value);}},
+    setTimeout:()=>0,clearTimeout(){},...options.clock});
   vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../app.js'),'utf8'),context);
   function click(action,data={}) {
     const button={dataset:{action,...data},disabled:false,isConnected:true};
@@ -69,7 +70,11 @@ const importJson=()=>P.serialize({version:1,equipment:[C.createEquipment('Імп
   const sample=require('../examples/pump-600v-first-three.json');
   const readAppFile=name=>fs.readFileSync(require('node:path').join(__dirname,'..',name),'utf8');
   const routes = [];
-  const referenceState = app({window:{FlangeCalculations:require('../calculations.js'),FlangeExcel:require('../excel-export.js'),
+  const pendingTimers = new Map();
+  let timerId = 0;
+  const clock = {setTimeout(run,delay){pendingTimers.set(++timerId,{run,delay});return timerId;},
+    clearTimeout(id){pendingTimers.delete(id);}};
+  const referenceState = app({clock,window:{FlangeCalculations:require('../calculations.js'),FlangeExcel:require('../excel-export.js'),
     StandardsReference:{render(main,parts){
     routes.push(Array.from(parts));
     main.innerHTML = '<h1>Довідник стандартів</h1>';
@@ -78,10 +83,13 @@ const importJson=()=>P.serialize({version:1,equipment:[C.createEquipment('Імп
   referenceState.navigateNode(0,0);
   const nodeHash = referenceState.location.hash;
   referenceState.dispatch('input',{dataset:{field:'gasket.thickness'},value:'4',type:'text',tagName:'INPUT'});
+  assert.ok([...pendingTimers.values()].some(timer => timer.delay === 120),'The edit queued a refresh of the current node');
   referenceState.click('open-standards');
   assert.equal(referenceState.location.hash.replace(/^#/,''),'standards');
   assert.equal(JSON.parse(referenceState.storage.get(KEY)).equipment[0].nodes[0].gasket.thickness,'4');
   referenceState.follow('#standards');
+  assert.doesNotThrow(() => {for (const timer of pendingTimers.values()) timer.run();},
+    'A queued editor refresh must not run against the standards screen');
   referenceState.follow('#standards/nuts');
   referenceState.follow('#standards/nuts/gost-9064-75');
   assert.deepEqual(routes,[[],['nuts'],['nuts','gost-9064-75']]);

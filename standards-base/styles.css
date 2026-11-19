@@ -174,7 +174,8 @@
 .standards-reference :is(.reference-path,.reference-sources) a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
 .standards-reference .reference-related { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
 .standards-reference .reference-empty { margin: 0; padding: 15px 18px; border-radius: 8px; background: var(--paper); color: #536981; }
-.standards-reference .reference-empty button { margin-left: 12px; }
+.standards-reference .reference-empty > button { margin-left: 12px; }
+.standards-reference .reference-empty .reference-actions { margin-top: 9px; }
 
 @media (max-width: 1150px) {
   .standards-reference .reference-detail-split { grid-template-columns: minmax(0,1fr); }
