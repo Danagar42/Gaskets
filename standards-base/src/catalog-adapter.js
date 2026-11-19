@@ -150,7 +150,128 @@
     return null;
   }
 
+  const referenceCategories = [
+    {id:'nuts', title:'Гайки'},
+    {id:'washers', title:'Шайби'},
+    {id:'threads', title:'Різьби'},
+    {id:'flanges', title:'Фланці'},
+    {id:'gaskets', title:'Прокладки'},
+    {id:'torques', title:'Моменти затягування'}
+  ];
+  const column = (key, label, unit = '') => ({key, label, unit});
+  const limit = new Intl.NumberFormat('uk-UA', {useGrouping:false, maximumFractionDigits:12});
+
+  function referenceEntry(raw, categoryId) {
+    const diameters = Object.keys(raw.sizes || {}).map(Number).filter(Number.isFinite);
+    const min = Math.min(...diameters), max = Math.max(...diameters);
+    const temperatures = Object.keys(raw.expansionMicroPerCByTemperatureC || {}).map(Number);
+    let range = null;
+    if (diameters.length) range = min === max ? `М${limit.format(min)}` : `М${limit.format(min)}–М${limit.format(max)}`;
+    else if (temperatures.length) range = `${Math.min(...temperatures)}–${Math.max(...temperatures)} °C`;
+    return {id:raw.id, categoryId, document:raw.document || 'Таблиці Б.1–Б.2',
+      title:raw.title || raw.name, range, aliases:[]};
+  }
+
+  function normalizeQuery(value) {
+    return String(value ?? '').toLocaleLowerCase('uk-UA').trim()
+      .replace(/[‐‑‒–—−]/g, '-').replace(/\s*-\s*/g, '-').replace(/\s+/g, ' ');
+  }
+
+  function gasketTables(raw) {
+    return [
+      {id:'properties', title:'Таблиця Б.1. Властивості прокладки',
+        columns:[column('label','Параметр'), column('value','Значення'), column('unit','Одиниця')],
+        rows:[
+          {id:'elasticity', label:'Модуль пружності', value:raw.elasticModulusMPa, unit:'МПа'},
+          {id:'width', label:'Розрахункова ширина b', value:raw.effectiveWidth?.description},
+          {id:'seating', label:'Тиск первинного обтиску', value:raw.seatingPressureMPa, unit:'МПа'},
+          {id:'minimum', label:'Мінімальний питомий тиск', value:raw.minimumPressureMPa, unit:'МПа'},
+          {id:'maximum', label:'Максимальний питомий тиск', value:raw.maximumPressureMPa, unit:'МПа'}
+        ]},
+      {id:'media', title:'Прокладковий коефіцієнт m',
+        columns:[column('media','Група середовищ'), column('value','Коефіцієнт m')],
+        rows:Object.entries(raw.mediumCoefficients).map(([id, value]) => ({id, value, media:raw.mediumGroups[id]}))},
+      {id:'expansion', title:'Таблиця Б.2. Температурне розширення',
+        columns:[column('temperature','Температура','°C'), column('value','Коефіцієнт α','10⁻⁶/°C')],
+        rows:Object.entries(raw.expansionMicroPerCByTemperatureC).map(([id,value]) => ({id, temperature:Number(id), value}))}
+    ];
+  }
+
   const StandardsCatalogAdapter = {
+    listReferenceCategories() {
+      return referenceCategories;
+    },
+
+    listReferenceEntries(db, flangeEntries = []) {
+      const resolved = resolveDb(db);
+      return referenceCategories.flatMap(({id}) => id === 'flanges' ? flangeEntries :
+        Object.values(resolved?.[id] || {}).map(raw => referenceEntry(raw,id)));
+    },
+
+    searchReferenceEntries(entries, query) {
+      const words = normalizeQuery(query).replace(/^гост\s+(?=.)/u, '').split(' ');
+      return entries.filter(entry => {
+        const text = normalizeQuery([entry.document, entry.title, ...entry.aliases].join(' '));
+        return words.every(word => text.includes(word));
+      });
+    },
+
+    getReferenceCard(db, id, filters = {}) {
+      const found = findStandard(db,id);
+      if (!found) return null;
+      const {raw, category, meta} = found;
+      const details = this.getStandardDetails(db,id);
+      const entry = referenceEntry(raw,category);
+      const source = raw.source;
+      const sources = source ? [{...source, url:details.url, label:({
+        user_supplied_table:'Таблиця, надана користувачем',
+        user_supplied_screenshot:'Фрагмент, наданий користувачем. Номер ТУ й редакція невстановлені'
+      })[source.kind] || entry.document}] : [];
+      if (source?.pitchUrl) sources.push({label:'ГОСТ 8724-2002. Кроки різьби', url:source.pitchUrl});
+      const notes = [details.scope, details.coverage?.note, source?.notes, source?.note, source?.verification,
+        raw.expansionSelectionNote].filter(value => typeof value === 'string' && value);
+      const card = {entry, filters:[], tables:[], sources, notes, drawingKind:null};
+      if (category === 'gaskets') {
+        card.tables = gasketTables(raw);
+        return card;
+      }
+
+      const diameter = String(filters.diameter ?? '');
+      card.filters.push({key:'diameter', label:'Діаметр різьби', value:diameter, options:null});
+      const choices = {};
+      function addChoice(key, label, options) {
+        if (!options.length) return;
+        const value = options.find(option => option.value === String(filters[key]))?.value ?? options[0].value;
+        card.filters.push({key,label,value,options});
+        choices[key] = value;
+      }
+      if (raw.types) addChoice('type','Тип',Object.entries(raw.types).map(([value, type]) => ({value,label:type.label})));
+      if (raw.executions) {
+        addChoice('execution','Виконання',Object.keys(raw.executions).map(value => ({value,label:value})));
+        const classes = raw.executions[choices.execution] || [];
+        addChoice('accuracyClass','Клас точності',classes.map(value => ({value,label:value})));
+      }
+      const data = this.getTableData(db,id,choices);
+      let columns = data.columns;
+      const capped = choices.type === 'B';
+      if (capped) {
+        columns = [...columns, column('bodyDiameterMm','Діаметр корпусу D₁','мм'),
+          column('headHeightMm','Висота головки l₀','мм'), column('boreDepthMm','Глибина глухого отвору l','мм')];
+        if (source?.capProfile) notes.push(source.capProfile);
+      }
+      if (category === 'torques') columns = columns.filter(col => !col.key.startsWith('torqueRange'));
+      const rows = this.filterRows(data.rows,diameter.replace(',', '.')).map(row => {
+        const profile = capped ? raw.sizes[row.diameter]?.capProfile : null;
+        return {...row, ...profile, capProfile:profile, id:String(row.diameter)};
+      });
+      if (category === 'threads') {
+        columns = columns.map(col => col.key === 'pitchesDisplay' ? {...col,key:'finePitchesMm',label:'Дрібні кроки'} : col);
+      }
+      card.tables.push({id:'sizes', title:category === 'torques' ? 'Допустимі моменти' : 'Розміри', columns, rows});
+      card.drawingKind = category === 'torques' ? null : capped ? 'capped_nut' : meta?.type || null;
+      return card;
+    },
+
     /**
      * Повертає список категорій каталогу
      * @param {Object} [db]
@@ -398,7 +519,7 @@
               const d = parseFloat(k);
               let innerD = null;
               if (s.innerDiameterByClassMm) {
-                innerD = s.innerDiameterByClassMm[accuracyClass] != null
+                innerD = Object.hasOwn(s.innerDiameterByClassMm,accuracyClass)
                   ? s.innerDiameterByClassMm[accuracyClass]
                   : s.innerDiameterByClassMm.A;
               }
