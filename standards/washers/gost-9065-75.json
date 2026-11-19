@@ -1,0 +1,207 @@
+{
+  "id": "gost-9065-75",
+  "document": "ГОСТ 9065-75",
+  "title": "Шайби для фланцевих з’єднань за температури середовища від 0 до 650 °C. Розміри",
+  "scope": "Спеціальні фланцеві товсті шайби під шпильки ГОСТ 9066 та гайки ГОСТ 9064",
+  "unit": "mm",
+  "accuracyClasses": [
+    "A"
+  ],
+  "executions": {
+    "1": [
+      "A"
+    ]
+  },
+  "minDiameterByExecutionMm": {
+    "1": 10
+  },
+  "source": {
+    "url": "https://meganorm.ru/Data2/1/4294828/4294828230.pdf",
+    "section": "Таблиця розмірів, стор. 1–2",
+    "verification": "Звірено з офіційним виданням ГОСТ 9065-75 та базою КОМПАС-3D v25 (ПОЛИНОМ)"
+  },
+  "sizes": {
+    "10": {
+      "innerDiameterByClassMm": {
+        "A": 11.0
+      },
+      "outerDiameterMm": 18.0,
+      "thicknessMm": 2.0
+    },
+    "12": {
+      "innerDiameterByClassMm": {
+        "A": 13.0
+      },
+      "outerDiameterMm": 24.0,
+      "thicknessMm": 3.0
+    },
+    "16": {
+      "innerDiameterByClassMm": {
+        "A": 17.0
+      },
+      "outerDiameterMm": 30.0,
+      "thicknessMm": 3.0
+    },
+    "20": {
+      "innerDiameterByClassMm": {
+        "A": 21.0
+      },
+      "outerDiameterMm": 37.0,
+      "thicknessMm": 4.0
+    },
+    "22": {
+      "innerDiameterByClassMm": {
+        "A": 23.0
+      },
+      "outerDiameterMm": 39.0,
+      "thicknessMm": 4.0
+    },
+    "24": {
+      "innerDiameterByClassMm": {
+        "A": 25.0
+      },
+      "outerDiameterMm": 44.0,
+      "thicknessMm": 4.0
+    },
+    "27": {
+      "innerDiameterByClassMm": {
+        "A": 28.0
+      },
+      "outerDiameterMm": 50.0,
+      "thicknessMm": 5.0
+    },
+    "30": {
+      "innerDiameterByClassMm": {
+        "A": 31.0
+      },
+      "outerDiameterMm": 56.0,
+      "thicknessMm": 5.0
+    },
+    "36": {
+      "innerDiameterByClassMm": {
+        "A": 37.0
+      },
+      "outerDiameterMm": 66.0,
+      "thicknessMm": 6.0
+    },
+    "42": {
+      "innerDiameterByClassMm": {
+        "A": 43.0
+      },
+      "outerDiameterMm": 78.0,
+      "thicknessMm": 6.0
+    },
+    "48": {
+      "innerDiameterByClassMm": {
+        "A": 50.0
+      },
+      "outerDiameterMm": 90.0,
+      "thicknessMm": 10.0
+    },
+    "52": {
+      "innerDiameterByClassMm": {
+        "A": 54.0
+      },
+      "outerDiameterMm": 95.0,
+      "thicknessMm": 10.0
+    },
+    "56": {
+      "innerDiameterByClassMm": {
+        "A": 58.0
+      },
+      "outerDiameterMm": 100.0,
+      "thicknessMm": 10.0
+    },
+    "60": {
+      "innerDiameterByClassMm": {
+        "A": 62.0
+      },
+      "outerDiameterMm": 110.0,
+      "thicknessMm": 10.0
+    },
+    "64": {
+      "innerDiameterByClassMm": {
+        "A": 66.0
+      },
+      "outerDiameterMm": 115.0,
+      "thicknessMm": 10.0
+    },
+    "68": {
+      "innerDiameterByClassMm": {
+        "A": 70.0
+      },
+      "outerDiameterMm": 120.0,
+      "thicknessMm": 10.0
+    },
+    "72": {
+      "innerDiameterByClassMm": {
+        "A": 74.0
+      },
+      "outerDiameterMm": 126.0,
+      "thicknessMm": 10.0
+    },
+    "76": {
+      "innerDiameterByClassMm": {
+        "A": 78.0
+      },
+      "outerDiameterMm": 132.0,
+      "thicknessMm": 12.0
+    },
+    "80": {
+      "innerDiameterByClassMm": {
+        "A": 82.0
+      },
+      "outerDiameterMm": 138.0,
+      "thicknessMm": 12.0
+    },
+    "90": {
+      "innerDiameterByClassMm": {
+        "A": 92.0
+      },
+      "outerDiameterMm": 155.0,
+      "thicknessMm": 12.0
+    },
+    "100": {
+      "innerDiameterByClassMm": {
+        "A": 102.0
+      },
+      "outerDiameterMm": 174.0,
+      "thicknessMm": 14.0
+    },
+    "110": {
+      "innerDiameterByClassMm": {
+        "A": 112.0
+      },
+      "outerDiameterMm": 190.0,
+      "thicknessMm": 14.0
+    },
+    "120": {
+      "innerDiameterByClassMm": {
+        "A": 122.0
+      },
+      "outerDiameterMm": 208.0,
+      "thicknessMm": 14.0
+    },
+    "125": {
+      "innerDiameterByClassMm": {
+        "A": 127.0
+      },
+      "outerDiameterMm": 215.0,
+      "thicknessMm": 14.0
+    },
+    "140": {
+      "innerDiameterByClassMm": {
+        "A": 142.0
+      },
+      "outerDiameterMm": 242.0,
+      "thicknessMm": 16.0
+    },
+    "160": {
+      "innerDiameterByClassMm": {
+        "A": 162.0
+      },
+      "outerDiameterMm": 276.0,
+      "thicknessMm": 16.0
+    }
+  }
+}

@@ -22,6 +22,8 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
+  const formatNumber = new Intl.NumberFormat('uk-UA',{maximumFractionDigits:2}).format;
+
   // Application State
   const state = {
     activeCategory: 'fasteners',
@@ -579,19 +581,11 @@
       columns.forEach((col, colIdx) => {
         const isFirst = colIdx === 0;
         const stickyClass = isFirst ? ' sticky-first-col' : '';
-        let cellVal = row[col.key];
-
-        // Format cell values
-        let displayVal = '—';
-        if (cellVal != null) {
-          if (col.key === 'diameter') {
-            displayVal = `М${cellVal}`;
-          } else if (typeof cellVal === 'number') {
-            displayVal = cellVal;
-          } else {
-            displayVal = cellVal;
-          }
-        }
+        const cellVal = row[col.key];
+        let displayVal = cellVal ?? '—';
+        if (col.key === 'diameter') displayVal = `М${formatNumber(cellVal)}`;
+        else if (col.key === 'pitchesDisplay') displayVal = row.pitchesMm.map(formatNumber).join(' · ') || '—';
+        else if (typeof cellVal === 'number') displayVal = formatNumber(cellVal);
 
         // Additional badge for first column if non-preferred
         let extraTag = '';

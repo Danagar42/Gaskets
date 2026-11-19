@@ -8,7 +8,7 @@
     assembly(parts,fastener,scope) {
       const profile = root.PassportProfiles;
       const {bolt} = fastener;
-      const d = fastener.diameter > 0 && (fastener.pitch || parts.some(p=>p.kind === 'nut' && p.height > 0)) ? fastener.diameter : 24;
+      const d = fastener.diameter > 0 && (fastener.pitch || parts.some(p=>p.height > 0 && p.kind === 'nut' || p.h > 0 && p.kind === 'washer')) ? fastener.diameter : 24;
       const bounded = (value,min,max) => Math.max(min,Math.min(value,max));
       const shaftRadius = 18, gap = shaftRadius + 2, mm = 2*shaftRadius/d;
       const {shankRadius,headRadius,headHeight} = profile.boltMetrics(d);
@@ -23,11 +23,15 @@
         const rim = sized ? bounded((f.outerDiameter-f.boltCircle)*mm/2,36,62) : 45;
         const bore = sized ? bounded((f.boltCircle-f.innerDiameter)*mm/2,76,140) : 112;
         const wall = bounded((f?.wallCylinder || 10)*mm,10,bore-52);
-        const cone = f?.coneHeight === 0 ? 0 : bounded((f?.coneHeight || 42)*mm,20,74);
+        const closedPart = ['cover','body'].includes(part.role);
+        const hasCone = f?.form ? f.form === 'conical' : closedPart && !f ? false : f?.coneHeight !== 0;
+        const cone = hasCone ? bounded((f?.coneHeight || 42)*mm,20,74) : 0;
         const rootWall = bounded(f?.wallCone > 0 ? f.wallCone*mm : wall+25,wall,bore-39);
         return {part,f,sized,rim,bore,wall,cone,rootWall};
       });
       const ref = sides.find(s=>s.sized);
+      const circular = sides.some(s=>['cover','body','flange'].includes(s.part.role) || s.part.flanged);
+      const centerX = Math.max(...sides.map(s=>s.bore))+50;
       function radialX(diameter,fallback) {
         if (!ref || !(diameter > 0)) return fallback;
         const f = ref.f, delta = f.boltCircle-diameter;
@@ -44,7 +48,7 @@
       const previousLabel = {left:-Infinity,right:-Infinity};
       function mark(index,edge,level,right=false) {
         const column = right ? 'right' : 'left';
-        const x = right ? 165 : -87;
+        const x = right ? (circular ? centerX+30 : 165) : -87;
         const labelY = Math.max(level,previousLabel[column]+19);
         previousLabel[column] = labelY;
         maxY = Math.max(maxY,labelY+9);
@@ -54,6 +58,15 @@
       }
       function strip(left,right,top,thickness,fill) {
         return `<rect x="${left}" y="${top}" width="${right-left}" height="${thickness}" fill="url(#${fill})"/>`;
+      }
+      function breakLine(x1,y1,x2,y2) {
+        const dx = x2-x1, dy = y2-y1, length = Math.hypot(dx,dy);
+        let line = '';
+        for (let step=1; step<=4; step++) {
+          const middle = (step-.5)/4, end = step/4, bend = step%2 ? 6 : -6;
+          line += ` Q ${x1+dx*middle-dy/length*bend} ${y1+dy*middle+dx/length*bend} ${x1+dx*end} ${y1+dy*end}`;
+        }
+        return line;
       }
       for (const [index,part] of parts.entries()) {
         let thickness, edge;
@@ -66,15 +79,27 @@
           const throat = tapped ? shaftRadius-.5 : bounded((f?.holeDiameter || 0)*mm/2,gap,Math.min(rim-7,bore-46));
           // Від ущільнювальної площини до зовнішнього торця, у місцевих координатах деталі.
           let back = `H ${bore}`;
-          if (part.flanged) {
+          const cover = part.role === 'cover', body = part.role === 'body';
+          let sectionEnd = deck;
+          const coverEnd = centerX-20;
+          if (cover) {
+            sectionEnd = deck+cone;
+            back = cone ? `H ${bore-rootWall} L ${bore-wall} ${sectionEnd} H ${coverEnd}` : `H ${coverEnd}`;
+          } else if (body) {
+            back = breakLine(tapped ? -rim : throat,deck,bore,deck);
+          } else if (part.flanged) {
             const foot = bore-(cone ? rootWall : wall), neck = bore-wall;
             const end = deck+cone+29;
+            sectionEnd = end;
             back = `H ${foot-3} Q ${foot} ${deck} ${foot} ${deck+3} L ${neck} ${deck+Math.max(3,cone)} V ${end}
               q ${wall*.25} -2 ${wall*.5} 0 t ${wall*.5} 0`;
             minY = Math.min(minY,face+dir*end);
             maxY = Math.max(maxY,face+dir*end);
           }
-          const rightFace = faceStep ? `V 0 H ${Math.max(seatStart,throat)} V ${faceStep} H ${throat}` : `V 0 H ${throat}`;
+          minY = Math.min(minY,face+dir*sectionEnd);
+          maxY = Math.max(maxY,face+dir*sectionEnd);
+          const innerEdge = cover ? breakLine(coverEnd,sectionEnd,coverEnd,0) : 'V 0';
+          const rightFace = faceStep ? `${innerEdge} H ${Math.max(seatStart,throat)} V ${faceStep} H ${throat}` : `${innerEdge} H ${throat}`;
           let outline;
           if (tapped) {
             const ratio = part.engagement > 0 && part.memberHeight > 0 ? part.engagement/part.memberHeight : .72;
@@ -86,9 +111,34 @@
             // Умовний обрив отвору за кінцем кріплення: глибину свердління анкета не задає.
             outline = `M ${-rim} ${deck} ${back} ${rightFace} V ${depth+3} q ${-throat*.5} 2 ${-throat} 0 t ${-throat} 0 V ${faceStep} H ${-rim} Z`;
           } else {
-            outline = `M ${-rim} ${deck} H ${-throat} V ${faceStep} H ${-rim} Z M ${throat} ${deck} ${back} ${rightFace} Z`;
+            const leftBack = body ? breakLine(-rim,deck,-throat,deck) : `H ${-throat}`;
+            outline = `M ${-rim} ${deck} ${leftBack} V ${faceStep} H ${-rim} Z M ${throat} ${deck} ${back} ${rightFace} Z`;
           }
-          shapes.push(`<path transform="translate(0 ${face}) scale(1 ${dir})" d="${outline}" fill="url(#${hatch})"/>`);
+          const selected = fastener.activeSide === part.side;
+          const neckEnd = sectionEnd;
+          let trace = '';
+          if (selected && fastener.dimension) {
+            const [section,,key] = fastener.dimension.split('.');
+            const foot = bore-(cone ? rootWall : wall);
+            const features = {
+              innerDiameter:cover ? `M ${bore} 0 V ${deck}` : `M ${bore} 0 V ${neckEnd}`,
+              outerDiameter:`M ${-rim} ${faceStep} V ${deck}`,
+              boltCircle:`M 0 ${faceStep} V ${deck}`,
+              holeDiameter:`M ${-throat} ${deck/2} H ${throat}`,
+              height:`M ${bore-rootWall*.5} 0 V ${deck}`,
+              coneHeight:body ? '' : `M ${foot} ${deck} L ${bore-wall} ${deck+cone}`,
+              wallCylinder:`M ${bore-wall} ${body ? deck/2 : cover ? sectionEnd : deck+cone+15} H ${bore}`,
+              wallCone:`M ${bore-rootWall} ${deck} H ${bore}`,
+              gasketDiameter:`M ${radialX(f?.gasketDiameter,seatStart)} -3 V ${faceStep+3}`
+            };
+            trace = section === 'connection' && key === 'height' ? `M ${-rim+4} ${faceStep} V ${deck}` : features[key] || '';
+          }
+          shapes.push(`<g data-assembly-side="${part.side}" data-part-role="${part.role || 'part'}" transform="translate(0 ${face}) scale(1 ${dir})" opacity="${fastener.activeSide && !selected ? .55 : 1}">
+            <path d="${outline}" fill="url(#${hatch})" stroke="none"/>
+            <path d="${outline}" fill="none"/>
+            ${selected ? `<path d="${outline}" fill="#0d9488" fill-opacity=".12" stroke="none"/><path class="assembly-selection" d="${outline}" fill="none" stroke="#087d81" stroke-width="1.8"/>` : ''}
+            ${trace ? `<path class="assembly-dimension" d="${trace}" fill="none" stroke="#d4822f" stroke-width="2"/>` : ''}
+          </g>`);
           edge = -rim;
         } else if (part.kind === 'head') {
           thickness = headHeight*scale;
@@ -102,7 +152,7 @@
           edge = -headRadius*scale;
         } else if (part.kind === 'nut') {
           const h = part.height || d;
-          const nut = profile.buildHexNutMetrics(0,0,d,part.capped ? 'B' : 'A',{nutM:h,nutCapH:h});
+          const nut = profile.buildHexNutMetrics(0,0,d,part.capped ? 'B' : 'A',{nutM:h,nutCapH:h,nutS:part.acrossFlats,pitch:fastener.pitch || 2});
           nutScale = shaftRadius/(nut.threadRadius+2);
           thickness = nut.hPx*nutScale;
           const seat = part.upper ? y+thickness : y;
@@ -111,18 +161,23 @@
           if (part.upper) shaftTop = seat-reach;
           else shaftBottom = seat+reach;
           shapes.push(`<g class="assembly-fastener" transform="translate(0 ${seat}) scale(${nutScale} ${part.upper ? nutScale : -nutScale})">${profile.nutSide(nut,steel,nutHatch)}</g>`);
-          edge = -nut.halfE*nutScale;
+          edge = -(nut.cap ? nut.cap.bodyDiameterMm * nut.scale / 2 : nut.halfE)*nutScale;
         } else if (part.kind === 'gasket') {
           thickness = bounded((part.thickness || 3)*mm,4,13);
           if (part.full) shapes.push(strip(gasketLeft,-gap,y,thickness,gasketHatch));
           shapes.push(strip(part.full ? gap : seatStart,gasketEnd,y,thickness,gasketHatch));
           edge = gasketEnd;
-        } else {
-          const washer = part.kind === 'washer';
-          thickness = washer ? 4 : bounded((part.thickness || 12)*mm,8,28);
-          const outer = washer ? 40 : 45;
-          shapes.push(strip(-outer,-gap,y,thickness,washer ? steel : hatch),strip(gap,washer ? outer : seatEnd,y,thickness,washer ? steel : hatch));
+        } else if (part.kind === 'washer') {
+          thickness = part.h > 0 ? part.h*mm : 4;
+          const outer = part.outer > 0 ? part.outer*mm/2 : 40;
+          const inner = part.inner > 0 ? part.inner*mm/2 : gap;
+          shapes.push(strip(-outer,-inner,y,thickness,steel),strip(inner,outer,y,thickness,steel));
+          if (part.spring) shapes.push(`<path d="M ${inner+(outer-inner)*.35} ${y} l ${(outer-inner)*.3} ${thickness}" fill="none"/>`);
           edge = -outer;
+        } else {
+          thickness = bounded((part.thickness || 12)*mm,8,28);
+          shapes.push(strip(-45,-gap,y,thickness,hatch),strip(gap,seatEnd,y,thickness,hatch));
+          edge = -45;
         }
         mark(index,edge,y+thickness/2,part.kind === 'gasket');
         y += thickness;
@@ -132,7 +187,7 @@
       const axisTop = Math.min(0,shaftTop)-12, axisBottom = Math.max(y,shaftBottom)+12;
       minY = Math.min(minY,axisTop)-9;
       maxY = Math.max(maxY,axisBottom)+9;
-      return `<svg viewBox="-100 ${minY} 280 ${maxY-minY}" role="img" aria-label="Осьовий розріз з’єднання через кріплення і прокладку">
+      return `<svg viewBox="-100 ${minY} ${circular ? centerX+145 : 280} ${maxY-minY}" role="img" aria-label="Осьовий розріз з’єднання через кріплення і прокладку">
         <defs>${profile.steelGradient(steel)}${profile.steelHatch(nutHatch,.65/nutScale)}${profile.steelHatch(hatch,1)}
           <pattern id="${gasketHatch}" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="#526269"/><path d="M0 0L4 4M0 4L4 0" stroke="#c4d0d4" stroke-width=".55"/></pattern></defs>
         <g stroke="#2b434f" stroke-width="1.35" stroke-linejoin="round">
@@ -141,13 +196,15 @@
             <path d="${shaft.threadLines}" fill="none" stroke="#3c5866" stroke-width=".85"/>
             ${hole ? `<path d="M ${-hole} 0 V ${length} M ${hole} 0 V ${length}" fill="none" stroke-dasharray="4 3"/>` : ''}</g>
           ${shapes.join('')}</g>
-        <path d="M 0 ${axisTop} V ${axisBottom}" stroke="#c56b1a" stroke-width=".85" stroke-dasharray="12 4 2 4"/>${markers.join('')}</svg>`;
+        <g fill="none" stroke="#c56b1a" stroke-width=".85" stroke-dasharray="12 4 2 4">
+          <path data-axis="fastener" d="M 0 ${axisTop} V ${axisBottom}"/>
+          ${circular ? `<path data-axis="joint" d="M ${centerX} ${minY+2} V ${maxY-2}"/>` : ''}</g>${markers.join('')}</svg>`;
     },
     create(style,key,part,threadPitch) {
       const parts = {[key]:part};
       const d=part.diameter || part.outer;
       const pitch=threadPitch;
-      const number=n=>n.toLocaleString('uk-UA');
+      const number=n=>n.toLocaleString('uk-UA',{maximumFractionDigits:2});
       const styles=this.styles;
 const TAU = Math.PI*2;
 const clamp = (x,min,max) => Math.max(min,Math.min(max,x));

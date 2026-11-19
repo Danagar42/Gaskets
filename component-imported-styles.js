@@ -99,10 +99,14 @@
      * та математично коректні дуги гіпербол перетину конуса фаски з гранями.
      */
     function buildHexNutMetrics(cx, baseY, d, nutType, spec) {
-      const halfE = 56 + d * 0.68;      // E/2 описаного кола шестигранника
-      const edgeX = halfE * 0.5;        // E/4 — внутрішні вертикальні ребра граней
       const heightMm = nutType === 'B' ? spec.nutCapH : spec.nutM;
-      const hPx = nutType === 'B' ? (68 + spec.nutCapH * 1.15) : (52 + spec.nutM * 1.45);
+      const cap = nutType === 'B' && spec.nutS > 0
+        ? root.FlangeStandardsDB?.nuts?.['gost-9064-75']?.sizes[d]?.capProfile : null;
+      const width = cap ? cap.bodyDiameterMm : spec.nutS;
+      const scale = width > 0 ? Math.min(160 / width, 202 / heightMm) : null;
+      const halfE = scale ? spec.nutS * scale / Math.sqrt(3) : 56 + d * 0.68;
+      const edgeX = halfE * 0.5;        // E/4 — внутрішні вертикальні ребра граней
+      const hPx = scale ? heightMm * scale : (nutType === 'B' ? 68 + heightMm * 1.15 : 52 + heightMm * 1.45);
       const topY = baseY - hPx;
       const chamferDrop = Math.max(8, halfE * 0.14);
       const centerArcDip = chamferDrop * 0.42;
@@ -114,11 +118,13 @@
         topY,
         hPx,
         halfE,
-        threadRadius: 13 + d * 0.56,
+        threadRadius: scale ? d * scale / 2 - 2 : 13 + d * 0.56,
         edgeX,
         chamferDrop,
         centerArcDip,
         heightMm,
+        cap,
+        scale,
         isCapped: nutType === 'B'
       };
     }
@@ -139,8 +145,27 @@
     }
 
     function nutSide(m, steel = 'v5-steel', hatch = 'v5-hatch') {
-      const {cx,baseY,topY,halfE,edgeX,chamferDrop,centerArcDip,isCapped} = m;
-      const bodyTopY = isCapped ? topY + m.hPx * 0.44 : topY;
+      const {cx,baseY,topY,halfE,edgeX,chamferDrop,centerArcDip,cap,scale} = m;
+      if (m.isCapped && !cap) {
+        return `<rect x="${cx-halfE}" y="${topY}" width="${2*halfE}" height="${m.hPx}" fill="none" stroke="#526872" stroke-dasharray="4 3"><title>Розміри ковпачкової гайки відсутні в каталозі</title></rect>`;
+      }
+      if (cap) {
+        const shoulder = topY + cap.headHeightMm * scale;
+        const boreEnd = baseY - cap.boreDepthMm * scale;
+        const body = cap.bodyDiameterMm * scale / 2;
+        const head = m.spec.nutS * scale / 2;
+        const bevel = scale;
+        const major = m.threadRadius + 2;
+        const minor = major - (5 * Math.sqrt(3) / 16) * (m.spec.pitch || 1) * scale;
+        // Відкриті контури закінчуються на осі, тож межу піврозрізу позначає лише осьова лінія.
+        return `<g stroke="#2b434f" stroke-width="2" stroke-linejoin="round">
+          <path d="M ${cx} ${topY} H ${cx-head+bevel} L ${cx-head} ${topY+bevel} V ${shoulder} H ${cx-body} V ${baseY-bevel} L ${cx-body+bevel} ${baseY} H ${cx}" fill="url(#${steel})"/>
+          <path d="M ${cx} ${topY} H ${cx+head-bevel} L ${cx+head} ${topY+bevel} V ${shoulder} H ${cx+body} V ${baseY-bevel} L ${cx+body-bevel} ${baseY} H ${cx+major} L ${cx+minor} ${baseY-(major-minor)} V ${boreEnd} H ${cx}" fill="url(#${hatch})"/>
+          <path d="M ${cx-head} ${shoulder} H ${cx} M ${cx-head} ${topY+bevel} Q ${cx-head/2} ${topY-bevel/2} ${cx} ${topY+bevel}" fill="none" stroke-width="1.2"/>
+          <path d="M ${cx+major} ${baseY} V ${boreEnd+bevel} L ${cx+minor} ${boreEnd}" fill="none" stroke-width=".85"/>
+        </g>`;
+      }
+      const bodyTopY = topY;
       const rMinor = m.threadRadius;
       const rMajor = rMinor + 4;
 
@@ -158,13 +183,7 @@
           <!-- ПРАВА ПОЛОВИНА: розріз гайки зі штрихуванням сталі під 45° -->
           <path d="${innerTeeth} L ${cx + rMajor + 4} ${baseY} H ${cx + halfE - 7} L ${cx + halfE} ${baseY - 6} V ${bodyTopY + chamferDrop} L ${cx + halfE - 10} ${bodyTopY} H ${cx + rMajor + 4} Z" fill="url(#${hatch})" stroke="#2b434f" stroke-width="2" stroke-linejoin="round"/>
           <!-- Лінія западин внутрішньої різьби (тонка суцільна за ЄСКД) -->
-          <line x1="${cx + rMajor}" y1="${bodyTopY + 5}" x2="${cx + rMajor}" y2="${baseY - 5}" stroke="#2b434f" stroke-width="1.1"/>
-
-          <!-- Ковпачок для Виконання Б (зліва вигляд, справа розріз глухого отвору) -->
-          ${isCapped ? `
-            <path d="M ${cx} ${topY} Q ${cx - halfE + 10} ${topY} ${cx - halfE + 10} ${bodyTopY} H ${cx}" fill="url(#${steel})" stroke="#2b434f" stroke-width="2"/>
-            <path d="M ${cx} ${topY} Q ${cx + halfE - 10} ${topY} ${cx + halfE - 10} ${bodyTopY} H ${cx + rMajor + 4} V ${bodyTopY - 12} H ${cx} Z" fill="url(#${hatch})" stroke="#2b434f" stroke-width="2"/>
-          ` : ''}`;
+          <line x1="${cx + rMajor}" y1="${bodyTopY + 5}" x2="${cx + rMajor}" y2="${baseY - 5}" stroke="#2b434f" stroke-width="1.1"/>`;
     }
 
     function steelGradient(id) {
@@ -185,7 +204,7 @@
 root.ImportedComponentStyles = function(style,key,part,pitch) {
  const fmt = n => Number(n).toLocaleString('uk-UA',{maximumFractionDigits:2});
  const diameter = part.diameter || part.outer;
- const GOST_DB = {[diameter]:{studLength:part.length ?? '—',threadEnd:'—',nutS:part.acrossFlats ?? '—',nutM:part.h,nutCapH:part.h,washerD1:part.inner,washerD2:part.outer,washerS:part.h}};
+ const GOST_DB = {[diameter]:{studLength:part.length ?? '—',threadEnd:'—',nutS:part.acrossFlats ?? '—',nutM:part.h,nutCapH:part.h,pitch,washerD1:part.inner,washerD2:part.outer,washerS:part.h}};
      const RenderV1 = {
       stud(d, p, count) {
         const spec = GOST_DB[d];
@@ -239,11 +258,11 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
           <line x1="${zx - zDepth}" y1="${zy - zPitch * 1.6}" x2="${zx - zDepth}" y2="${zy + zPitch * 2.1}" stroke="#0284c7" stroke-width="0.8" stroke-dasharray="6 3"/>
 
           <!-- Інтерактивні розміри -->
-          <g class="svg-interactive" data-tip-title="Діаметр різьби М${d}" data-tip-body="Номінальний зовнішній діаметр d = ${d} мм за ГОСТ 24705-2004. Кількість у вузлі: ${count} шт.">
+          <g class="svg-interactive" data-tip-title="Діаметр різьби М${fmt(d)}" data-tip-body="Номінальний зовнішній діаметр d = ${fmt(d)} мм за ГОСТ 24705-2004. Кількість у вузлі: ${fmt(count)} шт.">
             <line class="dim-line" x1="${cx - halfW}" y1="292" x2="${cx - halfW}" y2="336" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${cx + halfW}" y1="292" x2="${cx + halfW}" y2="336" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${cx - halfW}" y1="327" x2="${cx + halfW}" y2="327" stroke="#006d73" stroke-width="1.2" marker-start="url(#v1-arr)" marker-end="url(#v1-arr)"/>
-            <text class="dim-text" x="${cx}" y="319" text-anchor="middle" fill="#005f66" font-size="16" font-weight="700">М${d}</text>
+            <text class="dim-text" x="${cx}" y="319" text-anchor="middle" fill="#005f66" font-size="16" font-weight="700">М${fmt(d)}</text>
           </g>
 
           <g class="svg-interactive" data-tip-title="Крок різьби P = ${fmt(p)} мм" data-tip-body="Великий крок метричної різьби за ГОСТ 8724-2002 (кут профілю 60°).">
@@ -253,29 +272,26 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
             <text class="dim-text" x="${zx + 50}" y="${zy + zPitch * 0.5 + 5}" fill="#005f66" font-size="15.5" font-weight="700">P = ${fmt(p)}</text>
           </g>
 
-          <g class="svg-interactive" data-tip-title="Довжина шпильки L = ${spec.studLength} мм" data-tip-body="Розрахункова довжина шпильки за ГОСТ 22032-76 / ГОСТ 9066-75 під пакет фланця.">
+          <g class="svg-interactive" data-tip-title="Довжина шпильки L = ${fmt(spec.studLength)} мм" data-tip-body="Розрахункова довжина шпильки за ГОСТ 22032-76 / ГОСТ 9066-75 під пакет фланця.">
             <line class="dim-line" x1="${cx - halfW}" y1="${topY}" x2="108" y2="${topY}" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${cx - halfW}" y1="${botY}" x2="108" y2="${botY}" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="118" y1="${topY}" x2="118" y2="${botY}" stroke="#006d73" stroke-width="1.2" marker-start="url(#v1-arr)" marker-end="url(#v1-arr)"/>
-            <text class="dim-text" transform="translate(107 ${(topY + botY) / 2}) rotate(-90)" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">L = ${spec.studLength}</text>
+            <text class="dim-text" transform="translate(107 ${(topY + botY) / 2}) rotate(-90)" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">L = ${fmt(spec.studLength)}</text>
           </g>
         `;
       },
 
       nut(d, nutType) {
         const m = buildHexNutMetrics(215, 250, d, nutType, GOST_DB[d]);
-        const { cx, baseY, topY, halfE, edgeX, chamferDrop, centerArcDip, spec, isCapped } = m;
+        const { cx, baseY, topY, halfE, edgeX, chamferDrop, centerArcDip, spec } = m;
 
         // Контур 3 граней шестигранника
-        const bodyTopY = isCapped ? topY + m.hPx * 0.44 : topY;
+        const bodyTopY = topY;
         const leftFace = `M ${cx - halfE} ${baseY - 6} V ${bodyTopY + chamferDrop} L ${cx - edgeX} ${bodyTopY + chamferDrop} V ${baseY} L ${cx - halfE + 7} ${baseY} Z`;
         const centerFace = `M ${cx - edgeX} ${bodyTopY + chamferDrop} Q ${cx} ${bodyTopY + centerArcDip} ${cx + edgeX} ${bodyTopY + chamferDrop} V ${baseY} H ${cx - edgeX} Z`;
         const rightFace = `M ${cx + edgeX} ${bodyTopY + chamferDrop} L ${cx + halfE} ${bodyTopY + chamferDrop} V ${baseY - 6} L ${cx + halfE - 7} ${baseY} H ${cx + edgeX} Z`;
 
-        // Верхня фаска або сферичний ковпачок
-        const crown = isCapped
-          ? `<path d="M ${cx - halfE} ${bodyTopY + chamferDrop} L ${cx - halfE + 9} ${bodyTopY - 4} Q ${cx - halfE + 9} ${topY} ${cx} ${topY} Q ${cx + halfE - 9} ${topY} ${cx + halfE - 9} ${bodyTopY - 4} L ${cx + halfE} ${bodyTopY + chamferDrop} Q ${cx + (halfE + edgeX) / 2} ${bodyTopY + chamferDrop * 0.4} ${cx + edgeX} ${bodyTopY + chamferDrop} Q ${cx} ${bodyTopY + centerArcDip} ${cx - edgeX} ${bodyTopY + chamferDrop} Q ${cx - (halfE + edgeX) / 2} ${bodyTopY + chamferDrop * 0.4} ${cx - halfE} ${bodyTopY + chamferDrop} Z" fill="url(#v1-nut-top)" stroke="#1e293b" stroke-width="2.1" stroke-linejoin="round"/>`
-          : `<path d="M ${cx - halfE} ${topY + chamferDrop} L ${cx - halfE + 11} ${topY} H ${cx + halfE - 11} L ${cx + halfE} ${topY + chamferDrop} Q ${cx + (halfE + edgeX) / 2} ${topY + chamferDrop * 0.35} ${cx + edgeX} ${topY + chamferDrop} Q ${cx} ${topY + centerArcDip} ${cx - edgeX} ${topY + chamferDrop} Q ${cx - (halfE + edgeX) / 2} ${topY + chamferDrop * 0.35} ${cx - halfE} ${topY + chamferDrop} Z" fill="url(#v1-nut-top)" stroke="#1e293b" stroke-width="2.1" stroke-linejoin="round"/>`;
+        const crown = `<path d="M ${cx - halfE} ${topY + chamferDrop} L ${cx - halfE + 11} ${topY} H ${cx + halfE - 11} L ${cx + halfE} ${topY + chamferDrop} Q ${cx + (halfE + edgeX) / 2} ${topY + chamferDrop * 0.35} ${cx + edgeX} ${topY + chamferDrop} Q ${cx} ${topY + centerArcDip} ${cx - edgeX} ${topY + chamferDrop} Q ${cx - (halfE + edgeX) / 2} ${topY + chamferDrop * 0.35} ${cx - halfE} ${topY + chamferDrop} Z" fill="url(#v1-nut-top)" stroke="#1e293b" stroke-width="2.1" stroke-linejoin="round"/>`;
 
         // Вид зверху / з боку різьби (справа)
         const rcx = 468, rcy = 172, rOuter = halfE * 0.96;
@@ -327,23 +343,23 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
           <line x1="${rcx}" y1="${rcy - rOuter - 12}" x2="${rcx}" y2="${rcy + rOuter + 12}" stroke="#0284c7" stroke-width="0.85" stroke-dasharray="12 3 2 3"/>
 
           <!-- Розміри -->
-          <g class="svg-interactive" data-tip-title="Висота гайки ${isCapped ? 'H' : 'm'} = ${fmt(m.heightMm)} мм" data-tip-body="${isCapped ? 'Висота ковпачкової гайки за ГОСТ 11860-85' : 'Висота шестигранної гайки за ГОСТ 5915-70'}.">
+          <g class="svg-interactive" data-tip-title="Висота гайки ${part.heightSymbol || 'm'} = ${fmt(m.heightMm)} мм" data-tip-body="Висота шестигранної гайки.">
             <line class="dim-line" x1="${cx - halfE + 10}" y1="${topY}" x2="92" y2="${topY}" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${cx - halfE + 7}" y1="${baseY}" x2="92" y2="${baseY}" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="102" y1="${topY}" x2="102" y2="${baseY}" stroke="#006d73" stroke-width="1.2" marker-start="url(#v1-arr2)" marker-end="url(#v1-arr2)"/>
-            <text class="dim-text" transform="translate(91 ${(topY + baseY) / 2}) rotate(-90)" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">${isCapped ? 'H' : 'm'} = ${fmt(m.heightMm)}</text>
+            <text class="dim-text" transform="translate(91 ${(topY + baseY) / 2}) rotate(-90)" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">${part.heightSymbol || 'm'} = ${fmt(m.heightMm)}</text>
           </g>
 
-          <g class="svg-interactive" data-tip-title="Розмір під ключ S = ${spec.nutS} мм" data-tip-body="Відстань між паралельними гранями шестигранника S = ${spec.nutS} мм.">
+          <g class="svg-interactive" data-tip-title="Розмір під ключ S = ${fmt(spec.nutS)} мм" data-tip-body="Відстань між паралельними гранями шестигранника S = ${fmt(spec.nutS)} мм.">
             <line class="dim-line" x1="${rcx - rChamfer}" y1="${rcy}" x2="${rcx - rChamfer}" y2="288" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${rcx + rChamfer}" y1="${rcy}" x2="${rcx + rChamfer}" y2="288" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${rcx - rChamfer}" y1="280" x2="${rcx + rChamfer}" y2="280" stroke="#006d73" stroke-width="1.2" marker-start="url(#v1-arr2)" marker-end="url(#v1-arr2)"/>
-            <text class="dim-text" x="${rcx}" y="272" text-anchor="middle" fill="#005f66" font-size="15" font-weight="700">S = ${spec.nutS}</text>
+            <text class="dim-text" x="${rcx}" y="272" text-anchor="middle" fill="#005f66" font-size="15" font-weight="700">S = ${fmt(spec.nutS)}</text>
           </g>
 
-          <g class="svg-interactive" data-tip-title="Внутрішня різьба М${d}" data-tip-body="Поле допуску 6H за ГОСТ 16093-2004.">
+          <g class="svg-interactive" data-tip-title="Внутрішня різьба М${fmt(d)}" data-tip-body="Поле допуску 6H за ГОСТ 16093-2004.">
             <path class="dim-line" d="M ${rcx + rThreadMinor * 0.7} ${rcy - rThreadMinor * 0.7} L 538 72 H 586" fill="none" stroke="#006d73" stroke-width="1.1"/>
-            <text class="dim-text" x="584" y="65" text-anchor="end" fill="#005f66" font-size="15.5" font-weight="700">М${d}</text>
+            <text class="dim-text" x="584" y="65" text-anchor="end" fill="#005f66" font-size="15.5" font-weight="700">М${fmt(d)}</text>
           </g>
 
           <text x="${cx}" y="318" text-anchor="middle" fill="#435b66" font-size="13">Головний вигляд</text>
@@ -402,25 +418,25 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
           <line x1="${secX + 4}" y1="${(secTop + secY) / 2}" x2="${secX + secW - 2}" y2="${(secTop + secY) / 2}" stroke="#f8fafc" stroke-width="2.0" stroke-dasharray="12 3"/>
 
           <!-- Розміри -->
-          <g class="svg-interactive" data-tip-title="Внутрішній діаметр Ø${id} мм" data-tip-body="Прохідний отвір прокладки Dвн = ${id} мм.">
+          <g class="svg-interactive" data-tip-title="Внутрішній діаметр Ø${fmt(id)} мм" data-tip-body="Прохідний отвір прокладки Dвн = ${fmt(id)} мм.">
             <line class="dim-line" x1="${cx - rIn}" y1="${cy}" x2="${cx - rIn}" y2="215" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${cx + rIn}" y1="${cy}" x2="${cx + rIn}" y2="215" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${cx - rIn}" y1="207" x2="${cx + rIn}" y2="207" stroke="#006d73" stroke-width="1.2" marker-start="url(#v1-arr3)" marker-end="url(#v1-arr3)"/>
-            <text class="dim-text" x="${cx}" y="199" text-anchor="middle" fill="#f8fafc" stroke="#1e293b" stroke-width="3" paint-order="stroke" font-size="14.5" font-weight="700">Ø${id}</text>
+            <text class="dim-text" x="${cx}" y="199" text-anchor="middle" fill="#f8fafc" stroke="#1e293b" stroke-width="3" paint-order="stroke" font-size="14.5" font-weight="700">Ø${fmt(id)}</text>
           </g>
 
-          <g class="svg-interactive" data-tip-title="Зовнішній діаметр Ø${od} мм" data-tip-body="Зовнішній габарит прокладки Dзовн = ${od} мм.">
+          <g class="svg-interactive" data-tip-title="Зовнішній діаметр Ø${fmt(od)} мм" data-tip-body="Зовнішній габарит прокладки Dзовн = ${fmt(od)} мм.">
             <line class="dim-line" x1="${cx - rOut}" y1="${cy}" x2="${cx - rOut}" y2="328" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${cx + rOut}" y1="${cy}" x2="${cx + rOut}" y2="328" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${cx - rOut}" y1="320" x2="${cx + rOut}" y2="320" stroke="#006d73" stroke-width="1.2" marker-start="url(#v1-arr3)" marker-end="url(#v1-arr3)"/>
-            <text class="dim-text" x="${cx}" y="312" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">Ø${od}</text>
+            <text class="dim-text" x="${cx}" y="312" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">Ø${fmt(od)}</text>
           </g>
 
-          <g class="svg-interactive" data-tip-title="Товщина прокладки h = ${thick} мм" data-tip-body="Початкова товщина до обтиснення фланцями.">
+          <g class="svg-interactive" data-tip-title="Товщина прокладки h = ${fmt(thick)} мм" data-tip-body="Початкова товщина до обтиснення фланцями.">
             <line class="dim-line" x1="${secX + secW}" y1="${secTop}" x2="${secX + secW + 34}" y2="${secTop}" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${secX + secW}" y1="${secY}" x2="${secX + secW + 34}" y2="${secY}" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${secX + secW + 25}" y1="${secTop}" x2="${secX + secW + 25}" y2="${secY}" stroke="#006d73" stroke-width="1.2" marker-start="url(#v1-arr3)" marker-end="url(#v1-arr3)"/>
-            <text class="dim-text" x="${secX + secW + 36}" y="${(secTop + secY) / 2 + 5}" fill="#005f66" font-size="15.5" font-weight="700">h = ${thick}</text>
+            <text class="dim-text" x="${secX + secW + 36}" y="${(secTop + secY) / 2 + 5}" fill="#005f66" font-size="15.5" font-weight="700">h = ${fmt(thick)}</text>
           </g>
 
           <g class="svg-interactive" data-tip-title="Ширина прокладки b₀ = ${fmt((od - id) / 2)} мм" data-tip-body="Реальна ширина поля прокладки: (Dзовн - Dвнутр) / 2 = ${fmt((od - id) / 2)} мм. Середній діаметр: Dср = ${fmt((od + id) / 2)} мм.">
@@ -430,7 +446,7 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
             <text class="dim-text" x="${secX + secW / 2}" y="${secY + 44}" text-anchor="middle" fill="#005f66" font-size="15" font-weight="700">b₀ = ${fmt((od - id) / 2)}</text>
           </g>
 
-          ${hasHoles ? `<text x="${secX}" y="264" fill="#435b66" font-size="13.5" font-weight="600">${count} отв. × Ø${holeD} мм</text>` : `<text x="${secX}" y="264" fill="#64748b" font-size="13">Без отворів під шпильки</text>`}
+          ${hasHoles ? `<text x="${secX}" y="264" fill="#435b66" font-size="13.5" font-weight="600">${fmt(count)} отв. × Ø${fmt(holeD)} мм</text>` : `<text x="${secX}" y="264" fill="#64748b" font-size="13">Без отворів під шпильки</text>`}
         `;
       },
 
@@ -478,16 +494,16 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
           <path d="${secPoly}" fill="url(#v1-hatch-steel)" stroke="#1e293b" stroke-width="2.2" stroke-linejoin="round"/>
 
           <!-- Розміри -->
-          <g class="svg-interactive" data-tip-title="Внутрішній діаметр d1 = ${spec.washerD1} мм" data-tip-body="Отвір шайби під різьбу М${d} (ГОСТ 11371-78).">
+          <g class="svg-interactive" data-tip-title="Внутрішній діаметр d1 = ${fmt(spec.washerD1)} мм" data-tip-body="Отвір шайби під різьбу М${fmt(d)} (ГОСТ 11371-78).">
             <line class="dim-line" x1="${cx - rIn}" y1="${cy}" x2="${cx + rIn}" y2="${cy}" stroke="#006d73" stroke-width="1.2" marker-start="url(#v1-arr4)" marker-end="url(#v1-arr4)"/>
-            <text class="dim-text" x="${cx}" y="${cy - 8}" text-anchor="middle" fill="#005f66" font-size="15" font-weight="700">Ø${spec.washerD1}</text>
+            <text class="dim-text" x="${cx}" y="${cy - 8}" text-anchor="middle" fill="#005f66" font-size="15" font-weight="700">Ø${fmt(spec.washerD1)}</text>
           </g>
 
-          <g class="svg-interactive" data-tip-title="Зовнішній діаметр d2 = ${spec.washerD2} мм" data-tip-body="Зовнішній діаметр опорної поверхні шайби.">
+          <g class="svg-interactive" data-tip-title="Зовнішній діаметр d2 = ${fmt(spec.washerD2)} мм" data-tip-body="Зовнішній діаметр опорної поверхні шайби.">
             <line class="dim-line" x1="${cx - rOut}" y1="${cy}" x2="${cx - rOut}" y2="326" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${cx + rOut}" y1="${cy}" x2="${cx + rOut}" y2="326" stroke="#006d73" stroke-width="0.85"/>
             <line class="dim-line" x1="${cx - rOut}" y1="318" x2="${cx + rOut}" y2="318" stroke="#006d73" stroke-width="1.2" marker-start="url(#v1-arr4)" marker-end="url(#v1-arr4)"/>
-            <text class="dim-text" x="${cx}" y="310" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">Ø${spec.washerD2}</text>
+            <text class="dim-text" x="${cx}" y="310" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">Ø${fmt(spec.washerD2)}</text>
           </g>
 
           <g class="svg-interactive" data-tip-title="Товщина шайби s = ${fmt(spec.washerS)} мм" data-tip-body="Номінальна товщина за ГОСТ 11371-78.">
@@ -512,23 +528,20 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
     // --------------------------------------------------------------------------
 
     // Торцевий вигляд шестигранника з фаскою. Отвір задається радіусом у масштабі виду.
-    function hexEndView(cx, cy, radius, angle, boreRadius, capped = false) {
+    function hexEndView(cx, cy, radius, angle, boreRadius, bodyRadius = 0) {
+      const extent = Math.max(radius, bodyRadius);
       const points = Array.from({length:6}, (_, i) => {
         const a = angle + i * Math.PI / 3;
         return `${(cx + radius * Math.cos(a)).toFixed(1)},${(cy + radius * Math.sin(a)).toFixed(1)}`;
       }).join(' ');
       return `
+        ${bodyRadius ? `<circle cx="${cx}" cy="${cy}" r="${bodyRadius}" fill="url(#v5-steel)" stroke="#2b434f" stroke-width="2"/>` : ''}
         <polygon points="${points}" fill="url(#v5-steel)" stroke="#2b434f" stroke-width="2" stroke-linejoin="round"/>
-        ${capped ? `<defs>
-          <radialGradient id="v5-nut-crown" cx="35%" cy="30%" r="75%">
-            <stop stop-color="#edf4f5"/><stop offset=".55" stop-color="#bdcdd2"/><stop offset="1" stop-color="#718995"/>
-          </radialGradient>
-        </defs>` : ''}
-        <circle cx="${cx}" cy="${cy}" r="${(radius * 0.85).toFixed(1)}" fill="${capped ? 'url(#v5-nut-crown)' : 'none'}" stroke="#2b434f" stroke-width="1.1"/>
+        <circle cx="${cx}" cy="${cy}" r="${(radius * (bodyRadius ? .80 : .85)).toFixed(1)}" fill="none" stroke="#2b434f" stroke-width="1.1"/>
         ${boreRadius > 0 ? `<circle cx="${cx}" cy="${cy}" r="${boreRadius}" fill="#f7faf9" stroke="#2b434f" stroke-width="1.9"/>` : ''}
         <g stroke="#c56b1a" stroke-width="0.85" stroke-dasharray="14 4 2 4">
-          <line x1="${cx - radius - 12}" y1="${cy}" x2="${cx + radius + 12}" y2="${cy}"/>
-          <line x1="${cx}" y1="${cy - radius - 12}" x2="${cx}" y2="${cy + radius + 12}"/>
+          <line x1="${cx - extent - 12}" y1="${cy}" x2="${cx + extent + 12}" y2="${cy}"/>
+          <line x1="${cx}" y1="${cy - extent - 12}" x2="${cx}" y2="${cy + extent + 12}"/>
         </g>`;
     }
 
@@ -588,11 +601,11 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
           <text x="${lx}" y="${ly - lr - 10}" text-anchor="middle" fill="#1b3440" font-size="13.5" font-weight="700">Збіг різьби</text>
 
           <!-- Розміри -->
-          <g class="svg-interactive" data-tip-title="Шпилька М${d} × ${fmt(p)}" data-tip-body="ГОСТ 24705-2004 · Кількість: ${count} шт. · Довжина L=${spec.studLength} мм">
+          <g class="svg-interactive" data-tip-title="Шпилька М${fmt(d)} × ${fmt(p)}" data-tip-body="ГОСТ 24705-2004 · Кількість: ${fmt(count)} шт. · Довжина L=${fmt(spec.studLength)} мм">
             <line class="dim-line" x1="${cx - halfW}" y1="294" x2="${cx - halfW}" y2="332" stroke="#006d73" stroke-width="1"/>
             <line class="dim-line" x1="${cx + halfW}" y1="294" x2="${cx + halfW}" y2="332" stroke="#006d73" stroke-width="1"/>
             <line class="dim-line" x1="${cx - halfW}" y1="324" x2="${cx + halfW}" y2="324" stroke="#006d73" stroke-width="1.4" marker-start="url(#v5-arr)" marker-end="url(#v5-arr)"/>
-            <text class="dim-text" x="${cx}" y="316" text-anchor="middle" fill="#005f66" font-size="16" font-weight="700">М${d} × ${fmt(p)}</text>
+            <text class="dim-text" x="${cx}" y="316" text-anchor="middle" fill="#005f66" font-size="16" font-weight="700">М${fmt(d)} × ${fmt(p)}</text>
           </g>
         `;
       },
@@ -638,13 +651,16 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
       nut(d, nutType) {
         // Половинно-осьовий розріз гайки (зліва — вигляд шестигранника, справа від осі — розріз з внутрішньою різьбою!)
         const specRow = GOST_DB[d];
-        const height = nutType === 'B' ? 68 + specRow.nutCapH * 1.15 : 52 + specRow.nutM * 1.45;
         const centerY = 170;
-        const m = buildHexNutMetrics(215, centerY + height/2, d, nutType, specRow);
+        const m = buildHexNutMetrics(215,centerY,d,nutType,specRow);
+        if (m.isCapped && !m.cap) return '<text x="335" y="170" text-anchor="middle">Розміри ковпачкової гайки відсутні в каталозі</text>';
+        m.baseY += m.hPx/2;
+        m.topY += m.hPx/2;
         const { cx, baseY, topY, halfE, spec, isCapped } = m;
-        const rcx = 468, rcy = centerY, rOuter = halfE * 0.94;
+        const rcx = 468, rcy = centerY, rOuter = isCapped ? halfE : halfE * 0.94;
+        const bodyRadius = isCapped ? m.cap.bodyDiameterMm * m.scale / 2 : 0;
         const flatHalf = rOuter * Math.cos(Math.PI/6);
-        const dimensionY = rcy + rOuter + 24;
+        const dimensionY = rcy + Math.max(rOuter,bodyRadius) + 24;
         return `
           ${this.defs()}
           ${nutSide(m)}
@@ -655,7 +671,7 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
           </g>
 
           <!-- Вид зверху -->
-          ${hexEndView(rcx, rcy, rOuter, Math.PI/6, isCapped ? 0 : rOuter * 0.46, isCapped)}
+          ${hexEndView(rcx, rcy, rOuter, Math.PI/6, isCapped ? 0 : (m.threadRadius+2)*rOuter/halfE, bodyRadius)}
           ${part.acrossFlats ? `
           <g class="nut-wrench-dimension" fill="none" stroke="#006d73">
             <path d="M ${rcx-flatHalf} ${rcy+3} V ${dimensionY+6} M ${rcx+flatHalf} ${rcy+3} V ${dimensionY+6}" stroke-width="0.85"/>
@@ -663,9 +679,9 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
             <text class="dim-text" x="${rcx}" y="${dimensionY+20}" text-anchor="middle" fill="#005f66" stroke="none" font-size="15.5" font-weight="700">S = ${fmt(part.acrossFlats)}</text>
           </g>` : ''}
 
-          <g class="svg-interactive" data-tip-title="Поєднання вигляду і розрізу гайки М${d}" data-tip-body="Висота ${isCapped ? 'H=' + spec.nutCapH : 'm=' + spec.nutM} мм · Під ключ S=${spec.nutS} мм">
-            <line class="dim-line" x1="${cx - halfE + 10}" y1="${topY}" x2="94" y2="${topY}" stroke="#006d73" stroke-width="1"/>
-            <line class="dim-line" x1="${cx - halfE + 7}" y1="${baseY}" x2="94" y2="${baseY}" stroke="#006d73" stroke-width="1"/>
+          <g class="svg-interactive" data-tip-title="Поєднання вигляду і розрізу гайки М${fmt(d)}" data-tip-body="${isCapped ? 'Тип Б, виконання 1 · l₁=' + fmt(spec.nutCapH) : 'm=' + fmt(spec.nutM)} мм · Під ключ S=${fmt(spec.nutS)} мм">
+            <line class="dim-line" x1="${isCapped ? cx-flatHalf+m.scale : cx-halfE+10}" y1="${topY}" x2="94" y2="${topY}" stroke="#006d73" stroke-width="1"/>
+            <line class="dim-line" x1="${isCapped ? cx-bodyRadius+m.scale : cx-halfE+7}" y1="${baseY}" x2="94" y2="${baseY}" stroke="#006d73" stroke-width="1"/>
             <line class="dim-line" x1="104" y1="${topY}" x2="104" y2="${baseY}" stroke="#006d73" stroke-width="1.4" marker-start="url(#v5-arr)" marker-end="url(#v5-arr)"/>
             <text class="dim-text" transform="translate(92 ${(topY + baseY) / 2}) rotate(-90)" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">${part.heightSymbol || (isCapped ? 'l₁' : 'm')} = ${fmt(m.heightMm)}</text>
           </g>
@@ -724,6 +740,8 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
         // Вісь кільця показуємо схематично за внутрішньою гранню збільшеного перерізу.
         const axisX = ex + 80;
         const widthLineY = bottom + 24;
+        const thicknessLineX = ex + 18;
+        const minArrowSpan = 20;
         const stripY = (pattern === 'parallel' ? inner/2 : 0) + half;
         const stripX = (chordX(stripY) + (pattern === 'tee' || pattern === 'cross' ? half : 0)) / 2;
         const stripShelfY = Math.max(40,stripY + 12);
@@ -746,6 +764,10 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
         const bandRadius = (inner + radius) / 2;
         // Прив'язка товщини до матеріалу між сусідніми отворами.
         const bandAngle = hasHoles && count >= 4 ? (-Math.floor(count/8) - .5) * 2*Math.PI/count - Math.PI/2 : -3*Math.PI/4;
+        // Розрив на торцевому вигляді та умовний підйом кінців у вільному стані.
+        const spring = washer && part.spring;
+        const slitY = 5;
+        const splitX = r => Math.sqrt(r*r-slitY*slitY);
 
         return `
           ${this.defs()}
@@ -760,10 +782,12 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
           </defs>
 
           <g transform="translate(${cx} ${cy})">
-            <circle r="${radius}" fill="url(#${washer ? 'v5-steel' : 'v5-graphite'})" mask="url(#v5-gasket-mask)"/>
+            ${spring ? `<path d="M ${splitX(radius)} ${slitY} A ${radius} ${radius} 0 1 1 ${splitX(radius)} ${-slitY}
+              L ${splitX(inner)} ${-slitY} A ${inner} ${inner} 0 1 0 ${splitX(inner)} ${slitY} Z"
+              fill="url(#v5-steel)" stroke="#2b434f" stroke-width="1.65"/>` : `<circle r="${radius}" fill="url(#${washer ? 'v5-steel' : 'v5-graphite'})" mask="url(#v5-gasket-mask)"/>
             <circle r="${radius}" fill="none" stroke="#2b434f" stroke-width="1.65"/>
             ${chamfered ? `<circle r="${radius*(1-2*chamfer/od)}" fill="none" stroke="#2b434f" stroke-width=".9"/>` : ''}
-            <path d="${openings}" fill="none" stroke="#344954" stroke-width="1.15"/>
+            <path d="${openings}" fill="none" stroke="#344954" stroke-width="1.15"/>`}
             <g fill="none" stroke="#c56b1a" stroke-width=".85" stroke-dasharray="14 4 2 4">
               <path d="M -131 0 H 131 M 0 -131 V 131"/>
               ${hasHoles ? `<circle r="${pitchRadius}" stroke-dasharray="8 3 2 3"/>` : ''}
@@ -780,6 +804,11 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
           </g>
 
           <g transform="translate(476 ${cy})">
+            ${spring ? `<g transform="translate(0 -120)" stroke="#2b434f" stroke-width="1.3" fill="url(#v5-steel)">
+              <path d="M -65 0 Q 0 -8 65 -16 v10 Q 0 2 -65 10 Z"/>
+              <path d="M -65 0 L -3 7 v10 L -65 10 Z M 3 -23 L 65 -16 v10 L 3 -13 Z"/>
+              <text y="36" text-anchor="middle" fill="#344954" stroke="none" font-size="13">Вільний стан</text>
+            </g>` : ''}
             <text y="${top-24}" text-anchor="middle" fill="#344954" font-size="13" font-weight="600">Радіальний переріз</text>
             ${washer ? `<path d="M ${sx+bevel} ${top} H ${ex} V ${bottom} H ${sx} V ${top+bevel} Z" fill="url(#v5-hatch)" stroke="#2b434f" stroke-width="1.5"/>
               ${chamfered ? `<path d="M ${sx+bevel/2} ${top+bevel/2} l-14 -15 v-8" fill="none" stroke="#006d73" marker-start="url(#v5-arr)"/><text x="${sx+bevel/2-14}" y="${top+bevel/2-28}" text-anchor="middle" font-size="13" fill="#005f66">45°</text>` : ''}` :
@@ -788,9 +817,11 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
             <line x1="${axisX}" y1="${top-52}" x2="${axisX}" y2="${bottom+58}" stroke="#c56b1a" stroke-width="1" stroke-dasharray="14 4 2 4"/>
             <g fill="none" stroke="#006d73">
               <path d="M ${sx} ${bottom+2} V ${widthLineY+5} M ${ex} ${bottom+2} V ${widthLineY+5}" stroke-width=".85"/>
-              ${sectionWidth > 20 ? `<path d="M ${sx} ${widthLineY} H ${ex}" stroke-width="1.3" ${arrow}/>` : `<path d="M ${sx-15} ${widthLineY} H ${sx}" ${endArrow}/><path d="M ${ex+15} ${widthLineY} H ${ex}" ${endArrow}/>`}
-              <path d="M ${ex+18} ${top-15} V ${top}" stroke-width="1.2" ${endArrow}/>
-              <path d="M ${ex+18} ${bottom+15} V ${bottom}" stroke-width="1.2" ${endArrow}/>
+              ${sectionWidth > minArrowSpan ? `<path d="M ${sx} ${widthLineY} H ${ex}" stroke-width="1.3" ${arrow}/>` : `<path d="M ${sx-15} ${widthLineY} H ${sx}" ${endArrow}/><path d="M ${ex+15} ${widthLineY} H ${ex}" ${endArrow}/>`}
+              ${sectionHeight > minArrowSpan
+                ? `<path d="M ${thicknessLineX} ${top} V ${bottom}" stroke-width="1.2" ${arrow}/>`
+                : `<path d="M ${thicknessLineX} ${top-15} V ${top}" stroke-width="1.2" ${endArrow}/>
+                   <path d="M ${thicknessLineX} ${bottom+15} V ${bottom}" stroke-width="1.2" ${endArrow}/>`}
             </g>
             <g fill="#005f66" font-size="15" font-weight="700">
               <text y="${widthLineY+20}" text-anchor="middle">${washer ? 'b' : 'b₀'} = ${fmt(band)}</text>
@@ -802,7 +833,7 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
     };
 
 
- const renderer=style==='cad'?RenderV1:RenderV5;
+ const renderer=style==='cad' && !(key==='nut' && part.capped)?RenderV1:RenderV5;
  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
  const viewBox = key === 'bolt' ? '55 3 460 336' : ['gasket','washer'].includes(key) && style === 'passport' ? '0 0 640 338' : '55 5 560 340';
  svg.setAttribute('viewBox',viewBox);

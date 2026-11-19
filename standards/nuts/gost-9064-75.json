@@ -21,6 +21,7 @@
     }
   },
   "source": {
+    "capProfile": "ГОСТ 9064-75, креслення 2 і таблиця. Для ескізу виконання 1 використано D₁, l₀ та l.",
     "url": "https://opm.ru/GOSTI_PDF/gost_9064-75.pdf",
     "section": "Пункт 3, таблиця розмірів, рядки «Высота для типа А H» та «Высота гайки l1 для типа Б»; редакція зі змінами № 1, 2",
     "verification": "Звірено з табличними рядками сканованої публікації (PDF, стор. 3) та текстовим відтворенням",
@@ -48,6 +49,11 @@
       }
     },
     "12": {
+      "capProfile": {
+        "bodyDiameterMm": 24,
+        "headHeightMm": 10,
+        "boreDepthMm": 21
+      },
       "heightsByTypeMm": {
         "A": 12,
         "B": 35
@@ -58,6 +64,11 @@
       }
     },
     "16": {
+      "capProfile": {
+        "bodyDiameterMm": 28,
+        "headHeightMm": 12,
+        "boreDepthMm": 26
+      },
       "heightsByTypeMm": {
         "A": 16,
         "B": 40
@@ -68,6 +79,11 @@
       }
     },
     "20": {
+      "capProfile": {
+        "bodyDiameterMm": 32,
+        "headHeightMm": 12,
+        "boreDepthMm": 32
+      },
       "heightsByTypeMm": {
         "A": 20,
         "B": 50
@@ -78,6 +94,11 @@
       }
     },
     "22": {
+      "capProfile": {
+        "bodyDiameterMm": 36,
+        "headHeightMm": 12,
+        "boreDepthMm": 36
+      },
       "heightsByTypeMm": {
         "A": 22,
         "B": 55
@@ -88,6 +109,11 @@
       }
     },
     "24": {
+      "capProfile": {
+        "bodyDiameterMm": 40,
+        "headHeightMm": 16,
+        "boreDepthMm": 40
+      },
       "heightsByTypeMm": {
         "A": 24,
         "B": 65
@@ -98,6 +124,11 @@
       }
     },
     "27": {
+      "capProfile": {
+        "bodyDiameterMm": 48,
+        "headHeightMm": 18,
+        "boreDepthMm": 40
+      },
       "heightsByTypeMm": {
         "A": 27,
         "B": 70
@@ -108,6 +139,11 @@
       }
     },
     "30": {
+      "capProfile": {
+        "bodyDiameterMm": 48,
+        "headHeightMm": 20,
+        "boreDepthMm": 43
+      },
       "heightsByTypeMm": {
         "A": 30,
         "B": 75
@@ -118,6 +154,11 @@
       }
     },
     "36": {
+      "capProfile": {
+        "bodyDiameterMm": 55,
+        "headHeightMm": 20,
+        "boreDepthMm": 49
+      },
       "heightsByTypeMm": {
         "A": 36,
         "B": 80
@@ -128,6 +169,11 @@
       }
     },
     "42": {
+      "capProfile": {
+        "bodyDiameterMm": 65,
+        "headHeightMm": 25,
+        "boreDepthMm": 56
+      },
       "heightsByTypeMm": {
         "A": 42,
         "B": 95
@@ -138,6 +184,11 @@
       }
     },
     "48": {
+      "capProfile": {
+        "bodyDiameterMm": 75,
+        "headHeightMm": 25,
+        "boreDepthMm": 64
+      },
       "heightsByTypeMm": {
         "A": 48,
         "B": 105
@@ -148,6 +199,11 @@
       }
     },
     "52": {
+      "capProfile": {
+        "bodyDiameterMm": 85,
+        "headHeightMm": 30,
+        "boreDepthMm": 70
+      },
       "heightsByTypeMm": {
         "A": 52,
         "B": 112
@@ -158,6 +214,11 @@
       }
     },
     "56": {
+      "capProfile": {
+        "bodyDiameterMm": 85,
+        "headHeightMm": 35,
+        "boreDepthMm": 76
+      },
       "heightsByTypeMm": {
         "A": 56,
         "B": 130
@@ -168,6 +229,11 @@
       }
     },
     "60": {
+      "capProfile": {
+        "bodyDiameterMm": 90,
+        "headHeightMm": 35,
+        "boreDepthMm": 81
+      },
       "heightsByTypeMm": {
         "A": 60,
         "B": 135

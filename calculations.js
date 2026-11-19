@@ -558,10 +558,10 @@
     }
     if (d0 > 0) {
       if (edgeOuter !== null && edgeOuter > 0 && edgeOuter < d0) {
-        warnings.push(`Зовнішня кромка фланця мала (${edgeOuter.toFixed(1).replace('.', ',')} мм < d₀ = ${d0} мм).`);
+        warnings.push(`Зовнішня кромка фланця мала (${edgeOuter.toFixed(1).replace('.', ',')} мм < d₀ = ${C.formatNumber(d0)} мм).`);
       }
       if (edgeInner !== null && edgeInner > 0 && edgeInner < d0) {
-        warnings.push(`Внутрішня кромка фланця мала (${edgeInner.toFixed(1).replace('.', ',')} мм < d₀ = ${d0} мм).`);
+        warnings.push(`Внутрішня кромка фланця мала (${edgeInner.toFixed(1).replace('.', ',')} мм < d₀ = ${C.formatNumber(d0)} мм).`);
       }
     }
 

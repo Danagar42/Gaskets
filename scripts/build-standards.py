@@ -59,7 +59,8 @@ def validate_nut(record, filename):
             raise ValueError(f"{filename}: invalid nominal diameter {designation}")
         if record.get("types"):
             kinds = record["types"]
-            if set(row) != {"heightsByTypeMm", "acrossFlatsByTypeMm"}:
+            cap = row.get("capProfile")
+            if set(row) - {"capProfile"} != {"heightsByTypeMm", "acrossFlatsByTypeMm"}:
                 raise ValueError(f"{filename}: typed nut rows require heights and wrench sizes at M{designation}")
             heights = row.get("heightsByTypeMm", {})
             if set(heights) != set(kinds):
@@ -74,6 +75,12 @@ def validate_nut(record, filename):
                 raise ValueError(f"{filename}: wrench sizes must cover the exact nut types at M{designation}")
             if any((value is None) != (heights[kind] is None) for kind, value in wrench_sizes.items()):
                 raise ValueError(f"{filename}: wrench-size availability differs from nut-height availability at M{designation}")
+            if heights.get("B") is not None:
+                if not isinstance(cap, dict) or set(cap) != {"bodyDiameterMm", "headHeightMm", "boreDepthMm"}:
+                    raise ValueError(f"{filename}: incomplete capped-nut profile at M{designation}")
+                if not (cap["bodyDiameterMm"] > max(nominal, 2 * wrench_sizes["B"] / math.sqrt(3))
+                        and 0 < cap["boreDepthMm"] <= heights["B"] - cap["headHeightMm"] < heights["B"]):
+                    raise ValueError(f"{filename}: invalid capped-nut profile at M{designation}")
         else:
             height = row.get("heightMm")
             if type(height) not in (float, int) or not math.isfinite(height) or height <= 0:

@@ -17,7 +17,7 @@ function app(options={}) {
   function element() {
     return {open:false,hidden:true,textContent:'',value:'',isConnected:true,events:{},classList:{toggle(){}},
       addEventListener(type,handler){this.events[type]=handler;},showModal(){this.open=true;},close(){this.open=false;},focus(){},
-      querySelector(){return {value:'replace'};},querySelectorAll(){return [{value:'100'}];}};
+      querySelector(){return {value:'replace'};},querySelectorAll(){return [{value:'100',dataset:{}}];}};
   }
   for (const name of ['#main','#edit-dialog','#material-dialog','#file-dialog','#file-error','#import-preview','#save-status','.header-status','#toast','#breadcrumbs','#desktop-content']) elements.set(name,element());
   const dialog=elements.get('#file-dialog');let dialogHtml='';
@@ -47,6 +47,7 @@ function app(options={}) {
   const upload={id:'project-upload',isConnected:true,files:[]};
   const select=file=>{upload.files=[file];return dialog.events.change({target:upload});};
   return {click,select,upload,dialog,elements,storage,downloads,faults,pendingExport,equipment,
+    dispatch(type,target){documentEvents[type]({target});},
     navigate(index){location.hash=`#equipment/${equipment[index].id}`;windowEvents.hashchange();}};
 }
 const importJson=()=>P.serialize({version:1,equipment:[C.createEquipment('Імпортований насос')]});
@@ -66,6 +67,43 @@ const importJson=()=>P.serialize({version:1,equipment:[C.createEquipment('Імп
     assert(cards[index].includes('Деталі перевірки'));
   }
   assert(!cards[1].includes('focus-input'),'A complete node has no correction link');
+
+  const preciseEquipment = structuredClone(sample.equipment);
+  const preciseNode = preciseEquipment[0].nodes[1];
+  preciseNode.operating.normal.pressure = '1.23456';
+  preciseNode.operating.hydro.pressure = '0.00123456';
+  preciseNode.fastener.torqueNm = '0.00000012345';
+  preciseNode.fastener.targetTorqueMinNm = '100.12345';
+  preciseNode.fastener.targetTorqueMaxNm = '200.56789';
+  const excel = require('../excel-export.js');
+  let exportedTorques;
+  const precisionApp = app({equipment:preciseEquipment,materials:vm.runInNewContext(readAppFile('data.js')+';materialsDB'),
+    window:{FlangeStandardsDB:vm.runInNewContext(readAppFile('standards.bundle.js')+';FlangeStandardsDB'),
+      FlangeCalculations:require('../calculations.js'),FlangeExcel:{...excel,create:async options => {
+        exportedTorques = options.torques;
+        return new Uint8Array();
+      }}}});
+  const register = precisionApp.elements.get('#desktop-content').innerHTML;
+  assert.match(register,/1,23 МПа/,'Node summaries show at most two decimal places');
+  assert.match(register,/1,23[EЕ]-3 МПа/,'Small nonzero values keep their magnitude in scientific notation');
+  assert.match(register,/100,12–200,57/,'Torque ranges use the same precision');
+  assert.doesNotMatch(register,/100[,.]12345|200[,.]56789/,'Torque tooltips use the same precision');
+  precisionApp.click('excel-export',{scope:'equipment'});
+  const torqueMarkup = precisionApp.dialog.innerHTML.match(/data-excel-torque="1"[^>]*value="([^"]+)" data-raw-value="([^"]+)"/);
+  assert.match(torqueMarkup?.[1] ?? '',/^1,23[EЕ]-7$/,'Export dialog displays two decimal places');
+  const torqueInput = {value:torqueMarkup[1],dataset:{excelTorque:'1',rawValue:torqueMarkup[2]},isConnected:true};
+  precisionApp.dispatch('focusin',torqueInput);
+  assert.equal(torqueInput.value,'0,00000012345','Focusing the input reveals the exact value');
+  precisionApp.dispatch('focusout',torqueInput);
+  assert.equal(torqueInput.value,torqueMarkup[1],'The blurred input shows the rounded value again');
+  precisionApp.dialog.querySelectorAll = () => [torqueInput];
+  precisionApp.click('download-excel');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(Array.from(exportedTorques),[0.00000012345],'Excel uses the full precision of the torque');
+  precisionApp.click('project-file');
+  precisionApp.click('save-project');
+  const savedPrecise = P.parse(await precisionApp.downloads.at(-1).blob.text()).equipment[0].nodes[1];
+  assert.equal(savedPrecise.operating.normal.pressure,'1.23456','Saving retains the original precision');
 
   let state=app();state.faults.read=true;
   assert.doesNotThrow(()=>state.click('project-file'),'Storage read failure must not prevent saving an in-memory project to JSON');

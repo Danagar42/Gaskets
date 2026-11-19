@@ -114,6 +114,8 @@
       errors.push(...compliance.states[mode].issues,...thermal[mode].issues);
     }
     const warnings = [];
+    const gasketNote = C.gasketCalculationNote(node);
+    if (gasketNote) warnings.push(gasketNote);
     if (pendingReference(node)) warnings.push(pendingMessage);
     if (limits.maximum.omitted.length) warnings.push('Внутрішню різьбу чавунного корпусу без Rp пропущено, як у вихідному Excel. Її міцність не підтверджена.');
     if (limits.roundedOverlap === false) warnings.push('Допустимого діапазону затягування немає.');
@@ -135,7 +137,8 @@
     const washer = C.washerDimensions(catalog,node.washers.standardId,node.fastener.nominalDiameter,node.washers.accuracyClass,node.washers.execution);
     const gasket = catalog.gaskets[node.gasket.referenceId];
     put('B2',`${equipment.name}${equipment.designation ? ' · '+equipment.designation : ''} · ${node.name} · ${mount.label}`);
-    if (pendingReference(node)) put('M2',pendingMessage);
+    const calculationNotes = [pendingReference(node) ? pendingMessage : '',C.gasketCalculationNote(node)].filter(Boolean).join(' ');
+    if (calculationNotes) put('M2',calculationNotes);
     put('C6',torqueNm*1000);
     put('C12','Прокладка'); put('C13','Терморозширений графіт'); put('C14',gasket.name); put('C15',n(node.gasket.thickness));
     put('F20',node.gasket.mode === 'ring' ? n(node.gasket.outerDiameter) : '-');

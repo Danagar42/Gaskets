@@ -207,7 +207,7 @@ const nutSvg = StandardsDrawingEngine.render({
 assert.ok(nutSvg.includes('<svg'), 'Output must be an SVG element');
 assert.ok(!nutSvg.includes('NaN'), 'SVG must not contain NaN coordinates');
 assert.ok(nutSvg.includes('36'), 'SVG must display across-flats dimension 36');
-assert.ok(nutSvg.includes('21.5'), 'SVG must display height dimension 21.5');
+assert.ok(nutSvg.includes('21,5'), 'SVG must display height dimension 21,5');
 assert.ok(nutSvg.includes('24'), 'SVG must display nominal diameter dimension 24');
 assert.ok(!nutSvg.includes('undefined'), 'SVG must not contain undefined');
 assert.ok(nutSvg.includes('viewBox='), 'SVG must have viewBox');
@@ -248,6 +248,8 @@ const threadSvg = StandardsDrawingEngine.render({
 assert.ok(threadSvg.includes('<svg'), 'Thread output must be SVG');
 assert.ok(!threadSvg.includes('NaN'), 'Thread SVG must not contain NaN');
 assert.ok(!threadSvg.includes('undefined'), 'Thread SVG must not contain undefined');
+assert.ok(threadSvg.includes('= 2,6 мм'), 'Thread height is shown with at most two decimal places');
+assert.ok(!threadSvg.includes('0.866025'), 'Thread height formula uses the exact ratio instead of a long decimal');
 
 // Test Torque infographic
 const torqueSvg = StandardsDrawingEngine.render({

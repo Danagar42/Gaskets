@@ -8,6 +8,21 @@ const fixture=require('./fixtures/workbook-comparison.json');
 const base=fixture.nodes[0].application.node;
 const report=node=>C.validateInputs(node,catalog);
 assert.deepEqual(report(base),{errors:{},missing:{}});
+const formNode = structuredClone(base);
+const flange = formNode.flanges.sideA;
+flange.coneHeight = '0';
+assert.equal(C.flangeForm(flange),'flat');
+assert(!report(formNode).errors['flanges.sideA.coneHeight']);
+flange.form = 'conical';
+assert(report(formNode).errors['flanges.sideA.coneHeight']);
+flange.coneHeight = '';
+assert(report(formNode).missing['flanges.sideA.coneHeight']);
+flange.coneHeight = '23';
+assert(!report(formNode).errors['flanges.sideA.coneHeight']);
+flange.form = 'flat';
+assert(report(formNode).errors['flanges.sideA.form']);
+delete flange.form;
+assert.equal(C.flangeForm(flange),'conical');
 let cases=0;
 function invalid(field,value,expectedField=field) {
   const node=structuredClone(base);C.set(node,field,value);
@@ -61,6 +76,27 @@ node=structuredClone(base);node.extras=[{id:C.id(),name:'Проставка',thi
 assert(report(node).errors['extras.0.thickness']);assert(report(node).missing['extras.0.area']);
 const empty=report(C.createNode('Порожній'));
 assert.deepEqual(empty.errors,{});assert(empty.missing['operating.normal.pressure']);
+
+node=structuredClone(base);
+node.connection.sideA.name='  ';
+node.flanges.sideB.mode='pending';
+node.fastener.threadStandardId='';
+Object.assign(node.washers,{placement:'a',standardId:'gost-11371-78',execution:'',accuracyClass:''});
+node.extras=[{id:C.id(),name:'',thickness:'10',area:'250',material:null}];
+const unset=report(node);
+for (const field of ['connection.sideA.name','flanges.sideB.mode','fastener.threadStandardId','washers.execution','washers.accuracyClass','extras.0.name']) {
+  assert(unset.missing[field],`${field} must be identified as unset`);
+  assert(!unset.errors[field],`${field} is empty, not malformed`);
+}
+node.washers.placement='none';
+node.flanges.sideB.mode='none';
+assert(!report(node).missing['washers.execution']);
+assert(!report(node).missing['flanges.sideB.mode']);
+Object.assign(node.nut,{standardId:'gost-9064-75',typeId:''});
+assert(report(node).missing['nut.typeId']);
+node.nut.standardId='';
+assert(report(node).missing['nut.standardId']);
+assert(!report(node).missing['nut.typeId']);
 
 node=structuredClone(base);
 node.fastener.targetTorqueMinNm='500';node.fastener.targetTorqueMaxNm='300';

@@ -8,6 +8,7 @@
   <title>Прокладки — робочий простір</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23245ed0'/%3E%3Ccircle cx='20' cy='20' r='12' fill='none' stroke='white' stroke-width='2'/%3E%3Ccircle cx='20' cy='20' r='5' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="flange-picker.css">
   <script src="data.js" defer></script>
   <script src="standards.bundle.js" defer></script>
   <script src="core.js" defer></script>
@@ -17,6 +18,10 @@
   <script src="excel-export.js" defer></script>
   <script src="component-imported-styles.js" defer></script>
   <script src="component-visuals.js" defer></script>
+  <script src="flange-catalog.bundle.js" defer></script>
+  <script src="flange-finder.js" defer></script>
+  <script src="flange-picker-drawing.js" defer></script>
+  <script src="flange-picker.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -35,6 +40,7 @@
   <dialog id="edit-dialog" class="dialog edit-dialog" aria-labelledby="edit-title"></dialog>
   <dialog id="material-dialog" class="dialog material-dialog" aria-labelledby="material-title"></dialog>
   <dialog id="file-dialog" class="dialog edit-dialog" aria-labelledby="file-title"></dialog>
+  <dialog id="flange-picker-dialog" class="dialog flange-picker" aria-labelledby="flange-picker-title"></dialog>
   <div id="toast" class="toast" role="status" hidden></div>
   <noscript>Для роботи опитувальника потрібно увімкнути JavaScript.</noscript>
 </body>

@@ -26,6 +26,8 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
+  const format = new Intl.NumberFormat('uk-UA',{maximumFractionDigits:2}).format;
+
   // Безпечне округлення чисел для SVG
   function n(val, fallback = 0) {
     const num = Number(val);
@@ -181,7 +183,7 @@
         y2: yB,
         x: xL,
         xDim: xL - 25,
-        text: `${heightM}`,
+        text: `${format(heightM)}`,
         colors
       })}
 
@@ -190,14 +192,14 @@
         x2: xR,
         y: yB,
         yDim: yB + 30,
-        text: `${widthS}`,
+        text: `${format(widthS)}`,
         colors
       })}
 
       <!-- Thread Nominal Leader Line -->
       <path d="M ${n(holeR)} ${n(cySection)} L ${n(holeR + 30)} ${n(cySection - 30)} H ${n(holeR + 75)}" fill="none" stroke="${colors.dim}" stroke-width="0.9" />
       <circle cx="${n(holeR)}" cy="${n(cySection)}" r="2" fill="${colors.dim}" />
-      <text x="${n(holeR + 34)}" y="${n(cySection - 34)}" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">М${nomD}</text>
+      <text x="${n(holeR + 34)}" y="${n(cySection - 34)}" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">М${format(nomD)}</text>
 
       <!-- ================= TOP VIEW ================= -->
       <!-- Hexagon Outline -->
@@ -217,7 +219,7 @@
       ${drawCenterline(cxTop, cyTop - rHexPx - 16, cxTop, cyTop + rHexPx + 16, colors)}
 
       <!-- Across-Flats Callout on Top View -->
-      <text x="${n(cxTop)}" y="${n(cyTop + rHexPx + 24)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.dimText}">S = ${widthS} мм</text>
+      <text x="${n(cxTop)}" y="${n(cyTop + rHexPx + 24)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.dimText}">S = ${format(widthS)} мм</text>
     `;
 
     return wrapSvg({
@@ -225,7 +227,7 @@
       height: viewH,
       content,
       themeColors: colors,
-      title: `Гайка М${nomD} (S=${widthS}, m=${heightM})`
+      title: `Гайка М${format(nomD)} (S=${format(widthS)}, m=${format(heightM)})`
     });
   }
 
@@ -278,7 +280,7 @@
         y2: yB,
         x: cxSection - r2Px,
         xDim: cxSection - r2Px - 25,
-        text: `${thickS}`,
+        text: `${format(thickS)}`,
         colors
       })}
 
@@ -288,7 +290,7 @@
         x2: cxSection + r1Px,
         y: yT,
         yDim: yT - 25,
-        text: `Ø ${innerD}`,
+        text: `Ø ${format(innerD)}`,
         colors
       })}
 
@@ -298,7 +300,7 @@
         x2: cxSection + r2Px,
         y: yB,
         yDim: yB + 30,
-        text: `Ø ${outerD}`,
+        text: `Ø ${format(outerD)}`,
         colors
       })}
 
@@ -314,7 +316,7 @@
       ${drawCenterline(cxTop, cyTop - r2Px - 16, cxTop, cyTop + r2Px + 16, colors)}
 
       <!-- Subtitle badge -->
-      <text x="${n(cxTop)}" y="${n(cyTop + r2Px + 24)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.dimText}">Шайба ${nomD} (Ø${innerD} × Ø${outerD} × ${thickS})</text>
+      <text x="${n(cxTop)}" y="${n(cyTop + r2Px + 24)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.dimText}">Шайба ${format(nomD)} (Ø${format(innerD)} × Ø${format(outerD)} × ${format(thickS)})</text>
     `;
 
     return wrapSvg({
@@ -322,7 +324,7 @@
       height: viewH,
       content,
       themeColors: colors,
-      title: `Шайба ${nomD} (d1=${innerD}, d2=${outerD}, s=${thickS})`
+      title: `Шайба ${format(nomD)} (d1=${format(innerD)}, d2=${format(outerD)}, s=${format(thickS)})`
     });
   }
 
@@ -390,7 +392,7 @@
         y2: yB_left,
         x: cxSection - r2Px,
         xDim: cxSection - r2Px - 25,
-        text: `s = ${thickS}`,
+        text: `s = ${format(thickS)}`,
         colors
       })}
 
@@ -400,7 +402,7 @@
         y2: yB_right,
         x: cxSection + r2Px,
         xDim: cxSection + r2Px + 25,
-        text: `h ≈ ${n(thickS * 1.6, 8)}`,
+        text: `h ≈ ${format(thickS * 1.6)}`,
         colors
       })}
 
@@ -410,7 +412,7 @@
         x2: cxSection + r2Px,
         y: yB_right,
         yDim: yB_right + 30,
-        text: `Ø ${outerD}`,
+        text: `Ø ${format(outerD)}`,
         colors
       })}
 
@@ -427,7 +429,7 @@
       ${drawCenterline(cxTop, cyTop - r2Px - 16, cxTop, cyTop + r2Px + 16, colors)}
 
       <!-- Inner & Outer Callout -->
-      <text x="${n(cxTop)}" y="${n(cyTop + r2Px + 24)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.dimText}">Гровер ${nomD} (Ø${innerD} × Ø${outerD} × ${thickS})</text>
+      <text x="${n(cxTop)}" y="${n(cyTop + r2Px + 24)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.dimText}">Гровер ${format(nomD)} (Ø${format(innerD)} × Ø${format(outerD)} × ${format(thickS)})</text>
     `;
 
     return wrapSvg({
@@ -435,7 +437,7 @@
       height: viewH,
       content,
       themeColors: colors,
-      title: `Шайба пружинна ${nomD} (d1=${innerD}, d2=${outerD}, s=${thickS})`
+      title: `Шайба пружинна ${format(nomD)} (d1=${format(innerD)}, d2=${format(outerD)}, s=${format(thickS)})`
     });
   }
 
@@ -493,7 +495,7 @@
         x2: tooth2_crest,
         y: yCrest,
         yDim: yCrest - 25,
-        text: `P = ${pitch} мм`,
+        text: `P = ${format(pitch)} мм`,
         colors
       })}
 
@@ -508,17 +510,17 @@
       <!-- Side Data Card -->
       <g transform="translate(340, 75)">
         <rect width="195" height="185" rx="6" fill="${colors.cardBg || 'rgba(0,0,0,0.1)'}" stroke="${colors.cardBorder || colors.dim}" stroke-width="0.8" />
-        <text x="14" y="24" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" font-weight="700" fill="${colors.dimText}">Параметри різьби М${nomD}:</text>
+        <text x="14" y="24" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" font-weight="700" fill="${colors.dimText}">Параметри різьби М${format(nomD)}:</text>
         
-        <text x="14" y="52" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• Номінальний d: <tspan font-weight="700" fill="${colors.dimText}">${nomD} мм</tspan></text>
-        <text x="14" y="74" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• Великий крок P: <tspan font-weight="700" fill="${colors.dimText}">${pitch} мм</tspan></text>
+        <text x="14" y="52" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• Номінальний d: <tspan font-weight="700" fill="${colors.dimText}">${format(nomD)} мм</tspan></text>
+        <text x="14" y="74" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• Великий крок P: <tspan font-weight="700" fill="${colors.dimText}">${format(pitch)} мм</tspan></text>
         <text x="14" y="96" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• Дрібні кроки:</text>
-        <text x="24" y="116" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">${pitches.join(', ')} мм</text>
+        <text x="24" y="116" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">${pitches.map(format).join(' · ')} мм</text>
 
         <line x1="14" y1="132" x2="181" y2="132" stroke="${colors.lineThin}" stroke-width="0.5" stroke-dasharray="2,2" />
 
         <text x="14" y="152" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="500" fill="${colors.lineThin}">Теоретична висота:</text>
-        <text x="14" y="168" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="700" fill="${colors.dimText}">H = 0.866025 · P = ${n(0.866025 * pitch, 2.6)} мм</text>
+        <text x="14" y="168" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="700" fill="${colors.dimText}">H = (√3 / 2) · P = ${format(Math.sqrt(3) * pitch / 2)} мм</text>
       </g>
     `;
 
@@ -527,7 +529,7 @@
       height: viewH,
       content,
       themeColors: colors,
-      title: `Профіль різьби М${nomD} (P=${pitch} мм)`
+      title: `Профіль різьби М${format(nomD)} (P=${format(pitch)} мм)`
     });
   }
 
@@ -568,25 +570,25 @@
       const xt = xFor(v);
       ticks.push(`
         <line x1="${n(xt)}" y1="${n(barY - 8)}" x2="${n(xt)}" y2="${n(barY + 20)}" stroke="${colors.lineThin}" stroke-width="0.8" />
-        <text x="${n(xt)}" y="${n(barY + 34)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="600" fill="${colors.lineThin}">${v}</text>
+        <text x="${n(xt)}" y="${n(barY + 34)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="600" fill="${colors.lineThin}">${format(v)}</text>
       `);
     }
 
     const content = `
       <!-- Title -->
-      <text x="280" y="36" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="700" fill="${colors.lineThin}" letter-spacing="0.5">ДОПУСТИМИЙ МОМЕНТ ЗАТЯГУВАННЯ КРІПЛЕННЯ М${nomD}</text>
+      <text x="280" y="36" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="700" fill="${colors.lineThin}" letter-spacing="0.5">ДОПУСТИМИЙ МОМЕНТ ЗАТЯГУВАННЯ КРІПЛЕННЯ М${format(nomD)}</text>
 
       <!-- KPI Summary Header Cards -->
       <g transform="translate(60, 52)">
         <rect x="0" y="0" width="205" height="60" rx="6" fill="${colors.cardBg || 'rgba(0,0,0,0.1)'}" stroke="${colors.dim}" stroke-width="0.8" />
         <text x="16" y="22" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="600" fill="${colors.lineThin}">МОМЕНТ (Н·м):</text>
-        <text x="16" y="47" font-family="'Segoe UI', system-ui, sans-serif" font-size="20" font-weight="800" fill="${colors.dimText}">${lowNm} … ${highNm} <tspan font-size="12" font-weight="600">Н·м</tspan></text>
+        <text x="16" y="47" font-family="'Segoe UI', system-ui, sans-serif" font-size="20" font-weight="800" fill="${colors.dimText}">${format(lowNm)} … ${format(highNm)} <tspan font-size="12" font-weight="600">Н·м</tspan></text>
       </g>
 
       <g transform="translate(295, 52)">
         <rect x="0" y="0" width="205" height="60" rx="6" fill="${colors.cardBg || 'rgba(0,0,0,0.1)'}" stroke="${colors.dim}" stroke-width="0.8" />
         <text x="16" y="22" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="600" fill="${colors.lineThin}">МОМЕНТ (кгс·м):</text>
-        <text x="16" y="47" font-family="'Segoe UI', system-ui, sans-serif" font-size="20" font-weight="800" fill="${colors.dimText}">${lowKgf} … ${highKgf} <tspan font-size="12" font-weight="600">кгс·м</tspan></text>
+        <text x="16" y="47" font-family="'Segoe UI', system-ui, sans-serif" font-size="20" font-weight="800" fill="${colors.dimText}">${format(lowKgf)} … ${format(highKgf)} <tspan font-size="12" font-weight="600">кгс·м</tspan></text>
       </g>
 
       <!-- Main Scale Track (0..max) -->
@@ -603,14 +605,14 @@
       <polygon points="${n((xMin + xMax) / 2)},${n(barY - 2)} ${n((xMin + xMax) / 2 - 5)},${n(barY - 10)} ${n((xMin + xMax) / 2 + 5)},${n(barY - 10)}" fill="${colors.axis}" />
 
       <!-- Min & Max Indicators -->
-      <text x="${n(xMin)}" y="${n(barY - 12)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">min: ${lowNm}</text>
-      <text x="${n(xMax)}" y="${n(barY - 12)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">max: ${highNm}</text>
+      <text x="${n(xMin)}" y="${n(barY - 12)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">min: ${format(lowNm)}</text>
+      <text x="${n(xMax)}" y="${n(barY - 12)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">max: ${format(highNm)}</text>
 
       <!-- Bottom Guidance Legend -->
       <g transform="translate(60, 240)">
         <rect x="0" y="0" width="440" height="70" rx="6" fill="${colors.cardBg || 'rgba(0,0,0,0.1)'}" stroke="${colors.lineThin}" stroke-width="0.5" />
         <circle cx="24" cy="24" r="6" fill="${colors.accentZone || colors.dim}" />
-        <text x="38" y="28" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">Рекомендований діапазон контрольованого затягування різьби М${nomD}</text>
+        <text x="38" y="28" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">Рекомендований діапазон контрольованого затягування різьби М${format(nomD)}</text>
         <text x="38" y="48" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="500" fill="${colors.lineThin}">Забезпечує щільність з'єднання без ризику пластичної деформації тіла болта/шпильки.</text>
       </g>
     `;
@@ -620,7 +622,7 @@
       height: viewH,
       content,
       themeColors: colors,
-      title: `Момент затягування М${nomD} (${lowNm}..${highNm} Н·м)`
+      title: `Момент затягування М${format(nomD)} (${format(lowNm)}..${format(highNm)} Н·м)`
     });
   }
 

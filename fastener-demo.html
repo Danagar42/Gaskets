@@ -132,7 +132,7 @@
   const el = id => document.getElementById(id);
   const catalog = FlangeStandardsDB;
   const thread = catalog.threads['gost-24705-2004'];
-  const fmt = value => value.toLocaleString('uk-UA');
+  const fmt = FlangeCore.formatNumber;
   const diameter = el('diameter'), pitch = el('pitch'), count = el('count');
   const standard = el('standard'), type = el('type');
   const steps = [

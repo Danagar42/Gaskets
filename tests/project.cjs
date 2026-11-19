@@ -10,6 +10,12 @@ const original = {version:1,equipment:[equipment],preferences:{recent:['Стал
 const serialized = P.serialize(original), restored = P.parse('\uFEFF'+serialized);
 assert.deepEqual(restored.equipment,original.equipment);
 assert.deepEqual(restored.preferences,original.preferences);
+const formWorkspace = structuredClone(original);
+Object.assign(formWorkspace.equipment[0].nodes[0].flanges.sideA,{form:'conical',coneHeight:''});
+const formRestored = P.parse(P.serialize(formWorkspace));
+assert.equal(C.flangeForm(formRestored.equipment[0].nodes[0].flanges.sideA),'conical');
+formWorkspace.equipment[0].nodes[0].flanges.sideA.form = 'unsupported';
+assert.throws(()=>P.parse(JSON.stringify(formWorkspace)));
 const before = JSON.stringify(original);
 const combined = P.combine(original,restored,'add');
 assert.equal(combined.equipment.length,2);

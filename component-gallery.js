@@ -4,12 +4,12 @@ const d = 24;
 const pitch = FlangeCore.threadPitch(catalog,'gost-24705-2004',d).pitchMm;
 const nutHeight = FlangeCore.nutDimensions(catalog,'gost-5915-70',d).heightMm;
 const w = FlangeCore.washerDimensions(catalog,'gost-11371-78',d);
-const number = n => n.toLocaleString('uk-UA');
+const number = FlangeCore.formatNumber;
 const parts = {
-  stud:{length:112,name:'Шпилька',spec:`М${d} × ${pitch}`,detail:'Витки різьби',outer:d,inner:0,h:112},
+  stud:{length:112,name:'Шпилька',spec:`М${number(d)} × ${number(pitch)}`,detail:'Витки різьби',outer:d,inner:0,h:112},
   nut:{diameter:24,acrossFlats:36,name:'Гайка',spec:`М${d} · m = ${number(nutHeight)}`,detail:'Внутрішня різьба',outer:42,inner:d,h:nutHeight},
   gasket:{name:'Прокладка',spec:'Ø 320 × Ø 200 × 3',detail:'Кромка графіту',outer:320,inner:200,h:3},
-  washer:{diameter:24,name:'Шайба',spec:`Ø ${w.outerDiameterMm} × Ø ${w.innerDiameterMm} × ${w.thicknessMm}`,detail:'Кромка отвору',outer:w.outerDiameterMm,inner:w.innerDiameterMm,h:w.thicknessMm}
+  washer:{diameter:24,name:'Шайба',spec:`Ø ${number(w.outerDiameterMm)} × Ø ${number(w.innerDiameterMm)} × ${number(w.thicknessMm)}`,detail:'Кромка отвору',outer:w.outerDiameterMm,inner:w.innerDiameterMm,h:w.thicknessMm}
 };
 const styles=FlangeComponentVisuals.styles;
 const selector=document.querySelector('#part'), grid=document.querySelector('#grid');

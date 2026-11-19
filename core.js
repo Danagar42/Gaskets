@@ -39,6 +39,9 @@
   function createFlange() {
     return {mode:'pending',innerDiameter:'',boltCircle:'',outerDiameter:'',holeDiameter:'',height:'',coneHeight:'0',wallCylinder:'',wallCone:'',gasketDiameter:''};
   }
+  function flangeForm(flange) {
+    return flange.form || (number(flange.coneHeight) === 0 ? 'flat' : 'conical');
+  }
   function number(value) {
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
     if (value === null || value === undefined || String(value).trim() === '') return null;
@@ -46,6 +49,16 @@
     if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return null;
     const result = Number(text);
     return Number.isFinite(result) ? result : null;
+  }
+  const decimalFormat = new Intl.NumberFormat('uk-UA',{maximumFractionDigits:2});
+  const ungroupedFormat = new Intl.NumberFormat('uk-UA',{maximumFractionDigits:2,useGrouping:false});
+  const scientificFormat = new Intl.NumberFormat('uk-UA',{maximumFractionDigits:2,notation:'scientific'});
+  function formatNumber(value,{scientific = false, useGrouping = true} = {}) {
+    const n = number(value);
+    if (n === null) return '—';
+    if (n === 0) return '0';
+    if (scientific || Math.abs(n) < 0.01) return scientificFormat.format(n);
+    return (useGrouping ? decimalFormat : ungroupedFormat).format(n);
   }
   const positive = value => number(value) !== null && number(value) > 0;
   const canonical = value => {
@@ -185,6 +198,7 @@
     }
     const overlapMin = Math.max(cMin, tMin);
     const overlapMax = Math.min(cMax, tMax);
+    const fmt = formatNumber;
     if (overlapMin <= overlapMax) {
       if (cMin <= tMin && cMax >= tMax) {
         return {
@@ -192,30 +206,30 @@
           overlapMin,
           overlapMax,
           label: 'Повністю перекриває ТУ',
-          description: `Розрахунковий діапазон [${cMin}–${cMax} Н·м] повністю покриває нормативні межі ТУ [${tMin}–${tMax} Н·м].`
+          description: `Розрахунковий діапазон [${fmt(cMin)}–${fmt(cMax)} Н·м] повністю покриває нормативні межі ТУ [${fmt(tMin)}–${fmt(tMax)} Н·м].`
         };
       }
       let reason = '';
       if (cMin > tMin && cMax < tMax) {
-        reason = `Робочий коридор [${overlapMin}–${overlapMax} Н·м] звужений: мінімум вищий за ТУ (герметичність), а максимум обмежений міцністю.`;
+        reason = `Робочий коридор [${fmt(overlapMin)}–${fmt(overlapMax)} Н·м] звужений: мінімум вищий за ТУ (герметичність), а максимум обмежений міцністю.`;
       } else if (cMin > tMin) {
-        reason = `Мінімальний розрахунковий затяг ${cMin} Н·м вищий за ТУ (${tMin} Н·м) для забезпечення герметичності.`;
+        reason = `Мінімальний розрахунковий затяг ${fmt(cMin)} Н·м вищий за ТУ (${fmt(tMin)} Н·м) для забезпечення герметичності.`;
       } else {
-        reason = `Максимальний розрахунковий затяг ${cMax} Н·м нижчий за ТУ (${tMax} Н·м) через міцність вузла.`;
+        reason = `Максимальний розрахунковий затяг ${fmt(cMax)} Н·м нижчий за ТУ (${fmt(tMax)} Н·м) через міцність вузла.`;
       }
       return {
         status: 'partial',
         overlapMin,
         overlapMax,
-        label: `Частково: ${overlapMin}–${overlapMax} Н·м`,
+        label: `Частково: ${fmt(overlapMin)}–${fmt(overlapMax)} Н·м`,
         description: reason
       };
     }
     let reason = '';
     if (cMax < tMin) {
-      reason = `Максимально допустимий затяг (${cMax} Н·м) нижчий за мінімальну вимогу ТУ (${tMin} Н·м).`;
+      reason = `Максимально допустимий затяг (${fmt(cMax)} Н·м) нижчий за мінімальну вимогу ТУ (${fmt(tMin)} Н·м).`;
     } else {
-      reason = `Мінімальний момент для герметичності (${cMin} Н·м) перевищує максимум за ТУ (${tMax} Н·м).`;
+      reason = `Мінімальний момент для герметичності (${fmt(cMin)} Н·м) перевищує максимум за ТУ (${fmt(tMax)} Н·м).`;
     }
     return {
       status: 'none',
@@ -252,10 +266,10 @@
     }
     if (d0 > 0) {
       if (edgeOuter !== null && edgeOuter > 0 && edgeOuter < d0) {
-        warnings.push(`Зовнішня кромка фланця мала (${edgeOuter.toFixed(1).replace('.', ',')} мм < d₀ = ${d0} мм).`);
+        warnings.push(`Зовнішня кромка фланця мала (${edgeOuter.toFixed(1).replace('.', ',')} мм < d₀ = ${formatNumber(d0)} мм).`);
       }
       if (edgeInner !== null && edgeInner > 0 && edgeInner < d0) {
-        warnings.push(`Внутрішня кромка фланця мала (${edgeInner.toFixed(1).replace('.', ',')} мм < d₀ = ${d0} мм).`);
+        warnings.push(`Внутрішня кромка фланця мала (${edgeInner.toFixed(1).replace('.', ',')} мм < d₀ = ${formatNumber(d0)} мм).`);
       }
     }
 
@@ -270,9 +284,14 @@
   function validateInputs(node, catalog) {
     const errors = {}, missing = {};
     const fail = (path,message) => { errors[path] ||= message; };
+    function requireText(path,message) {
+      if (String(get(node,path) ?? '').trim()) return true;
+      missing[path] = message;
+      return false;
+    }
     function numeric(path,{zero=false,min=0,optional=false,integer=false} = {}) {
       const raw = get(node,path);
-      if (raw === undefined || raw === null || String(raw).trim() === '') {
+      if (!String(raw ?? '').trim()) {
         if (!optional) missing[path] = 'Заповніть це поле.';
         return null;
       }
@@ -287,8 +306,7 @@
       numeric(`operating.${mode}.pressure`,{zero:true});
       const temperature = numeric(`operating.${mode}.temperature`,{zero:true,min:-273.15});
       const mediumPath = `operating.${mode}.medium`;
-      if (!get(node,mediumPath)) missing[mediumPath] = 'Оберіть робоче середовище.';
-      else if (catalog?.gaskets && !gasketMediumCoefficient(catalog,node.gasket.referenceId || DEFAULT_GASKET_REFERENCE_ID,get(node,mediumPath))) fail(mediumPath,'Для цього середовища немає коефіцієнта m у вибраному наборі прокладки.');
+      if (requireText(mediumPath,'Оберіть робоче середовище.') && catalog?.gaskets && !gasketMediumCoefficient(catalog,node.gasket.referenceId || DEFAULT_GASKET_REFERENCE_ID,get(node,mediumPath))) fail(mediumPath,'Для цього середовища немає коефіцієнта m у вибраному наборі прокладки.');
       const record = catalog?.gaskets?.[node.gasket.referenceId || DEFAULT_GASKET_REFERENCE_ID];
       if (mode === 'normal' && temperature !== null && record && !gasketExpansionAt(catalog,record.id || node.gasket.referenceId,temperature)) fail(`operating.${mode}.temperature`,'Для цієї температури немає табличної α прокладки. Значення вище останньої точки не підставляється.');
     }
@@ -302,7 +320,7 @@
     }
     const axial = numeric('fastener.axialHoleDiameter',{zero:true});
     let pitch = null;
-    if (d !== null && catalog?.threads) {
+    if (catalog?.threads && requireText('fastener.threadStandardId','Оберіть стандарт різьби.') && d !== null) {
       const standard = catalog.threads[node.fastener.threadStandardId];
       if (!standard) fail('fastener.threadStandardId','Стандарт різьби відсутній у каталозі.');
       else if (!standard.sizes?.[String(d)]) fail('fastener.nominalDiameter','Цього номінального діаметра немає в обраному стандарті різьби.');
@@ -349,16 +367,19 @@
       }
     }
     for (const side of ['sideA','sideB']) {
+      requireText(`connection.${side}.name`,'Вкажіть назву деталі.');
       numeric(`connection.${side}.height`);
       numeric(`connection.${side}.area`,{optional:node.gasket.mode === 'ring'});
       const flange = node.flanges?.[side];
+      if (!['flange','none'].includes(flange?.mode)) missing[`flanges.${side}.mode`] = 'Оберіть, чи перевіряти цю деталь як фланець.';
       if (flange?.mode !== 'flange') continue;
       const path = `flanges.${side}.`;
       const inner = numeric(path+'innerDiameter'), circle = numeric(path+'boltCircle'), outer = numeric(path+'outerDiameter');
       const enteredHole = numeric(path+'holeDiameter',{optional:true});
       const hole = String(flange.holeDiameter || '').trim() === '' ? automaticHoleDiameter(d) : enteredHole;
       for (const key of ['height','wallCylinder','wallCone']) numeric(path+key);
-      numeric(path+'coneHeight',{zero:true});
+      const coneHeight = numeric(path+'coneHeight',{zero:flangeForm(flange) === 'flat'});
+      if (flangeForm(flange) === 'flat' && coneHeight !== null && coneHeight !== 0) fail(path+'form','Для плоского фланця висота конічної частини має дорівнювати 0.');
       const dm = node.gasket.mode === 'ring' ? mean : numeric(path+'gasketDiameter');
       if (inner !== null && circle !== null && circle <= inner) fail(path+'boltCircle','Потрібно D < Dw: коло кріплень має бути більшим за внутрішній діаметр.');
       if (circle !== null && outer !== null && outer <= circle) fail(path+'outerDiameter','Потрібно Dw < Df: зовнішній діаметр має бути більшим за коло кріплень.');
@@ -373,18 +394,70 @@
     }
     for (const key of mount.nuts) {
       const nut = nutAt(node,key);
+      const path = nut === node.nut ? 'nut' : 'nutB';
+      if (key === path && catalog?.nuts) {
+        requireText(`${path}.standardId`,'Оберіть стандарт гайки.');
+        if (catalog.nuts[nut.standardId]?.types) requireText(`${path}.typeId`,'Оберіть тип гайки.');
+      }
       if (nut.typeId !== 'B') continue;
-      const path = (nut === node.nut ? 'nut' : 'nutB')+'.threadedHeight';
-      const height = numeric(path), size = nutDimensions(catalog,nut.standardId,d,nut.typeId);
-      if (height !== null && size && height > size.heightMm) fail(path,`Різьбова частина не може бути вищою за гайку (${size.heightMm} мм).`);
+      const heightPath = `${path}.threadedHeight`;
+      const height = numeric(heightPath), size = nutDimensions(catalog,nut.standardId,d,nut.typeId);
+      if (height !== null && size && height > size.heightMm) fail(heightPath,`Різьбова частина не може бути вищою за гайку (${formatNumber(size.heightMm)} мм).`);
     }
-    node.extras.forEach((item,index) => {
+    if (node.washers.placement !== 'none' && catalog?.washers) {
+      requireText('washers.standardId','Оберіть стандарт шайб.');
+      if (catalog.washers[node.washers.standardId]) {
+        requireText('washers.execution','Оберіть виконання шайб.');
+        requireText('washers.accuracyClass','Оберіть клас точності шайб.');
+      }
+    }
+    node.extras.forEach((_,index) => {
+      requireText(`extras.${index}.name`,'Вкажіть назву елемента.');
       numeric(`extras.${index}.thickness`); numeric(`extras.${index}.area`);
     });
     return {errors,missing};
   }
+  function missingMaterialProperties(node,materials,path) {
+    const found = resolveMaterial(materials,get(node,path));
+    if (!found) return [];
+    const mount = mounting(node), side = path.startsWith('connection.') ? path.split('.')[1] : null;
+    const castIron = /чавун|сч\s*\d/u.test(canonical(found.material.name));
+    const yieldTable = Object.values(found.grade.data?.RTp || {});
+    const hasYield = yieldTable.some(value=>value !== null && value !== undefined && !['','—','-'].includes(String(value).trim()));
+    return Object.entries(node.operating).flatMap(([mode,state])=>{
+      if (number(state.temperature) === null) return [];
+      const normal = mode === 'normal', required = [];
+      const available = key => {
+        const property = propertyAt(found.grade,key,state.temperature);
+        return property && (key === 'Alpha' ? property.value >= 0 : property.value > 0);
+      };
+      if (path.startsWith('nut')) required.push('RTp');
+      else {
+        required.push('E');
+        if (path === 'fastener.material') required.push('RTp');
+        if (normal && (path === 'washers.material' || (side && side !== mount.body))) required.push('Alpha');
+      }
+      if (side) {
+        if (side === mount.body && !(castIron && !hasYield)) required.push('RTp');
+        const flange = node.flanges?.[side];
+        if (flange?.mode === 'flange') {
+          if (normal) {
+            required.push(castIron ? 'RTm' : 'RTp');
+            const hf = number(flange.height), s2 = number(flange.wallCone);
+            if (castIron && side === 'sideA' && hf !== null && s2 !== null && hf <= s2) required.push('RTp');
+          } else if (!available('RTm') && !available('RTp')) required.push('RTp');
+        }
+      }
+      return [...new Set(required)].filter(key=>!available(key)).map(property=>({mode,property}));
+    });
+  }
+  function gasketCalculationNote(node) {
+    return node.gasket.mode === 'ring' && (node.gasket.partitionPattern ?? 'none') !== 'none'
+      ? 'Перегородки показані на кресленні. Автоматичний розрахунок площ враховує кільцеве поле й отвори. Для врахування перегородок задайте перевірені площі вручну.'
+      : '';
+  }
   function sectionStatus(node, materials, standardsDb) {
-    const validMaterial = (ref, properties = ['RTm','RTp','E','Alpha']) => !!resolveMaterial(materials, ref) && !missingProperties(materials, ref, node.operating, properties).length;
+    const validMaterial = path => !!resolveMaterial(materials,get(node,path)) && !missingMaterialProperties(node,materials,path).length;
     const result = {};
     const cases = Object.values(node.operating);
     result.operating = cases.every(item => number(item.pressure) !== null && number(item.pressure) >= 0 && number(item.temperature) !== null && number(item.temperature) >= -273.15 && !!item.medium);
@@ -393,8 +466,8 @@
       ? positive(gasket.effectiveArea) && positive(gasket.pressureArea)
       : positive(gasket.outerDiameter) && positive(gasket.innerDiameter) && number(gasket.outerDiameter) > number(gasket.innerDiameter) && (!gasket.hasHoles || positive(gasket.holeDiameter))) && (!standardsDb || !!standardsDb.gaskets?.[gasket.referenceId || DEFAULT_GASKET_REFERENCE_ID]);
     if (gasket.mode === 'ring' && (gasket.partitionPattern ?? 'none') !== 'none') result.gasket &&= positive(gasket.partitionWidth);
-    result.fastener = positive(node.fastener.nominalDiameter) && positive(node.fastener.count) && Number.isInteger(number(node.fastener.count)) && validMaterial(node.fastener.material, ['RTm','RTp','E']) && (!standardsDb?.threads || !!threadPitch(standardsDb, node.fastener.threadStandardId || 'gost-24705-2004', node.fastener.nominalDiameter, node.fastener.pitch || ''));
-    result.connection = !!node.connection.sideA.name.trim() && !!node.connection.sideB.name.trim() && positive(node.connection.sideA.height) && positive(node.connection.sideB.height) && validMaterial(node.connection.sideA.material) && validMaterial(node.connection.sideB.material);
+    result.fastener = positive(node.fastener.nominalDiameter) && positive(node.fastener.count) && Number.isInteger(number(node.fastener.count)) && validMaterial('fastener.material') && (!standardsDb?.threads || !!threadPitch(standardsDb, node.fastener.threadStandardId || 'gost-24705-2004', node.fastener.nominalDiameter, node.fastener.pitch || ''));
+    result.connection = positive(node.connection.sideA.height) && positive(node.connection.sideB.height) && validMaterial('connection.sideA.material') && validMaterial('connection.sideB.material');
     result.connection &&= ['sideA','sideB'].every(key => {
       const area = node.connection[key].area;
       return area === undefined || String(area).trim() === '' ? node.gasket.mode === 'ring' : positive(area);
@@ -412,11 +485,12 @@
     if (mount.body && (node.fastener.type !== 'stud' || node.fastener.engagement !== undefined)) result.fastener &&= positive(mount.engagement);
     if (mount.nuts.length) result.nut = mount.nuts.every(key=>{
       const nut = nutAt(node,key), size = standardsDb && nutDimensions(standardsDb,nut.standardId,node.fastener.nominalDiameter,nut.typeId);
-      return validMaterial(nut.material,['RTm','RTp']) && (!standardsDb || !!size) && (size?.typeId !== 'B' || (positive(nut.threadedHeight) && number(nut.threadedHeight) <= size.heightMm));
+      return validMaterial((nut === node.nut ? 'nut' : 'nutB')+'.material') && (!standardsDb || !!size) && (size?.typeId !== 'B' || (positive(nut.threadedHeight) && number(nut.threadedHeight) <= size.heightMm));
     });
-    result.washers = node.washers.placement === 'none' || (validMaterial(node.washers.material, ['E','Alpha']) && (!standardsDb || !!washerDimensions(standardsDb, node.washers.standardId || 'gost-11371-78', node.fastener.nominalDiameter, node.washers.accuracyClass || 'A', node.washers.execution || '1')));
-    result.extras = node.extras.every(item => !!item.name.trim() && positive(item.thickness) && positive(item.area) && validMaterial(item.material, ['E']));
-    for (const path of Object.keys(validateInputs(node,standardsDb).errors)) result[path.startsWith('flanges.') ? 'connection' : path.startsWith('nutB.') ? 'nut' : path.split('.')[0]] = false;
+    result.washers = node.washers.placement === 'none' || (validMaterial('washers.material') && (!standardsDb || !!washerDimensions(standardsDb, node.washers.standardId || 'gost-11371-78', node.fastener.nominalDiameter, node.washers.accuracyClass || 'A', node.washers.execution || '1')));
+    result.extras = node.extras.every((item,index) => positive(item.thickness) && positive(item.area) && validMaterial(`extras.${index}.material`));
+    const {errors,missing} = validateInputs(node,standardsDb);
+    for (const path of [...Object.keys(errors),...Object.keys(missing)]) result[path.startsWith('flanges.') ? 'connection' : path.startsWith('nutB.') ? 'nut' : path.split('.')[0]] = false;
     return result;
   }
   function progress(node, materials, standardsDb) {
@@ -460,7 +534,7 @@
       }
       if (node.flanges !== undefined && (!node.flanges || !['sideA','sideB'].every(key => {
         const flange = node.flanges[key];
-        return flange && ['pending','flange','none'].includes(flange.mode) && Object.keys(createFlange()).filter(field => field !== 'mode').every(field => isText(flange[field]));
+        return flange && ['pending','flange','none'].includes(flange.mode) && (flange.form === undefined || ['flat','conical'].includes(flange.form)) && Object.keys(createFlange()).filter(field => field !== 'mode').every(field => isText(flange[field]));
       }))) return false;
       return ['normal','hydro'].every(key => node.operating[key] && ['pressure','temperature','medium'].every(field => isText(node.operating[key][field]))) && typeof node.gasket.hasHoles === 'boolean' && typeof node.fastener.lubricated === 'boolean'
         && ['fastener.material','connection.sideA.material','connection.sideB.material','nut.material','washers.material'].every(path => isRef(get(node, path)))
@@ -468,7 +542,7 @@
         && (node.gasket.referenceId === undefined || isText(node.gasket.referenceId)) && ['threadStandardId','pitch','axialHoleDiameter','torqueNm','targetTorqueMinNm','targetTorqueMaxNm'].every(key => node.fastener[key] === undefined || isText(node.fastener[key])) && ['standardId','typeId','threadedHeight'].every(key => node.nut[key] === undefined || isText(node.nut[key])) && ['standardId','accuracyClass','execution'].every(key => node.washers[key] === undefined || isText(node.washers[key])) && node.extras.every(extra => validId(extra) && isText(extra.name) && isText(extra.thickness) && isText(extra.area) && isRef(extra.material));
     }));
   }
-  const api = { automaticHoleDiameter, flangeGeometryAdvisories, arrangements, mounting, nutAt, DEFAULT_GASKET_REFERENCE_ID, gasketPartitions, id, timestamp, sections, createEquipment, createNode, createFlange, number, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, standardTorque, effectiveTargetTorque, compareTorqueRanges, gasketMediumCoefficient, gasketExpansionAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace, validateInputs };
+  const api = { missingMaterialProperties, gasketCalculationNote, flangeForm, automaticHoleDiameter, flangeGeometryAdvisories, arrangements, mounting, nutAt, DEFAULT_GASKET_REFERENCE_ID, gasketPartitions, id, timestamp, sections, createEquipment, createNode, createFlange, number, formatNumber, positive, canonical, materialRef, resolveMaterial, propertyAt, washerDimensions, nutDimensions, threadPitch, standardTorque, effectiveTargetTorque, compareTorqueRanges, gasketMediumCoefficient, gasketExpansionAt, missingProperties, cleanDescription, get, set, sectionStatus, progress, validateWorkspace, validateInputs };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.FlangeCore = api;
 })(globalThis);

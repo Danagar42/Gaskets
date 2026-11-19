@@ -1,0 +1,74 @@
+{
+  "id": "gost-10605-94",
+  "document": "ГОСТ 10605-94",
+  "title": "Гайки шестигранні з діаметром різьби понад 48 мм класу точності В. Розміри",
+  "type": "hex_nut",
+  "accuracyClass": "B",
+  "unit": "mm",
+  "fields": {
+    "heightMm": {
+      "symbol": "m",
+      "description": "Номінальна висота гайки",
+      "unit": "mm"
+    }
+  },
+  "source": {
+    "url": "https://meganorm.ru/mega_doc/norm/gost_gosudarstvennyj-standart/2/gost_10605-94_mezhgosudarstvennyj_standart_gayki_shestigrannye.html",
+    "section": "Таблиця розмірів m та S",
+    "verification": "Звірено з ГОСТ 10605-94 та базою КОМПАС-3D v25 (ПОЛИНОМ)"
+  },
+  "nonPreferredDiametersMm": [
+    52,
+    76
+  ],
+  "sizes": {
+    "52": {
+      "heightMm": 42.0,
+      "acrossFlatsMm": 80.0
+    },
+    "56": {
+      "heightMm": 45.0,
+      "acrossFlatsMm": 85.0
+    },
+    "64": {
+      "heightMm": 51.0,
+      "acrossFlatsMm": 95.0
+    },
+    "72": {
+      "heightMm": 58.0,
+      "acrossFlatsMm": 105.0
+    },
+    "76": {
+      "heightMm": 61.0,
+      "acrossFlatsMm": 110.0
+    },
+    "80": {
+      "heightMm": 64.0,
+      "acrossFlatsMm": 115.0
+    },
+    "90": {
+      "heightMm": 72.0,
+      "acrossFlatsMm": 130.0
+    },
+    "100": {
+      "heightMm": 80.0,
+      "acrossFlatsMm": 145.0
+    },
+    "110": {
+      "heightMm": 88.0,
+      "acrossFlatsMm": 155.0
+    },
+    "125": {
+      "heightMm": 100.0,
+      "acrossFlatsMm": 180.0
+    },
+    "140": {
+      "heightMm": 112.0,
+      "acrossFlatsMm": 200.0
+    },
+    "150": {
+      "heightMm": 128.0,
+      "acrossFlatsMm": 225.0
+    }
+  }
+}
