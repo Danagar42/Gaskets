@@ -47,3 +47,42 @@ test('gasket and torque tables show numeric values and recorded source status', 
   assert.equal(gasket.tables.find(table => table.id === 'expansion').rows.find(row => row.temperature === 400).value, 1.61);
   assert.equal(gasket.drawingKind, null);
 });
+
+test('flange cards expose the original 925 rows and both supporting documents', () => {
+  require('../flange-catalog.bundle.js');
+  const catalog = globalThis.GostFlangeCatalog;
+  const flange = require('../standards-base/src/flange-reference.js');
+  const entries = adapter.listReferenceEntries(db, flange.listEntries(catalog));
+  const ids = ['12820', '12821'].flatMap(standard =>
+    flange.getCard(catalog, `gost-${standard}-80`).tables[0].rows.map(row => row.id));
+  assert.equal(ids.length, 925);
+  assert.equal(new Set(ids).size, 925);
+  assert.deepEqual(new Set(ids), new Set(catalog.rows.map(row => row.id)));
+  for (const standard of ['12815', '12816']) {
+    const entry = adapter.searchReferenceEntries(entries, `${standard}-80`)[0];
+    assert.equal(entry.id, `gost-${standard}-80`);
+    assert.ok(flange.getCard(catalog, entry.id).sources[0].edition.includes('2003'));
+  }
+  assert.ok(flange.getCard(catalog, 'gost-12816-80').notes.some(note => note.includes('1.9')));
+});
+
+test('flange surface values, conflicting sources and incompatible filters follow the selected row', () => {
+  require('../flange-catalog.bundle.js');
+  const catalog = globalThis.GostFlangeCatalog;
+  const flange = require('../standards-base/src/flange-reference.js');
+  const id = '12820:0.1:600:-:1';
+  const flat = flange.getCard(catalog, 'gost-12820-80', {dn:600, pressure:0.1, face:'4'}, id);
+  assert.equal(flat.selectedRow, catalog.rows.find(row => row.id === id));
+  assert.equal(flat.face, '4');
+  const d3 = flat.tables[1].rows.find(row => row.id === 'D3');
+  assert.equal(d3.value, 631);
+  assert.match(d3.origin, /ГОСТ 12815-80/);
+  assert.ok(flat.notes.some(note => /КОМПАС 531.*ГОСТ 631/.test(note)));
+  assert.ok(flat.sources.some(source => source.label.includes('12816-80')));
+
+  const neck = flange.getCard(catalog, 'gost-12821-80', {dn:50, pressure:0.1, face:'999'}, id);
+  assert.equal(neck.selectedRow.dn, 50);
+  assert.equal(neck.selectedRow.pressure, 0.1);
+  assert.ok(Object.hasOwn(neck.selectedRow.faces, neck.face));
+  assert.notEqual(neck.face, '999');
+});
