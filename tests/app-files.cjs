@@ -54,6 +54,8 @@ function app(options={}) {
   const upload={id:'project-upload',isConnected:true,files:[]};
   const select=file=>{upload.files=[file];return dialog.events.change({target:upload});};
   return {click,select,upload,dialog,elements,storage,downloads,faults,pendingExport,equipment,
+    location,
+    follow(hash){location.hash=hash;windowEvents.hashchange();},
     dispatch(type,target){documentEvents[type]({target});},
     navigate(index){location.hash=`#equipment/${equipment[index].id}`;windowEvents.hashchange();},
     navigateNode(eqIndex,nodeIndex){
@@ -66,6 +68,26 @@ const importJson=()=>P.serialize({version:1,equipment:[C.createEquipment('Імп
 (async()=>{
   const sample=require('../examples/pump-600v-first-three.json');
   const readAppFile=name=>fs.readFileSync(require('node:path').join(__dirname,'..',name),'utf8');
+  const routes = [];
+  const referenceState = app({window:{FlangeCalculations:require('../calculations.js'),FlangeExcel:require('../excel-export.js'),
+    StandardsReference:{render(main,parts){
+    routes.push(Array.from(parts));
+    main.innerHTML = '<h1>Довідник стандартів</h1>';
+    return 'Довідник стандартів';
+  }}}});
+  referenceState.navigateNode(0,0);
+  const nodeHash = referenceState.location.hash;
+  referenceState.dispatch('input',{dataset:{field:'gasket.thickness'},value:'4',type:'text',tagName:'INPUT'});
+  referenceState.click('open-standards');
+  assert.equal(referenceState.location.hash.replace(/^#/,''),'standards');
+  assert.equal(JSON.parse(referenceState.storage.get(KEY)).equipment[0].nodes[0].gasket.thickness,'4');
+  referenceState.follow('#standards');
+  referenceState.follow('#standards/nuts');
+  referenceState.follow('#standards/nuts/gost-9064-75');
+  assert.deepEqual(routes,[[],['nuts'],['nuts','gost-9064-75']]);
+  referenceState.follow(nodeHash);
+  assert.match(referenceState.elements.get('#main').innerHTML,/Кришка/);
+  assert.match(referenceState.elements.get('#main').innerHTML,/data-field="gasket\.thickness"[^>]*value="4"|value="4"[^>]*data-field="gasket\.thickness"/);
   const sampleApp=app({equipment:sample.equipment,materials:vm.runInNewContext(readAppFile('data.js')+';materialsDB'),
     window:{FlangeStandardsDB:vm.runInNewContext(readAppFile('standards.bundle.js')+';FlangeStandardsDB'),
       FlangeCalculations:require('../calculations.js'),FlangeExcel:require('../excel-export.js')}});

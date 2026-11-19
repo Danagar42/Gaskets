@@ -301,6 +301,15 @@
     currentNode = parts[0] === 'node' ? currentEquipment?.nodes.find(item => item.id === parts[2]) || null : null;
     searchText = '';
     renderBreadcrumbs();
+    if (parts[0] === 'standards') {
+      if (storageError) setSaveStatus('Не вдалося відкрити збереження', true);
+      const title = window.StandardsReference?.render(main,parts.slice(1),{navigate,toast});
+      if (!title) main.innerHTML = '<section class="desktop"><h1>Довідник стандартів</h1><p>Файли довідника не завантажено.</p></section>';
+      document.title = `${title || 'Довідник стандартів'} — Прокладки`;
+      pendingField = null;
+      main.focus({preventScroll:true});
+      return;
+    }
     if (storageError) {
       setSaveStatus('Не вдалося відкрити збереження', true);
       main.innerHTML = `<section class="desktop"><h1>Збережені дані потребують перевірки</h1><p class="calculation-notice" style="margin-top:20px">Не вдалося прочитати робочий простір. Поточне збереження залишилося в браузері.</p><button class="button secondary" data-action="recover">Завантажити збережені дані</button><button class="button quiet" data-action="reset">Створити новий простір</button></section>`;
@@ -1597,10 +1606,16 @@
   });
 
   document.addEventListener('click', event => {
+    if (event.target.matches?.('.skip-link')) {
+      event.preventDefault();
+      main.focus();
+      return;
+    }
     const button = event.target.closest('[data-action]');
     if (!button || button.disabled) return;
     const action = button.dataset.action;
-    if (action === 'open-flange-picker') {
+    if (action === 'open-standards') navigate('standards');
+    else if (action === 'open-flange-picker') {
       const node = currentNode;
       if (node?.connection.kind !== 'flange-flange' && !(node?.connection.kind === 'flange-cover' && button.dataset.side === 'sideA')) return;
       const opened = window.FlangePicker?.openPicker({

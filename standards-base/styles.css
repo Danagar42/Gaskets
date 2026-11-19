@@ -1,555 +1,182 @@
-/* ==========================================================================
-   Standards Knowledge Base (StandardsBase)
-   Modern Engineering Glass 2.0 Styles
-   ========================================================================== */
+.standards-reference {
+  max-width: 1480px;
+  min-height: calc(100vh - 76px);
+  margin: 0 auto;
+  padding: 37px clamp(30px, 3.6vw, 55px) 48px;
+}
+.standards-reference-entry { flex-shrink: 0; }
+.standards-reference .reference-path {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.standards-reference .reference-heading { margin-bottom: 24px; }
+.standards-reference .reference-heading h1 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 34px;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.standards-reference .reference-heading p { max-width: 78ch; margin: 8px 0 0; font-size: 16px; line-height: 1.45; }
+.standards-reference .reference-heading small { display: block; margin-top: 8px; color: #536981; font-size: 13px; font-variant-numeric: tabular-nums; }
 
-/* --- 1. Typography & Global Resets --- */
-body, input, button, select, textarea {
-    transition: background-color 0.3s, color 0.3s;
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+.standards-reference .reference-search { max-width: 620px; margin-bottom: 24px; }
+.standards-reference .reference-search label,
+.standards-reference .reference-filter span { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; }
+.standards-reference .reference-search > div { display: flex; align-items: center; gap: 8px; }
+.standards-reference input,
+.standards-reference select {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid #bdcadd;
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
 }
+.standards-reference :is(a,button,input,select,[tabindex]):focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.standards-reference .reference-categories,
+.standards-reference .reference-list { margin: 0; padding: 0; list-style: none; }
+.standards-reference .reference-categories { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.standards-reference .reference-categories a,
+.standards-reference .reference-list a {
+  display: grid;
+  align-items: center;
+  text-decoration: none;
+  color: var(--ink);
+}
+.standards-reference .reference-categories a {
+  grid-template-columns: minmax(0,1fr) auto;
+  min-height: 86px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  font-size: 17px;
+}
+.standards-reference .reference-categories a:hover,
+.standards-reference .reference-list a:hover { background: var(--blue-soft); }
+.standards-reference .reference-categories span {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--blue-soft);
+  color: var(--navy);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.standards-reference .reference-list {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.standards-reference .reference-list li + li { border-top: 1px solid var(--line); }
+.standards-reference .reference-list a {
+  grid-template-columns: 178px minmax(0,1fr) minmax(100px,210px);
+  gap: 16px;
+  min-height: 59px;
+  padding: 11px 18px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.standards-reference .reference-list a:focus-visible { outline-offset: -2px; }
+.standards-reference .reference-list strong { color: var(--blue); }
+.standards-reference .reference-list small { color: #536981; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
 
-body {
-    background-color: #f1f5f9;
-    background-image:
-        radial-gradient(circle at 12% 8%, rgba(99, 102, 241, 0.14) 0%, transparent 42%),
-        radial-gradient(circle at 88% 14%, rgba(14, 165, 233, 0.11) 0%, transparent 38%),
-        radial-gradient(circle at 78% 88%, rgba(139, 92, 246, 0.10) 0%, transparent 45%),
-        linear-gradient(180deg, #f8fafc 0%, #eef2f9 100%);
-    background-attachment: fixed;
-    min-height: 100vh;
+.standards-reference .reference-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 19px; }
+.standards-reference .reference-filter { min-width: 130px; }
+.standards-reference .reference-filter input { width: 158px; }
+.standards-reference .reference-detail { display: grid; gap: 18px; align-items: start; }
+.standards-reference .reference-detail-split { grid-template-columns: minmax(0,1.12fr) minmax(0,1fr); }
+.standards-reference :is(.reference-tables,.reference-figure) { min-width: 0; }
+.standards-reference .reference-table-block,
+.standards-reference .reference-figure,
+.standards-reference .reference-sources {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
 }
-
-html.dark body {
-    background-color: #060911;
-    background-image:
-        radial-gradient(circle at 12% 8%, rgba(99, 102, 241, 0.22) 0%, transparent 44%),
-        radial-gradient(circle at 88% 16%, rgba(14, 165, 233, 0.14) 0%, transparent 40%),
-        radial-gradient(circle at 76% 90%, rgba(139, 92, 246, 0.15) 0%, transparent 46%),
-        linear-gradient(180deg, #070b14 0%, #0b1120 100%);
-    background-attachment: fixed;
+.standards-reference .reference-table-block + .reference-table-block { margin-top: 15px; }
+.standards-reference .reference-table-block h2,
+.standards-reference .reference-sources h2,
+.standards-reference .reference-figure h2 { margin: 0; color: var(--navy); font-size: 16px; }
+.standards-reference .reference-table-block h2 { padding: 14px 16px; }
+.standards-reference .reference-table-scroll { max-height: 430px; overflow: auto; border-radius: 0 0 var(--radius) var(--radius); }
+.standards-reference .reference-table-scroll:focus-visible { outline-offset: -2px; }
+.standards-reference .reference-table { width: 100%; border-spacing: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.standards-reference .reference-table :is(th,td) {
+  padding: 9px 12px;
+  border-bottom: 1px solid #e4eaf3;
+  text-align: left;
+  vertical-align: middle;
 }
-
-/* Monospace numerals for precision engineering tables */
-.font-mono-num {
-    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Segoe UI Mono', Consolas, monospace;
-    font-variant-numeric: tabular-nums;
+.standards-reference .reference-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-width: 64px;
+  background: #f0f4f9;
+  color: var(--navy);
+  line-height: 1.3;
 }
-
-/* --- 2. Engineered Scrollbars --- */
-::-webkit-scrollbar {
-    height: 8px;
-    width: 8px;
-}
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 99px;
-    border: 2px solid transparent;
-    background-clip: content-box;
-}
-::-webkit-scrollbar-thumb:hover {
-    background-color: #94a3b8;
-}
-html.dark ::-webkit-scrollbar-thumb {
-    background: #475569;
-    border: 2px solid transparent;
-    background-clip: content-box;
-}
-html.dark ::-webkit-scrollbar-thumb:hover {
-    background: #64748b;
-}
-
-/* --- 3. Glassmorphism Panel (Header, Sidebar, Floating Overlays) --- */
-.glass-panel {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78) 0%, rgba(248, 250, 252, 0.66) 100%) !important;
-    backdrop-filter: blur(20px) saturate(150%);
-    -webkit-backdrop-filter: blur(20px) saturate(150%);
-    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.85);
-}
-html.dark .glass-panel {
-    background: linear-gradient(135deg, rgba(15, 23, 42, 0.76) 0%, rgba(15, 23, 42, 0.60) 100%) !important;
-    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-/* Brand Glow Border and Accents */
-.brand-glow {
-    box-shadow: 0 4px 20px -2px rgba(99, 102, 241, 0.12);
-}
-html.dark .brand-glow {
-    box-shadow: 0 4px 25px -2px rgba(99, 102, 241, 0.22);
-}
-
-/* --- 4. Fluent Glassmorphic Cards --- */
-.fluent-card {
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.74) 0%, rgba(255, 255, 255, 0.56) 100%) !important;
-    backdrop-filter: blur(18px) saturate(145%);
-    -webkit-backdrop-filter: blur(18px) saturate(145%);
-    border: 1px solid rgba(255, 255, 255, 0.75) !important;
-    box-shadow: 0 10px 30px -6px rgba(15, 23, 42, 0.07),
-                0 2px 6px -1px rgba(15, 23, 42, 0.03),
-                inset 0 1px 0 0 rgba(255, 255, 255, 0.9) !important;
-    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease;
-}
-html.dark .fluent-card {
-    background: linear-gradient(145deg, rgba(30, 41, 59, 0.62) 0%, rgba(15, 23, 42, 0.48) 100%) !important;
-    border: 1px solid rgba(148, 163, 184, 0.16) !important;
-    box-shadow: 0 12px 34px -6px rgba(0, 0, 0, 0.42),
-                inset 0 1px 0 0 rgba(255, 255, 255, 0.09) !important;
-}
-.fluent-card:hover {
-    border-color: rgba(99, 102, 241, 0.32) !important;
-    box-shadow: 0 14px 36px -6px rgba(79, 70, 229, 0.11),
-                inset 0 1px 0 0 rgba(255, 255, 255, 0.95) !important;
-}
-html.dark .fluent-card:hover {
-    border-color: rgba(129, 140, 248, 0.28) !important;
-    box-shadow: 0 16px 40px -6px rgba(0, 0, 0, 0.55),
-                inset 0 1px 0 0 rgba(255, 255, 255, 0.12) !important;
-}
-
-/* --- 5. Application 3-Column Desktop Layout & Panels --- */
-#mainSidebar,
-.sidebar-panel {
-    width: 280px;
-    min-width: 280px;
-    max-width: 280px;
-    flex-shrink: 0;
-    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease, padding 0.25s ease;
-}
-
-#mainSidebar.sidebar-collapsed {
-    width: 0 !important;
-    min-width: 0 !important;
-    max-width: 0 !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    border-right-width: 0 !important;
-    overflow: hidden !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-}
-
-#mainContent,
-.content-panel {
-    flex: 1 1 auto;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-#detailSidebar,
-.detail-panel {
-    width: 420px;
-    min-width: 420px;
-    max-width: 420px;
-    flex-shrink: 0;
+.standards-reference .reference-table thead small { display: block; margin-top: 2px; color: #536981; font-size: 11px; font-weight: 400; }
+.standards-reference .reference-table tbody tr:last-child > * { border-bottom: 0; }
+.standards-reference .reference-table [data-reference-size] { cursor: pointer; }
+.standards-reference .reference-table [data-reference-size]:hover { background: #f5f8fc; }
+.standards-reference .reference-table .is-selected,
+.standards-reference .reference-table .is-selected:hover { background: var(--blue-soft); }
+.standards-reference .reference-table .is-selected td:first-child { box-shadow: inset 3px 0 var(--blue); }
+.standards-reference .reference-table [data-reference-row] {
+  min-width: 36px;
+  min-height: 24px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--blue);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
 }
 
-/* Sidebar Nav item active style */
-.sidebar-item-active {
-    background: linear-gradient(90deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.04) 100%);
-    border-left: 3px solid #6366f1;
-    color: #4f46e5 !important;
-    font-weight: 600;
+.standards-reference .reference-figure { margin: 0; padding: 15px; }
+.standards-reference .reference-callout { margin-bottom: 11px; font-size: 15px; font-weight: 650; }
+.standards-reference .reference-canvas {
+  margin: 9px 0 5px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f4f8fb;
 }
-html.dark .sidebar-item-active {
-    background: linear-gradient(90deg, rgba(99, 102, 241, 0.25) 0%, rgba(99, 102, 241, 0.08) 100%);
-    border-left-color: #818cf8;
-    color: #a5b4fc !important;
+.standards-reference .reference-canvas svg { display: block; width: 100%; height: auto; }
+.standards-reference .reference-canvas.fp-drawings { padding: 5px; }
+.standards-reference .reference-canvas.fp-drawings svg { max-height: none; }
+.standards-reference .reference-figure figcaption { color: #536981; font-size: 12px; text-align: right; }
+.standards-reference .reference-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+.standards-reference .reference-actions button { min-height: 36px; padding: 7px 10px; }
+.standards-reference .reference-calculated {
+  margin-top: 10px;
+  background: #fff8e9;
+  color: #684a20;
 }
+.standards-reference .reference-calculated td:last-child { font-weight: 650; }
+.standards-reference .reference-sources { margin-top: 18px; padding: 16px 18px; color: var(--ink); font-size: 13px; line-height: 1.52; }
+.standards-reference .reference-sources ul { display: grid; gap: 6px; margin: 9px 0 0; padding: 0; list-style: none; }
+.standards-reference .reference-sources li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 13px; }
+.standards-reference .reference-sources li span { color: #536981; }
+.standards-reference .reference-sources p { max-width: 108ch; margin: 8px 0 0; }
+.standards-reference :is(.reference-path,.reference-sources) a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.standards-reference .reference-related { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; }
+.standards-reference .reference-empty { margin: 0; padding: 15px 18px; border-radius: 8px; background: var(--paper); color: #536981; }
+.standards-reference .reference-empty button { margin-left: 12px; }
 
-/* --- 6. Table Layout & Sticky Headers --- */
-.table-container {
-    overflow: auto;
-    position: relative;
-    max-height: calc(100vh - 380px);
-    border-radius: 8px;
-}
-
-.table-container table {
-    width: 100%;
-    min-width: 600px;
-    border-collapse: collapse;
-}
-
-.sticky-thead th {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background-color: #f8fafc;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border-bottom: 2px solid #e2e8f0;
-}
-html.dark .sticky-thead th {
-    background-color: #0f172a;
-    border-bottom-color: #334155;
-}
-
-.sticky-first-col {
-    position: sticky;
-    left: 0;
-    z-index: 5;
-    background-color: inherit;
-}
-.sticky-thead th.sticky-first-col {
-    z-index: 15;
-}
-
-/* Interactive Table Rows */
-.table-row-interactive {
-    cursor: pointer;
-    transition: background-color 0.15s ease, outline-color 0.15s ease;
-}
-.table-row-interactive:hover {
-    background-color: rgba(99, 102, 241, 0.08) !important;
-}
-html.dark .table-row-interactive:hover {
-    background-color: rgba(99, 102, 241, 0.16) !important;
-}
-.table-row-interactive.active-row {
-    background-color: rgba(99, 102, 241, 0.15) !important;
-    outline: 2px solid rgba(99, 102, 241, 0.5);
-    outline-offset: -2px;
-}
-html.dark .table-row-interactive.active-row {
-    background-color: rgba(99, 102, 241, 0.25) !important;
-    outline: 2px solid rgba(129, 140, 248, 0.6);
-    outline-offset: -2px;
-}
-
-/* Non-preferred diameter indication */
-.non-preferred-size {
-    opacity: 0.8;
-    color: #64748b;
-}
-html.dark .non-preferred-size {
-    color: #94a3b8;
-}
-
-/* --- 7. CAD Drawing Canvas & Blueprint Themes --- */
-.cad-canvas {
-    position: relative;
-    background-color: #f8fafc;
-    background-image:
-        linear-gradient(to right, rgba(203, 213, 225, 0.45) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(203, 213, 225, 0.45) 1px, transparent 1px);
-    background-size: 20px 20px;
-    border-radius: 12px;
-    border: 1px solid #e2e8f0;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 380px;
-    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.04);
-}
-
-html.dark .cad-canvas {
-    background-color: #07101e; /* Blueprint deep technical blue */
-    background-image:
-        linear-gradient(to right, rgba(56, 189, 248, 0.12) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(56, 189, 248, 0.12) 1px, transparent 1px);
-    background-size: 20px 20px;
-    border-color: rgba(56, 189, 248, 0.25);
-    box-shadow: inset 0 0 40px rgba(14, 165, 233, 0.08), inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
-}
-
-.cad-canvas svg {
-    max-width: 100%;
-    height: auto;
-    display: block;
-}
-
-/* CAD Vector Graphics Styling */
-.cad-outline {
-    stroke: #0f172a;
-    stroke-width: 1.75;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    fill: none;
-}
-html.dark .cad-outline {
-    stroke: #e2e8f0;
-    filter: drop-shadow(0 0 1px rgba(226, 232, 240, 0.4));
-}
-
-.cad-hatch {
-    stroke: #64748b;
-    stroke-width: 0.75;
-    fill: none;
-}
-html.dark .cad-hatch {
-    stroke: #38bdf8;
-    opacity: 0.7;
-}
-
-.cad-axis {
-    stroke: #dc2626;
-    stroke-width: 0.75;
-    stroke-dasharray: 14 3 2 3;
-    fill: none;
-}
-html.dark .cad-axis {
-    stroke: #f87171;
-    opacity: 0.85;
-}
-
-.cad-dimension {
-    stroke: #0284c7;
-    stroke-width: 1;
-    fill: none;
-}
-html.dark .cad-dimension {
-    stroke: #38bdf8;
-}
-
-.cad-dimension-arrow {
-    fill: #0284c7;
-}
-html.dark .cad-dimension-arrow {
-    fill: #38bdf8;
-}
-
-.cad-dimension-text {
-    fill: #0369a1;
-    font-family: 'JetBrains Mono', Consolas, monospace;
-    font-size: 11px;
-    font-weight: 600;
-    text-anchor: middle;
-    dominant-baseline: central;
-}
-html.dark .cad-dimension-text {
-    fill: #f0f9ff;
-    text-shadow: 0 0 6px rgba(14, 165, 233, 0.5);
-}
-
-.cad-dimension-bg {
-    fill: rgba(248, 250, 252, 0.85);
-}
-html.dark .cad-dimension-bg {
-    fill: rgba(7, 16, 30, 0.85);
-}
-
-/* --- 8. Engineering Callout Badges & Toast Notifications --- */
-.callout-badge {
-    font-family: 'JetBrains Mono', 'Segoe UI Mono', Consolas, monospace;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(14, 165, 233, 0.1) 100%);
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    color: #4338ca;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-}
-html.dark .callout-badge {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(14, 165, 233, 0.2) 100%);
-    border-color: rgba(129, 140, 248, 0.35);
-    color: #c7d2fe;
-}
-
-/* Toast Notification */
-.toast-container {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    z-index: 100;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    pointer-events: none;
-}
-
-.toast-message {
-    pointer-events: auto;
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    background: rgba(15, 23, 42, 0.9);
-    color: #ffffff;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.25);
-    backdrop-filter: blur(8px);
-}
-html.dark .toast-message {
-    background: rgba(30, 41, 59, 0.95);
-    border: 1px solid rgba(148, 163, 184, 0.2);
-    color: #f8fafc;
-}
-
-@keyframes toastSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(12px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-/* Custom Interactive Input & Selects */
-.custom-input {
-    width: 100%;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 8px 12px;
-    outline: none;
-    transition: all 0.2s;
-    font-size: 0.875rem;
-    background: rgba(255, 255, 255, 0.8);
-}
-html.dark .custom-input {
-    background: rgba(15, 23, 42, 0.8);
-    border-color: #334155;
-    color: #f1f5f9;
-}
-.custom-input:focus {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
-}
-
-/* --- 9. Glass 2.0 Action Buttons, Navigation Links & Status Badges --- */
-.btn-primary,
-#btnCopyCallout {
-    background-color: #eef2ff;
-    color: #4f46e5;
-    border: 1px solid #c7d2fe;
-    transition: all 0.2s ease;
-}
-.btn-primary:hover,
-#btnCopyCallout:hover {
-    background-color: #e0e7ff;
-    color: #4338ca;
-    border-color: #a5b4fc;
-}
-html.dark .btn-primary,
-html.dark #btnCopyCallout {
-    background-color: rgba(49, 46, 129, 0.4) !important;
-    color: #a5b4fc !important;
-    border-color: rgba(99, 102, 241, 0.4) !important;
-}
-html.dark .btn-primary:hover,
-html.dark #btnCopyCallout:hover {
-    background-color: rgba(49, 46, 129, 0.6) !important;
-    color: #c7d2fe !important;
-    border-color: rgba(129, 140, 248, 0.55) !important;
-}
-
-.btn-secondary,
-#btnExportSvg {
-    background-color: #f1f5f9;
-    color: #334155;
-    border: 1px solid #cbd5e1;
-    transition: all 0.2s ease;
-}
-.btn-secondary:hover,
-#btnExportSvg:hover {
-    background-color: #e2e8f0;
-    color: #1e293b;
-    border-color: #94a3b8;
-}
-html.dark .btn-secondary,
-html.dark #btnExportSvg {
-    background-color: rgba(30, 41, 59, 0.65) !important;
-    color: #e2e8f0 !important;
-    border-color: rgba(148, 163, 184, 0.25) !important;
-}
-html.dark .btn-secondary:hover,
-html.dark #btnExportSvg:hover {
-    background-color: rgba(51, 65, 85, 0.8) !important;
-    color: #ffffff !important;
-    border-color: rgba(148, 163, 184, 0.4) !important;
-}
-
-/* Header Back Navigation Link */
-.header-back-link {
-    background-color: #f1f5f9;
-    color: #334155;
-    border: 1px solid #cbd5e1;
-    transition: all 0.2s ease;
-}
-.header-back-link:hover {
-    background-color: #eef2ff;
-    color: #4f46e5;
-    border-color: #c7d2fe;
-}
-html.dark .header-back-link {
-    background-color: rgba(30, 41, 59, 0.65) !important;
-    color: #e2e8f0 !important;
-    border-color: rgba(148, 163, 184, 0.25) !important;
-}
-html.dark .header-back-link:hover {
-    background-color: rgba(49, 46, 129, 0.45) !important;
-    color: #a5b4fc !important;
-    border-color: rgba(99, 102, 241, 0.45) !important;
-}
-
-/* Reset Search Button */
-#btnResetSearch {
-    transition: all 0.2s ease;
-}
-html.dark #btnResetSearch {
-    background-color: rgba(49, 46, 129, 0.4) !important;
-    color: #a5b4fc !important;
-    border-color: rgba(99, 102, 241, 0.4) !important;
-}
-html.dark #btnResetSearch:hover {
-    background-color: rgba(49, 46, 129, 0.6) !important;
-    color: #c7d2fe !important;
-}
-
-/* Standard Badges in Passport and Details */
-.badge-indigo {
-    background-color: #eef2ff;
-    color: #4338ca;
-    border: 1px solid #c7d2fe;
-}
-html.dark .badge-indigo {
-    background-color: rgba(49, 46, 129, 0.35) !important;
-    color: #a5b4fc !important;
-    border-color: rgba(99, 102, 241, 0.35) !important;
-}
-
-.badge-cyan {
-    background-color: #ecfeff;
-    color: #0e7490;
-    border: 1px solid #a5f3fc;
-}
-html.dark .badge-cyan {
-    background-color: rgba(8, 51, 68, 0.4) !important;
-    color: #67e8f9 !important;
-    border-color: rgba(6, 182, 212, 0.35) !important;
-}
-
-.badge-emerald {
-    background-color: #ecfdf5;
-    color: #047857;
-    border: 1px solid #a7f3d0;
-}
-html.dark .badge-emerald {
-    background-color: rgba(6, 78, 59, 0.35) !important;
-    color: #6ee7b7 !important;
-    border-color: rgba(16, 185, 129, 0.35) !important;
-}
-
-.badge-amber {
-    background-color: #fffbeb;
-    color: #b45309;
-    border: 1px solid #fde68a;
-}
-html.dark .badge-amber {
-    background-color: rgba(120, 53, 15, 0.35) !important;
-    color: #fcd34d !important;
-    border-color: rgba(245, 158, 11, 0.35) !important;
+@media (max-width: 1150px) {
+  .standards-reference .reference-detail-split { grid-template-columns: minmax(0,1fr); }
+  .standards-reference .reference-figure { max-width: 680px; }
 }

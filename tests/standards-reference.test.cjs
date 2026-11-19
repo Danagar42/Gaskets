@@ -1,6 +1,9 @@
 'use strict';
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
 const {StandardsCatalogAdapter: adapter} = require('../standards-base/src/catalog-adapter.js');
 require('../standards.bundle.js');
 const db = globalThis.FlangeStandardsDB;
@@ -131,4 +134,61 @@ test('flange drawing flags only dimensions with recorded calculated provenance',
   assert.match(flagged, /b 8 мм · Розраховано/);
   assert.equal((flagged.match(/Розраховано/g) || []).length,1);
   assert.doesNotMatch(drawCandidate(row,'1'), /Розраховано/);
+});
+
+function browserReference() {
+  const context = vm.createContext({});
+  for (const file of ['standards.bundle.js','flange-catalog.bundle.js','core.js','component-imported-styles.js',
+    'flange-picker-drawing.js','standards-base/src/catalog-adapter.js','standards-base/src/flange-reference.js',
+    'standards-base/src/drawing-templates.js','standards-base/src/drawing-engine.js','standards-base/src/app.js']) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),context,{filename:file});
+  }
+  return context;
+}
+
+test('unknown, category and card routes resolve without looking up unrelated workspace records', () => {
+  const browser = browserReference();
+  assert.equal(typeof browser.StandardsReference?.resolveRoute,'function');
+  const entries = adapter.listReferenceEntries(db);
+  const route = parts => JSON.parse(JSON.stringify(browser.StandardsReference.resolveRoute(parts,entries)));
+  assert.deepEqual(route(['unknown']),{categoryId:null,entryId:null});
+  assert.deepEqual(route(['nuts','gost-9064-75']),{categoryId:'nuts',entryId:'gost-9064-75'});
+  assert.deepEqual(route(['washers','gost-9064-75']),{categoryId:null,entryId:null});
+});
+
+test('filter and row selection render the corresponding dimensions and drawing together', () => {
+  const browser = browserReference();
+  assert.equal(typeof browser.StandardsReference?.render,'function');
+  const events = {};
+  const panel = {innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};
+  const root = {querySelector:()=>panel,addEventListener(type,handler){events[type]=handler;}};
+  const main = {firstElementChild:root,innerHTML:''};
+  const filter = (key,value) => events.change({target:{dataset:{referenceFilter:key},value,tagName:'SELECT'}});
+  const diameter = value => events.input({target:{dataset:{referenceFilter:'diameter'},value,tagName:'INPUT'}});
+  const action = dataset => events.click({target:{closest:()=>({dataset})},preventDefault(){}});
+  browser.StandardsReference.render(main,['nuts','gost-9064-75'],{navigate(){},toast(){}});
+  filter('type','B');
+  diameter('М24');
+  assert.match(panel.innerHTML,/М24\.Б ГОСТ 9064-75/);
+  assert.match(panel.innerHTML,/D₁.*40\s*мм/);
+  assert.match(panel.innerHTML,/l₀.*16\s*мм/);
+  assert.match(panel.innerHTML,/<td[^>]*>40<\/td><td[^>]*>16<\/td><td[^>]*>40<\/td>/);
+  diameter('999');
+  assert.match(panel.innerHTML,/Типорозмірів не знайдено/);
+  action({referenceReset:''});
+  assert.doesNotMatch(panel.innerHTML,/Типорозмірів не знайдено/);
+  browser.StandardsReference.render(main,['washers','gost-11371-78'],{navigate(){},toast(){}});
+  filter('accuracyClass','C');
+  diameter('М33');
+  assert.match(panel.innerHTML,/<td[^>]*>—<\/td>/);
+  assert.match(panel.innerHTML,/Недостатньо розмірів для ескізу/);
+  browser.StandardsReference.render(main,['flanges','gost-12820-80'],{navigate(){},toast(){}});
+  filter('dn','600');
+  filter('pressure','0.1');
+  filter('series','1');
+  filter('face','4');
+  assert.match(panel.innerHTML,/КОМПАС 531, ГОСТ 631/);
+  assert.match(panel.innerHTML,/D₃ 631 мм/);
+  filter('dn','10');
+  assert.doesNotMatch(panel.innerHTML,/D₃ 631 мм/);
 });

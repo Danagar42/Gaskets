@@ -1,21 +1,30 @@
-// tests/standards-base-assets.test.cjs
-const fs = require('fs');
-const path = require('path');
-const assert = require('assert');
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
 
-const baseDir = path.resolve(__dirname, '..', 'standards-base');
-assert.ok(fs.existsSync(path.join(baseDir, 'assets', 'tailwind-local.css')), 'tailwind-local.css must exist');
-assert.ok(fs.existsSync(path.join(baseDir, 'assets', 'favicon.png')), 'favicon.png must exist');
-assert.ok(fs.existsSync(path.join(baseDir, 'styles.css')), 'styles.css must exist');
+const repo = path.resolve(__dirname,'..');
+const read = name => fs.readFileSync(path.join(repo,name),'utf8');
+const html = read('index.html');
+const header = html.match(/<header class="app-header">([\s\S]+?)<\/header>/)[1];
+assert.equal((header.match(/data-action="open-standards"/g) || []).length,1);
+assert.match(html,/id="main"/);
+const scripts = [...html.matchAll(/<script src="([^"]+)" defer><\/script>/g)].map(match => match[1]);
+for (const name of ['standards.bundle.js','flange-catalog.bundle.js','standards-base/src/catalog-adapter.js',
+  'standards-base/src/flange-reference.js','standards-base/src/drawing-templates.js','standards-base/src/drawing-engine.js',
+  'standards-base/src/app.js']) {
+  assert.ok(scripts.includes(name) && scripts.indexOf(name) < scripts.indexOf('app.js'),`${name} must load before app.js`);
+  assert.ok(read(name).length > 0);
+}
+assert.match(html,/<link rel="stylesheet" href="standards-base\/styles\.css">/);
+assert.match(read('standards-base/styles.css'),/\.reference-table-scroll[^}]+overflow:\s*auto/);
 
-const tailwindStat = fs.statSync(path.join(baseDir, 'assets', 'tailwind-local.css'));
-assert.ok(tailwindStat.size > 10000, 'tailwind-local.css must not be empty');
-
-const faviconStat = fs.statSync(path.join(baseDir, 'assets', 'favicon.png'));
-assert.ok(faviconStat.size > 100, 'favicon.png must not be empty');
-
-const cssContent = fs.readFileSync(path.join(baseDir, 'styles.css'), 'utf8');
-assert.ok(cssContent.includes('.glass-panel'), 'styles.css must define .glass-panel');
-assert.ok(cssContent.includes('.fluent-card'), 'styles.css must define .fluent-card');
-assert.ok(cssContent.includes('.cad-canvas'), 'styles.css must define .cad-canvas');
-console.log('Task 1 assets test passed');
+const formerPage = read('standards-base/index.html');
+let redirect;
+vm.runInNewContext(formerPage.match(/<script>([\s\S]+?)<\/script>/)[1],{
+  location:{replace(value){redirect = value;}}
+});
+assert.equal(redirect,'../index.html#standards');
+assert.match(formerPage,/href="\.\.\/index\.html#standards"/);
+console.log('Integrated standards reference assets and legacy redirect passed.');

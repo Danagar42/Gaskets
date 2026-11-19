@@ -343,81 +343,9 @@ assert.ok(!browserRender.includes('NaN'), 'Browser render must not contain NaN')
 console.log('Drawing engine tests passed');
 
 // ==========================================
-// Part 3: UI HTML validation
+// Part 3: Parametric CAD scaling in the shared drawing engine
 // ==========================================
-const html = fs.readFileSync(path.join(__dirname, '..', 'standards-base', 'index.html'), 'utf8');
 
-assert.ok(html.includes('id="searchInput"'), 'Must have search input');
-assert.ok(html.includes('id="standardsList"'), 'Must have standards list container');
-assert.ok(html.includes('id="passportCard"'), 'Must have passport card container');
-assert.ok(html.includes('id="dimensionsTable"'), 'Must have dimensions table container');
-assert.ok(html.includes('id="drawingContainer"'), 'Must have drawing container');
-assert.ok(html.includes('id="btnCopyCallout"'), 'Must have copy callout button');
-assert.ok(html.includes('id="btnExportSvg"'), 'Must have export SVG button');
-assert.ok(html.includes('id="themeToggle"'), 'Must have theme toggle');
-assert.ok(html.includes('id="btnToggleSidebar"'), 'Must have sidebar toggle button');
-assert.ok(html.includes('id="toastContainer"'), 'Must have toast container');
-assert.ok(html.includes('tailwind-local.css'), 'Must link tailwind-local.css');
-assert.ok(html.includes('styles.css'), 'Must link styles.css');
-assert.ok(html.includes('../standards.bundle.js'), 'Must link shared standards.bundle.js');
-assert.ok(html.includes('src/catalog-adapter.js'), 'Must link catalog-adapter.js');
-assert.ok(html.includes('src/drawing-templates.js'), 'Must link drawing-templates.js');
-assert.ok(html.includes('src/drawing-engine.js'), 'Must link drawing-engine.js');
-assert.ok(html.includes('src/app.js'), 'Must link app.js');
-
-const appJsPath = path.join(__dirname, '..', 'standards-base', 'src', 'app.js');
-const appCode = fs.readFileSync(appJsPath, 'utf8');
-assert.ok(appCode.length > 0, 'app.js must not be empty');
-
-const app = require('../standards-base/src/app.js');
-assert.ok(app.state, 'app must export state');
-assert.strictEqual(typeof app.init, 'function', 'app must export init');
-assert.strictEqual(typeof app.selectStandard, 'function', 'app must export selectStandard');
-assert.strictEqual(typeof app.loadTableData, 'function', 'app must export loadTableData');
-assert.strictEqual(typeof app.renderDrawing, 'function', 'app must export renderDrawing');
-assert.strictEqual(typeof app.showToast, 'function', 'app must export showToast');
-
-// Test browser context in VM sandbox
-vm.runInContext(appCode, browserContext);
-assert.ok(browserContext.window.StandardsApp, 'StandardsApp must be attached to window in browser');
-assert.strictEqual(typeof browserContext.window.StandardsApp.selectStandard, 'function', 'browser StandardsApp has selectStandard');
-
-console.log('HTML and UI structure tests passed');
-
-// ==========================================
-// Part 3.5: Layout & CAD Scaling Excellence (ACTIVE_SPEC Rev 1)
-// ==========================================
-// 1. DOM IDs and Classes
-assert.ok(html.includes('id="detailSidebar"'), 'Must have #detailSidebar for right CAD drawing panel');
-assert.ok(html.includes('id="mainContent"'), 'Must have #mainContent for central scrollable workspace');
-assert.ok(html.includes('detail-panel'), 'Right sidebar must have .detail-panel class');
-assert.ok(html.includes('content-panel'), 'Central workspace must have .content-panel class');
-assert.ok(html.includes('sidebar-panel'), 'Left sidebar must have .sidebar-panel class');
-assert.ok(html.includes('header-back-link'), 'Back link must have .header-back-link class');
-
-// 2. CSS Layout and Glass 2.0 rules in styles.css
-const css = fs.readFileSync(path.join(__dirname, '..', 'standards-base', 'styles.css'), 'utf8');
-
-// Sidebar width rules
-assert.ok(/#mainSidebar[\s\S]*?width:\s*280px|sidebar-panel[\s\S]*?width:\s*280px/.test(css), 'styles.css must enforce 280px width on left sidebar');
-assert.ok(/#detailSidebar[\s\S]*?width:\s*420px|detail-panel[\s\S]*?width:\s*420px/.test(css), 'styles.css must enforce 420px width on #detailSidebar');
-assert.ok(/flex-shrink:\s*0/.test(css), 'styles.css must enforce flex-shrink: 0 on sidebars');
-
-// Central column flex: 1 1 auto; min-width: 0;
-assert.ok(/content-panel[\s\S]*?min-width:\s*0|#mainContent[\s\S]*?min-width:\s*0/.test(css), 'styles.css must enforce min-width: 0 on content-panel');
-
-// SVG containment inside .cad-canvas
-assert.ok(/\.cad-canvas\s+svg[\s\S]*?max-width:\s*100%/.test(css), '.cad-canvas svg must have max-width: 100%');
-
-// Table min-width
-assert.ok(/\.table-container\s+table[\s\S]*?min-width:\s*600px/.test(css), '.table-container table must have min-width: 600px to prevent squashing');
-
-// Buttons and Badges dark theme rules
-assert.ok(/html\.dark\s+[^{}]*(?:#btnCopyCallout|\.btn-primary)/.test(css), 'styles.css must define dark styles for btn-primary / btnCopyCallout');
-assert.ok(/html\.dark\s+[^{}]*(?:#btnExportSvg|\.btn-secondary)/.test(css), 'styles.css must define dark styles for btn-secondary / btnExportSvg');
-assert.ok(/html\.dark\s+[^{}]*\.header-back-link/.test(css), 'styles.css must define dark styles for .header-back-link');
-
-// 3. Parametric 2D CAD Vector Scaling
 // Tiny spring washer (ГОСТ 6402-70, M2: outerD = 3.1mm, innerD = 2.1mm, s = 0.5mm)
 const tinyGroverSvg = StandardsDrawingEngine.render({
   standardId: 'gost-6402-70',

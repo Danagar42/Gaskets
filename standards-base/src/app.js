@@ -1,844 +1,265 @@
-/**
- * Standards Knowledge Base (StandardsBase)
- * Application Controller & UI State Manager
- *
- * Implements Modern Engineering Glass 2.0 Master-Detail interaction:
- * - Dynamic sidebar navigation grouped by fastener categories
- * - Metadata Passport card with standard specifications & official notes
- * - Interactive dimensions table with instant search and non-preferred size badges
- * - Sticky 2D CAD vector drawing with real-time hover inspection & click lock
- * - Standard engineering callout generator with clipboard copy and toast feedback
- * - Vector SVG export functionality
- * - Theme switcher (CAD Light / Blueprint Dark) with SVG re-rendering
- * - Collapsible sidebar for maximizing workspace on engineer laptops
- */
+'use strict';
+(function(root) {
+  const title = 'Довідник стандартів';
+  const format = new Intl.NumberFormat('uk-UA',{useGrouping:false, maximumFractionDigits:12});
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[char]);
+  const routeFor = (categoryId, entryId) => ['standards',categoryId,entryId].filter(Boolean).join('/');
+  const link = (route, label, attrs = '') => `<a href="#${esc(route)}" data-reference-route="${esc(route)}" ${attrs}>${esc(label)}</a>`;
 
-(function (root, factory) {
-  if (typeof module === 'object' && typeof module.exports === 'object') {
-    module.exports = factory();
-  } else {
-    root.StandardsApp = factory();
-  }
-})(typeof self !== 'undefined' ? self : this, function () {
-  'use strict';
-
-  const formatNumber = new Intl.NumberFormat('uk-UA',{maximumFractionDigits:2}).format;
-
-  // Application State
-  const state = {
-    activeCategory: 'fasteners',
-    activeStandardId: 'gost-5915-70',
-    activeExecution: '1',
-    activeAccuracyClass: 'A',
-    activeType: 'A',
-    activeRow: null,
-    hoveredRow: null,
-    searchQuery: '',
-    currentTableData: { columns: [], rows: [] },
-    currentDetails: null
-  };
-
-  let isInitialized = false;
-
-  // DOM Elements Cache
-  const dom = {};
-
-  function cacheDom() {
-    dom.searchInput = document.getElementById('searchInput');
-    dom.standardsList = document.getElementById('standardsList');
-    dom.passportCard = document.getElementById('passportCard');
-    dom.dimensionsTable = document.getElementById('dimensionsTable');
-    dom.drawingContainer = document.getElementById('drawingContainer');
-    dom.calloutBadge = document.getElementById('calloutBadge');
-    dom.btnCopyCallout = document.getElementById('btnCopyCallout');
-    dom.btnExportSvg = document.getElementById('btnExportSvg');
-    dom.themeToggle = document.getElementById('themeToggle');
-    dom.btnToggleSidebar = document.getElementById('btnToggleSidebar');
-    dom.toastContainer = document.getElementById('toastContainer');
-    dom.dynamicFilters = document.getElementById('dynamicFilters');
-    dom.rowCountBadge = document.getElementById('rowCountBadge');
-    dom.mainSidebar = document.getElementById('mainSidebar');
-    dom.mainContent = document.getElementById('mainContent');
-    dom.detailSidebar = document.getElementById('detailSidebar');
-  }
-
-  function getAdapter() {
-    if (typeof StandardsCatalogAdapter !== 'undefined') return StandardsCatalogAdapter;
-    if (typeof globalThis !== 'undefined' && globalThis.StandardsCatalogAdapter) return globalThis.StandardsCatalogAdapter;
-    if (typeof window !== 'undefined' && window.StandardsCatalogAdapter) return window.StandardsCatalogAdapter;
-    return null;
-  }
-
-  function getDrawingEngine() {
-    if (typeof StandardsDrawingEngine !== 'undefined') return StandardsDrawingEngine;
-    if (typeof globalThis !== 'undefined' && globalThis.StandardsDrawingEngine) return globalThis.StandardsDrawingEngine;
-    if (typeof window !== 'undefined' && window.StandardsDrawingEngine) return window.StandardsDrawingEngine;
-    return null;
-  }
-
-  /**
-   * Escape HTML utility
-   */
-  function escapeHtml(str) {
-    if (str == null) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  /**
-   * Toast notification system
-   */
-  function showToast(message, type = 'info') {
-    if (!dom.toastContainer) return;
-
-    const toast = document.createElement('div');
-    toast.className = 'toast-message';
-
-    let icon = `
-      <svg class="w-4 h-4 text-emerald-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-        <polyline points="22 4 12 14.01 9 11.01"></polyline>
-      </svg>
-    `;
-    if (type === 'error') {
-      icon = `
-        <svg class="w-4 h-4 text-rose-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="15" y1="9" x2="9" y2="15"></line>
-          <line x1="9" y1="9" x2="15" y2="15"></line>
-        </svg>
-      `;
+  function resolveRoute(parts, entries) {
+    const [categoryId, entryId] = parts;
+    const known = root.StandardsCatalogAdapter.listReferenceCategories().some(category => category.id === categoryId);
+    if (known && parts.length === 1) return {categoryId,entryId:null};
+    if (known && parts.length === 2 && entries.some(entry => entry.id === entryId && entry.categoryId === categoryId)) {
+      return {categoryId,entryId};
     }
-
-    toast.innerHTML = `${icon}<span>${escapeHtml(message)}</span>`;
-    dom.toastContainer.appendChild(toast);
-
-    setTimeout(() => {
-      toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(8px) scale(0.95)';
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.parentNode.removeChild(toast);
-        }
-      }, 300);
-    }, 2500);
+    return {categoryId:null,entryId:null};
   }
 
-  /**
-   * Group and render the standards in the left sidebar
-   */
-  function renderSidebar() {
-    if (!dom.standardsList) return;
+  function entryList(entries) {
+    if (!entries.length) return '<p class="reference-empty">Стандартів не знайдено.</p>';
+    return `<ul class="reference-list">${entries.map(entry => {
+      const route = routeFor(entry.categoryId,entry.id);
+      return `<li><a href="#${esc(route)}" data-reference-route="${esc(route)}">
+        <strong>${esc(entry.document)}</strong><span>${esc(entry.title)}</span>
+        ${entry.range ? `<small>${esc(entry.range)}</small>` : ''}</a></li>`;
+    }).join('')}</ul>`;
+  }
 
-    const adapter = getAdapter();
+  function filterMarkup({key,label,value,options}) {
+    return `<label class="reference-filter"><span>${esc(label)}</span>${options ?
+      `<select data-reference-filter="${esc(key)}">${options.map(option => `<option value="${esc(option.value)}"${option.value === String(value) ? ' selected' : ''}>${esc(option.label)}</option>`).join('')}</select>` :
+      `<input type="search" data-reference-filter="${esc(key)}" value="${esc(value)}" placeholder="М24" autocomplete="off">`}</label>`;
+  }
 
-    if (!adapter) {
-      dom.standardsList.innerHTML = '<div class="p-4 text-xs text-rose-500">Помилка завантаження адаптера стандартів</div>';
-      return;
-    }
+  function valueText(value) {
+    if (value == null || value === '' || (Array.isArray(value) && !value.length)) return '—';
+    if (Array.isArray(value)) return value.map(valueText).join(', ');
+    if (typeof value === 'number') return format.format(value);
+    return value;
+  }
 
-    const standards = adapter.getStandards('fasteners');
+  function tableMarkup({id,title,rows,columns}, selectedId, selectable) {
+    const sizeId = `reference-table-${id}`;
+    return `<section class="reference-table-block" aria-labelledby="${esc(sizeId)}">
+      <h2 id="${esc(sizeId)}">${esc(title)}</h2>
+      <div class="reference-table-scroll" data-reference-scroll="${esc(id)}" tabindex="0" role="region" aria-labelledby="${esc(sizeId)}">
+        <table class="reference-table"><thead><tr>${columns.map(({label,unit}) =>
+          `<th scope="col">${esc(label)}${unit ? `<small>${esc(unit)}</small>` : ''}</th>`).join('')}</tr></thead><tbody>${rows.map(row => {
+          const active = selectable && row.id === selectedId;
+          return `<tr${active ? ' class="is-selected"' : ''}${selectable ? ` data-reference-size="${esc(row.id)}"` : ''}>${columns.map(({key},index) => {
+            const value = esc(valueText(row[key]));
+            return `<td>${index === 0 && selectable ? `<button type="button" data-reference-row="${esc(row.id)}" aria-pressed="${active}">${value}</button>` : value}</td>`;
+          }).join('')}</tr>`;
+        }).join('')}</tbody></table>
+      </div></section>`;
+  }
 
-    // Group standards
-    const groups = [
-      {
-        id: 'nuts',
-        title: 'Гайки шестигранні',
-        icon: '<polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>',
-        items: standards.filter(s => s.group === 'nuts')
-      },
-      {
-        id: 'washers',
-        title: 'Шайби (плоскі, гровери)',
-        icon: '<circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="4"></circle>',
-        items: standards.filter(s => s.group === 'washers')
-      },
-      {
-        id: 'threads',
-        title: 'Метричні різьби',
-        icon: '<line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line>',
-        items: standards.filter(s => s.group === 'threads')
-      },
-      {
-        id: 'torques',
-        title: 'Моменти затягування',
-        icon: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>',
-        items: standards.filter(s => s.group === 'torques')
+  function sourcesMarkup({sources,notes,related}) {
+    if (!sources.length && !notes.length && !related?.length) return '';
+    return `<section class="reference-sources" aria-labelledby="reference-sources-title">
+      <h2 id="reference-sources-title">Джерела й примітки</h2>
+      ${sources.length ? `<ul>${sources.map(source => `<li>${source.url ?
+        `<a href="${esc(source.url)}" target="_blank" rel="noopener">${esc(source.label)}</a>` :
+        `<strong>${esc(source.label)}</strong>`}${source.edition ? `<span>${esc(source.edition)}</span>` : ''}${source.section ? `<span>${esc(source.section)}</span>` : ''}</li>`).join('')}</ul>` : ''}
+      ${notes.map(note => `<p>${esc(note)}</p>`).join('')}
+      ${related?.length ? `<nav class="reference-related" aria-label="Пов’язані стандарти">${related.map(entry =>
+        link(routeFor(entry.categoryId,entry.id),entry.document)).join('')}</nav>` : ''}
+    </section>`;
+  }
+
+  function render(main, parts, {navigate,toast}) {
+    const adapter = root.StandardsCatalogAdapter;
+    const flange = root.StandardsFlangeReference;
+    if (!adapter || !flange) return null;
+    const db = root.FlangeStandardsDB;
+    const catalog = root.GostFlangeCatalog;
+    const categories = adapter.listReferenceCategories();
+    const entries = adapter.listReferenceEntries(db,flange.listEntries(catalog));
+    const {categoryId,entryId} = resolveRoute(parts,entries);
+    const category = categories.find(item => item.id === categoryId);
+    const entry = entries.find(item => item.id === entryId);
+    const heading = entry?.document || category?.title || title;
+    const crumbs = category ? `<nav class="reference-path" aria-label="Шлях у довіднику">${link(routeFor(),title)}
+      ${entry ? `<span aria-hidden="true">›</span>${link(routeFor(categoryId),category.title)}` : ''}</nav>` : '';
+
+    main.innerHTML = `<section class="standards-reference" aria-labelledby="reference-heading">
+      ${crumbs}<header class="reference-heading"><h1 id="reference-heading">${esc(heading)}</h1>
+      ${entry ? `<p>${esc(entry.title)}</p>${entry.range ? `<small>${esc(entry.range)}</small>` : ''}` : ''}</header>
+      <div data-reference-panel></div></section>`;
+    const view = main.firstElementChild;
+    const panel = view.querySelector('[data-reference-panel]');
+    let filters = {};
+    let selectedId = null;
+    let selectedPitch;
+    let activeDrawing = null;
+
+    function refreshCard(focusKey, rowAction) {
+      const oldScroll = panel.querySelector('[data-reference-scroll]');
+      const priorTop = rowAction || focusKey === 'pitch' || focusKey === 'face' ? oldScroll?.scrollTop || 0 : 0;
+      const priorLeft = oldScroll?.scrollLeft || 0;
+      const oldField = [...panel.querySelectorAll('[data-reference-filter]')].find(field => field.dataset.referenceFilter === focusKey);
+      const selection = oldField?.tagName === 'INPUT' ? [oldField.selectionStart,oldField.selectionEnd] : null;
+
+      const isFlange = categoryId === 'flanges';
+      const card = isFlange ? flange.getCard(catalog,entryId,filters,selectedId) : adapter.getReferenceCard(db,entryId,filters);
+      const table = card.tables[0];
+      const row = table?.rows.find(item => item.id === (isFlange ? card.selectedRow?.id : selectedId)) || table?.rows[0];
+      selectedId = row?.id ?? null;
+      filters = Object.fromEntries(card.filters.map(filter => [filter.key,filter.value]));
+      activeDrawing = null;
+      if (row && card.drawingKind === 'thread') {
+        const pitches = row.pitchesMm || [];
+        if (!pitches.includes(selectedPitch)) selectedPitch = row.coarsePitchMm ?? pitches[0];
+        if (pitches.length) card.filters.push({key:'pitch',label:'Крок вибраної різьби',value:selectedPitch,
+          options:pitches.map(value => ({value:String(value),label:`${format.format(value)} мм`}))});
       }
-    ];
-
-    let html = '';
-
-    groups.forEach(group => {
-      html += `
-        <div class="space-y-1">
-          <div class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
-            <svg class="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              ${group.icon}
-            </svg>
-            <span>${escapeHtml(group.title)}</span>
-          </div>
-          <div class="space-y-0.5">
-      `;
-
-      group.items.forEach(std => {
-        const isActive = std.id === state.activeStandardId;
-        const activeClass = isActive ? 'sidebar-item-active' : 'hover:bg-slate-100 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300';
-
-        html += `
-          <button type="button" data-standard-id="${escapeHtml(std.id)}" class="w-full text-left px-3 py-2 rounded-xl text-xs transition-colors flex items-center justify-between group ${activeClass}">
-            <div class="truncate pr-2">
-              <div class="font-bold tracking-tight ${isActive ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200'}">
-                ${escapeHtml(std.document)}
-              </div>
-              <div class="text-[11px] text-slate-400 dark:text-slate-500 truncate">
-                ${escapeHtml(std.title)}
-              </div>
-            </div>
-            ${isActive ? `
-              <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0"></span>
-            ` : ''}
-          </button>
-        `;
-      });
-
-      html += `
-          </div>
-        </div>
-      `;
-    });
-
-    dom.standardsList.innerHTML = html;
-
-    // Attach click events
-    dom.standardsList.querySelectorAll('[data-standard-id]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-standard-id');
-        if (id && id !== state.activeStandardId) {
-          selectStandard(id);
+      if (row && card.drawingKind === 'flange') {
+        const dims = card.selectedRow.dimensions;
+        const necessary = card.selectedRow.standard === '12821' ? ['b','bore','D','D1','d','n','h4','Dm','Dn'] : ['b','bore','D','D1','d','n'];
+        if (necessary.every(key => Number.isFinite(dims[key]) && dims[key] > 0)) {
+          activeDrawing = {svg:root.FlangePickerDrawing.drawCandidate(card.selectedRow,card.face,null,card.dimensionOrigins)};
         }
-      });
-    });
-  }
-
-  /**
-   * Select and activate standard
-   */
-  function selectStandard(standardId) {
-    state.activeStandardId = standardId;
-    state.searchQuery = '';
-    if (dom.searchInput) dom.searchInput.value = '';
-
-    const adapter = getAdapter();
-
-    if (!adapter) return;
-
-    const details = adapter.getStandardDetails(standardId);
-    state.currentDetails = details;
-
-    // Reset options
-    if (details.executions && details.executions.length > 0) {
-      state.activeExecution = details.executions[0];
-    } else {
-      state.activeExecution = '1';
-    }
-
-    if (details.accuracyClasses && details.accuracyClasses.length > 0) {
-      state.activeAccuracyClass = details.accuracyClasses[0];
-    } else if (details.accuracyClass) {
-      state.activeAccuracyClass = details.accuracyClass;
-    } else {
-      state.activeAccuracyClass = 'A';
-    }
-
-    if (standardId === 'gost-9064-75') {
-      state.activeType = 'A';
-    }
-
-    state.activeRow = null;
-    state.hoveredRow = null;
-
-    renderSidebar();
-    renderPassportCard(details);
-    renderControls(details);
-    loadTableData();
-  }
-
-  /**
-   * Render Standard Passport Card
-   */
-  function renderPassportCard(details) {
-    if (!dom.passportCard || !details) return;
-
-    let accuracyBadge = '';
-    if (details.accuracyClass || (details.accuracyClasses && details.accuracyClasses.length > 0)) {
-      const acc = details.accuracyClass || details.accuracyClasses.join(' / ');
-      accuracyBadge = `
-        <span class="badge-indigo inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold">
-          <svg class="w-3.5 h-3.5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <path d="m9 12 2 2 4-4"></path>
-          </svg>
-          Клас точності: ${escapeHtml(acc)}
-        </span>
-      `;
-    }
-
-    let executionsBadge = '';
-    if (details.executions && details.executions.length > 0) {
-      executionsBadge = `
-        <span class="badge-cyan inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold">
-          Виконання: ${details.executions.map(e => `№${e}`).join(', ')}
-        </span>
-      `;
-    }
-
-    let nonPreferredAlert = '';
-    if (details.nonPreferredDiametersMm && details.nonPreferredDiametersMm.length > 0) {
-      const nonPrefList = details.nonPreferredDiametersMm.map(d => `М${d}`).join(', ');
-      nonPreferredAlert = `
-        <div class="badge-amber mt-3 p-3 rounded-xl text-xs flex items-start gap-2.5">
-          <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="8" x2="12" y2="12"></line>
-            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-          </svg>
-          <div class="leading-relaxed">
-            <span class="font-bold">Нерекомендовані діаметри (Ряд 2/3):</span> розміри <span class="font-mono font-semibold">${escapeHtml(nonPrefList)}</span> наведені в дужках за стандартом і допускаються лише у технічно обґрунтованих випадках.
-          </div>
-        </div>
-      `;
-    }
-
-    let sourceInfo = '';
-    if (details.source) {
-      const docName = details.source.document || details.source.title || 'Офіційний нормативний документ';
-      const sectionName = details.source.section ? `, ${details.source.section}` : '';
-      sourceInfo = `
-        <div class="text-[11px] text-slate-400 flex items-center gap-2">
-          <span>Джерело даних:</span>
-          <span class="font-medium text-slate-600 dark:text-slate-300">${escapeHtml(docName)}${escapeHtml(sectionName)}</span>
-          ${details.verification ? `
-            <span class="text-emerald-500 font-semibold">• ${escapeHtml(details.verification)}</span>
-          ` : ''}
-        </div>
-      `;
-    }
-
-    dom.passportCard.innerHTML = `
-      <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
-        <div class="space-y-1.5 flex-1">
-          <div class="flex flex-wrap items-center gap-2.5">
-            <span class="font-black text-lg text-slate-900 dark:text-white tracking-tight">${escapeHtml(details.document)}</span>
-            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-              ${escapeHtml(details.groupName || 'Стандарт')}
-            </span>
-            <span class="badge-emerald inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full">
-              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              Верифіковано 100%
-            </span>
-          </div>
-          <h1 class="text-sm font-semibold text-slate-700 dark:text-slate-200 leading-snug">${escapeHtml(details.title)}</h1>
-          ${details.notes ? `
-            <p class="text-xs text-slate-500 dark:text-slate-400 pt-1 leading-relaxed">${escapeHtml(details.notes)}</p>
-          ` : ''}
-        </div>
-
-        <div class="flex flex-wrap md:flex-col items-start md:items-end gap-2 flex-shrink-0">
-          ${accuracyBadge}
-          ${executionsBadge}
-          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-mono">
-            Одиниця: ${escapeHtml(details.unit || 'мм')}
-          </span>
-        </div>
-      </div>
-
-      ${nonPreferredAlert}
-
-      <div class="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-2">
-        ${sourceInfo}
-        <div class="text-[11px] font-mono text-indigo-500 dark:text-indigo-400">
-          SuperBase Data Engine
-        </div>
-      </div>
-    `;
-  }
-
-  /**
-   * Render dynamic filters (Executions 1/2, Class A/C, Nut Type A/B)
-   */
-  function renderControls(details) {
-    if (!dom.dynamicFilters) return;
-
-    let html = '';
-
-    // Standard Washer ГОСТ 11371-78
-    if (details.id === 'gost-11371-78') {
-      html += `
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Виконання:</span>
-          <div class="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 text-xs font-semibold">
-            <button type="button" data-execution="1" class="px-2.5 py-1 rounded-md transition-colors ${state.activeExecution === '1' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'}">
-              1 (без фаски)
-            </button>
-            <button type="button" data-execution="2" class="px-2.5 py-1 rounded-md transition-colors ${state.activeExecution === '2' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'}">
-              2 (з фаскою d ≥ 5)
-            </button>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Клас точності:</span>
-          <div class="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 text-xs font-semibold">
-            <button type="button" data-accuracy-class="A" class="px-2.5 py-1 rounded-md transition-colors ${state.activeAccuracyClass === 'A' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'}">
-              Клас А
-            </button>
-            <button type="button" data-accuracy-class="C" ${state.activeExecution === '2' ? 'disabled title="Виконання 2 тільки класу А"' : ''} class="px-2.5 py-1 rounded-md transition-colors ${state.activeExecution === '2' ? 'opacity-40 cursor-not-allowed text-slate-400' : state.activeAccuracyClass === 'C' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'}">
-              Клас С
-            </button>
-          </div>
-        </div>
-      `;
-    }
-    // Flange Nut ГОСТ 9064-75 (Types A and B)
-    else if (details.id === 'gost-9064-75') {
-      html += `
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Тип виконання:</span>
-          <div class="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 text-xs font-semibold">
-            <button type="button" data-nut-type="A" class="px-3 py-1 rounded-md transition-colors ${state.activeType === 'A' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'}">
-              Тип А (суцільна шестигранна)
-            </button>
-            <button type="button" data-nut-type="B" class="px-3 py-1 rounded-md transition-colors ${state.activeType === 'B' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-300 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'}">
-              Тип Б (з проточкою під ковпак)
-            </button>
-          </div>
-        </div>
-      `;
-    } else {
-      // General informative badge for other standards
-      html = `
-        <div class="text-xs text-slate-500 flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
-          <span>Нормативний ряд розмірів за стандартом</span>
-        </div>
-      `;
-    }
-
-    dom.dynamicFilters.innerHTML = html;
-
-    // Attach filter button events
-    dom.dynamicFilters.querySelectorAll('[data-execution]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const exec = btn.getAttribute('data-execution');
-        if (exec && exec !== state.activeExecution) {
-          state.activeExecution = exec;
-          if (exec === '2') {
-            state.activeAccuracyClass = 'A';
-          }
-          renderControls(details);
-          loadTableData();
-        }
-      });
-    });
-
-    dom.dynamicFilters.querySelectorAll('[data-accuracy-class]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (btn.hasAttribute('disabled')) return;
-        const cls = btn.getAttribute('data-accuracy-class');
-        if (cls && cls !== state.activeAccuracyClass) {
-          state.activeAccuracyClass = cls;
-          renderControls(details);
-          loadTableData();
-        }
-      });
-    });
-
-    dom.dynamicFilters.querySelectorAll('[data-nut-type]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tp = btn.getAttribute('data-nut-type');
-        if (tp && tp !== state.activeType) {
-          state.activeType = tp;
-          renderControls(details);
-          loadTableData();
-        }
-      });
-    });
-  }
-
-  /**
-   * Fetch table data from catalog adapter and apply filters
-   */
-  function loadTableData() {
-    const adapter = getAdapter();
-
-    if (!adapter) return;
-
-    const options = {
-      execution: state.activeExecution,
-      accuracyClass: state.activeAccuracyClass,
-      type: state.activeType,
-      nutType: state.activeType
-    };
-
-    const tableData = adapter.getTableData(state.activeStandardId, options);
-    state.currentTableData = tableData;
-
-    applyFilterAndRender();
-  }
-
-  /**
-   * Filter and render table
-   */
-  function applyFilterAndRender() {
-    const adapter = getAdapter();
-
-    const allRows = state.currentTableData.rows || [];
-    const columns = state.currentTableData.columns || [];
-
-    const filteredRows = adapter ? adapter.filterRows(allRows, state.searchQuery) : allRows;
-
-    // Update row count badge
-    if (dom.rowCountBadge) {
-      dom.rowCountBadge.textContent = `${filteredRows.length} типорозмірів`;
-    }
-
-    // Preserve active row selection if still in filtered list
-    if (state.activeRow) {
-      const match = filteredRows.find(r => r.diameter === state.activeRow.diameter);
-      state.activeRow = match || filteredRows[0] || null;
-    } else {
-      state.activeRow = filteredRows[0] || null;
-    }
-
-    renderTable(columns, filteredRows);
-    renderDrawing();
-  }
-
-  /**
-   * Render table element
-   */
-  function renderTable(columns, rows) {
-    if (!dom.dimensionsTable) return;
-
-    if (!rows || rows.length === 0) {
-      dom.dimensionsTable.innerHTML = `
-        <div class="p-12 text-center text-slate-500 space-y-3">
-          <svg class="w-8 h-8 text-slate-400 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <div class="text-sm font-medium">Розмірів не знайдено за запитом «<span class="font-bold text-indigo-500">${escapeHtml(state.searchQuery)}</span>»</div>
-          <p class="text-xs text-slate-400">Спробуйте ввести інший діаметр або очистіть рядок пошуку.</p>
-          <button id="btnResetSearch" type="button" class="btn-primary mt-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors">
-            Скинути пошук
-          </button>
-        </div>
-      `;
-
-      const btnReset = document.getElementById('btnResetSearch');
-      if (btnReset) {
-        btnReset.addEventListener('click', () => {
-          state.searchQuery = '';
-          if (dom.searchInput) dom.searchInput.value = '';
-          applyFilterAndRender();
-        });
+      } else if (row && card.drawingKind) {
+        activeDrawing = root.StandardsDrawingEngine?.renderReference({standardId:entryId,type:card.drawingKind,row,pitchMm:selectedPitch});
       }
-      return;
+
+      const hasResults = Boolean(row);
+      const showDrawing = card.drawingKind && table;
+      const calc = activeDrawing?.calculated;
+      const drawing = activeDrawing ? `<figure class="reference-figure">
+        ${activeDrawing.callout ? `<div class="reference-callout">${esc(activeDrawing.callout)}</div>` : `<h2>Ескіз фланця</h2>`}
+        <div class="reference-canvas${isFlange ? ' fp-drawings' : ''}">${activeDrawing.svg}</div>
+        <figcaption>Схема не в масштабі</figcaption>
+        ${calc ? `<table class="reference-table reference-calculated" aria-label="Розрахований розмір"><tbody><tr>
+          <th scope="row">${esc(calc.label)}</th><td>≈ ${esc(formatValueForSketch(calc.value))} ${esc(calc.unit)}</td><td>Розраховано</td></tr></tbody></table>` : ''}
+        ${activeDrawing.callout ? `<div class="reference-actions">
+          <button type="button" class="button secondary" data-reference-copy>Скопіювати позначення</button>
+          <button type="button" class="button secondary" data-reference-export>Експорт SVG</button></div>` : ''}
+      </figure>` : showDrawing && hasResults ? '<p class="reference-empty">Недостатньо розмірів для ескізу.</p>' : '';
+
+      panel.innerHTML = `${card.filters.length ? `<div class="reference-filters">${card.filters.map(filterMarkup).join('')}</div>` : ''}
+        ${table && !hasResults ? `<div class="reference-empty" role="status">Типорозмірів не знайдено.
+          <button type="button" class="button secondary" data-reference-reset>Скинути фільтри</button></div>` : ''}
+        <div class="reference-detail${drawing ? ' reference-detail-split' : ''}">
+          <div class="reference-tables">${hasResults ? card.tables.map((item,index) =>
+            tableMarkup(item,selectedId,index === 0 && Boolean(showDrawing))).join('') : ''}</div>${drawing}
+        </div>${sourcesMarkup(card)}`;
+
+      const scroll = panel.querySelector('[data-reference-scroll]');
+      if (scroll) {
+        scroll.scrollTop = priorTop;
+        scroll.scrollLeft = priorLeft;
+      }
+      const newField = [...panel.querySelectorAll('[data-reference-filter]')].find(field => field.dataset.referenceFilter === focusKey);
+      if (newField) {
+        newField.focus({preventScroll:true});
+        if (selection?.[0] != null) newField.setSelectionRange(...selection);
+      } else if (rowAction) {
+        [...panel.querySelectorAll('[data-reference-row]')].find(button => button.dataset.referenceRow === selectedId)?.focus({preventScroll:true});
+      }
     }
 
-    let theadHtml = '<thead class="sticky-thead"><tr>';
-    columns.forEach((col, idx) => {
-      const isFirst = idx === 0;
-      const stickyClass = isFirst ? ' sticky-first-col' : '';
-      theadHtml += `
-        <th class="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200 text-xs tracking-wider whitespace-nowrap${stickyClass}">
-          <div>${escapeHtml(col.label)}</div>
-          ${col.unit ? `<div class="text-[10px] text-slate-400 font-normal">[${escapeHtml(col.unit)}]</div>` : ''}
-        </th>
-      `;
+    if (entry) refreshCard();
+    else if (category) panel.innerHTML = entryList(entries.filter(item => item.categoryId === categoryId));
+    else {
+      panel.innerHTML = `<form class="reference-search" data-reference-search-form>
+        <label for="reference-search">Пошук стандарту</label>
+        <div><input id="reference-search" type="search" placeholder="Номер або назва" autocomplete="off" data-reference-search>
+        <button type="submit" class="button primary">Знайти</button></div></form>
+        <div data-reference-search-results hidden></div>
+        <ul class="reference-categories" aria-label="Категорії" data-reference-categories>${categories.map(item => {
+          const count = entries.filter(candidate => candidate.categoryId === item.id).length;
+          const route = routeFor(item.id);
+          return `<li><a href="#${route}" data-reference-route="${route}"><strong>${esc(item.title)}</strong><span>${count}</span></a></li>`;
+        }).join('')}</ul>`;
+    }
+
+    view.addEventListener('input',event => {
+      const field = event.target;
+      if (field.dataset.referenceSearch !== undefined) {
+        const query = field.value.trim();
+        const results = view.querySelector('[data-reference-search-results]');
+        view.querySelector('[data-reference-categories]').hidden = Boolean(query);
+        results.hidden = !query;
+        results.innerHTML = query ? entryList(adapter.searchReferenceEntries(entries,query)) : '';
+      } else if (field.dataset.referenceFilter && field.tagName === 'INPUT') {
+        filters[field.dataset.referenceFilter] = field.value;
+        refreshCard(field.dataset.referenceFilter);
+      }
     });
-    theadHtml += '</tr></thead>';
-
-    let tbodyHtml = '<tbody>';
-    rows.forEach(row => {
-      const isActive = state.activeRow && state.activeRow.diameter === row.diameter;
-      const rowClasses = [
-        'table-row-interactive font-mono-num border-b border-slate-200/60 dark:border-slate-800/60',
-        isActive ? 'active-row' : '',
-        row.isNonPreferred ? 'non-preferred-size' : ''
-      ].filter(Boolean).join(' ');
-
-      tbodyHtml += `<tr class="${rowClasses}" data-diameter="${row.diameter}">`;
-
-      columns.forEach((col, colIdx) => {
-        const isFirst = colIdx === 0;
-        const stickyClass = isFirst ? ' sticky-first-col' : '';
-        const cellVal = row[col.key];
-        let displayVal = cellVal ?? '—';
-        if (col.key === 'diameter') displayVal = `М${formatNumber(cellVal)}`;
-        else if (col.key === 'pitchesDisplay') displayVal = row.pitchesMm.map(formatNumber).join(' · ') || '—';
-        else if (typeof cellVal === 'number') displayVal = formatNumber(cellVal);
-
-        // Additional badge for first column if non-preferred
-        let extraTag = '';
-        if (isFirst && row.isNonPreferred) {
-          extraTag = `<span class="badge-amber ml-1.5 text-[9px] px-1 py-0.5 rounded font-sans font-semibold">нерек.</span>`;
-        }
-
-        tbodyHtml += `<td class="px-4 py-2.5 whitespace-nowrap text-xs text-slate-700 dark:text-slate-300${stickyClass}">${escapeHtml(String(displayVal))}${extraTag}</td>`;
-      });
-
-      tbodyHtml += '</tr>';
+    view.addEventListener('submit',event => {
+      if (!event.target.matches('[data-reference-search-form]')) return;
+      event.preventDefault();
+      const query = view.querySelector('[data-reference-search]').value.trim();
+      const result = query && adapter.searchReferenceEntries(entries,query)[0];
+      if (result) navigate(routeFor(result.categoryId,result.id));
     });
-    tbodyHtml += '</tbody>';
-
-    dom.dimensionsTable.innerHTML = `<table class="w-full text-left text-xs border-collapse">${theadHtml}${tbodyHtml}</table>`;
-
-    // Attach row events
-    const rowElements = dom.dimensionsTable.querySelectorAll('tbody tr[data-diameter]');
-    rowElements.forEach(tr => {
-      const diameter = parseFloat(tr.getAttribute('data-diameter'));
-      const rowObj = rows.find(r => r.diameter === diameter);
-
-      if (!rowObj) return;
-
-      // Mouseover: live preview in drawing
-      tr.addEventListener('mouseover', () => {
-        state.hoveredRow = rowObj;
-        renderDrawing();
-      });
-
-      // Mouseleave: restore locked active row
-      tr.addEventListener('mouseleave', () => {
-        state.hoveredRow = null;
-        renderDrawing();
-      });
-
-      // Click: lock selection
-      tr.addEventListener('click', () => {
-        state.activeRow = rowObj;
-        rowElements.forEach(r => r.classList.remove('active-row'));
-        tr.classList.add('active-row');
-        renderDrawing();
-      });
+    view.addEventListener('change',event => {
+      const {value,dataset,tagName} = event.target;
+      const key = dataset.referenceFilter;
+      if (!key || tagName !== 'SELECT') return;
+      if (key === 'pitch') selectedPitch = Number(value);
+      else filters[key] = value;
+      refreshCard(key);
     });
+    view.addEventListener('click',event => {
+      const element = event.target.closest('[data-reference-route], [data-reference-reset], [data-reference-row], [data-reference-size], [data-reference-copy], [data-reference-export]');
+      if (!element) return;
+      const {referenceRoute,referenceReset,referenceRow,referenceSize,referenceCopy,referenceExport} = element.dataset;
+      if (referenceRoute) {
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        event.preventDefault();
+        navigate(referenceRoute);
+      } else if (referenceReset !== undefined) {
+        filters = {};
+        selectedId = null;
+        refreshCard('diameter');
+      } else if (referenceRow || referenceSize) {
+        selectedId = referenceRow || referenceSize;
+        refreshCard(null,true);
+      } else if (referenceCopy !== undefined && activeDrawing?.callout) {
+        copyCallout(activeDrawing.callout,element).then(copied => toast(copied ? 'Позначення скопійовано.' : 'Не вдалося скопіювати позначення.'));
+      } else if (referenceExport !== undefined && activeDrawing?.callout) {
+        downloadSvg(activeDrawing.svg,`${entryId}-${selectedId}.svg`);
+      }
+    });
+    return heading;
   }
 
-  /**
-   * Render dynamic 2D CAD SVG Drawing
-   */
-  function renderDrawing() {
-    if (!dom.drawingContainer) return;
+  const formatValueForSketch = new Intl.NumberFormat('uk-UA',{maximumFractionDigits:2}).format;
 
-    const engine = getDrawingEngine();
-
-    if (!engine) {
-      dom.drawingContainer.innerHTML = '<div class="text-xs text-rose-500">Креслярський рушій не завантажено</div>';
-      return;
-    }
-
-    const displayRow = state.hoveredRow || state.activeRow || (state.currentTableData.rows && state.currentTableData.rows[0]) || null;
-    const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-
-    if (!displayRow) {
-      dom.drawingContainer.innerHTML = `
-        <div class="text-center text-slate-400 text-xs space-y-2 p-6">
-          <svg class="w-8 h-8 mx-auto text-slate-400/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
-            <polyline points="2 17 12 22 22 17"></polyline>
-          </svg>
-          <div>Виберіть типорозмір для перегляду креслення</div>
-        </div>
-      `;
-      if (dom.calloutBadge) dom.calloutBadge.textContent = '—';
-      return;
-    }
-
-    // Callout text
-    const rowForCallout = {
-      ...displayRow,
-      type: state.activeType || displayRow.nutType || displayRow.type
-    };
-
-    const callout = engine.getStandardCallout(
-      state.activeStandardId,
-      rowForCallout,
-      state.activeExecution,
-      state.activeAccuracyClass
-    );
-
-    if (dom.calloutBadge) {
-      dom.calloutBadge.innerHTML = `
-        <span class="truncate">${escapeHtml(callout)}</span>
-        ${state.hoveredRow && state.hoveredRow !== state.activeRow ? `
-          <span class="text-[9px] px-1 py-0.5 rounded bg-indigo-500 text-white font-sans font-bold flex-shrink-0 animate-pulse">Перегляд</span>
-        ` : `
-          <span class="text-[9px] px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-sans flex-shrink-0">Активний</span>
-        `}
-      `;
-    }
-
-    // Render SVG
+  async function copyCallout(text, button) {
     try {
-      const svg = engine.render({
-        standardId: state.activeStandardId,
-        type: state.currentDetails ? state.currentDetails.type : null,
-        row: displayRow,
-        theme,
-        execution: state.activeExecution,
-        accuracyClass: state.activeAccuracyClass
-      });
-
-      dom.drawingContainer.innerHTML = svg;
-    } catch (err) {
-      dom.drawingContainer.innerHTML = `<div class="p-4 text-xs text-rose-500">Помилка побудови креслення: ${escapeHtml(err.message)}</div>`;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch (error) {
+      // Local files can deny clipboard access.
+    }
+    const input = document.createElement('textarea');
+    input.value = text;
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.append(input);
+    input.select();
+    try { return document.execCommand('copy'); }
+    catch (error) { return false; }
+    finally {
+      input.remove();
+      if (button.isConnected) button.focus({preventScroll:true});
     }
   }
 
-  /**
-   * Setup interactive application event listeners
-   */
-  function setupEventListeners() {
-    // Search input
-    if (dom.searchInput) {
-      dom.searchInput.addEventListener('input', (e) => {
-        state.searchQuery = e.target.value.trim();
-        applyFilterAndRender();
-      });
-    }
-
-    // Theme toggle
-    if (dom.themeToggle) {
-      dom.themeToggle.addEventListener('click', () => {
-        const isDark = document.documentElement.classList.toggle('dark');
-        localStorage.theme = isDark ? 'dark' : 'light';
-        renderDrawing();
-        showToast(isDark ? 'Темна тема (Blueprint Dark)' : 'Світла тема (CAD Light)');
-      });
-    }
-
-    // Sidebar collapse toggle
-    if (dom.btnToggleSidebar && dom.mainSidebar) {
-      dom.btnToggleSidebar.addEventListener('click', () => {
-        dom.mainSidebar.classList.toggle('sidebar-collapsed');
-      });
-    }
-
-    // Copy callout button
-    if (dom.btnCopyCallout) {
-      dom.btnCopyCallout.addEventListener('click', () => {
-        const engine = getDrawingEngine();
-
-        const displayRow = state.hoveredRow || state.activeRow;
-        if (!displayRow || !engine) return;
-
-        const rowForCallout = {
-          ...displayRow,
-          type: state.activeType || displayRow.nutType || displayRow.type
-        };
-
-        const callout = engine.getStandardCallout(
-          state.activeStandardId,
-          rowForCallout,
-          state.activeExecution,
-          state.activeAccuracyClass
-        );
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(callout).then(() => {
-            showToast(`Скопійовано: «${callout}»`);
-          }).catch(() => {
-            fallbackCopyText(callout);
-          });
-        } else {
-          fallbackCopyText(callout);
-        }
-      });
-    }
-
-    // Export SVG button
-    if (dom.btnExportSvg && dom.drawingContainer) {
-      dom.btnExportSvg.addEventListener('click', () => {
-        const svgEl = dom.drawingContainer.querySelector('svg');
-        if (!svgEl) {
-          showToast('Креслення для експорту відсутнє', 'error');
-          return;
-        }
-
-        const displayRow = state.hoveredRow || state.activeRow;
-        const dStr = displayRow && displayRow.diameter ? `-M${displayRow.diameter}` : '';
-        const filename = `${state.activeStandardId}${dStr}.svg`;
-
-        const svgContent = svgEl.outerHTML;
-        const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        showToast(`Креслення збережено як ${filename}`);
-      });
-    }
+  function downloadSvg(svg, name) {
+    const url = URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url),1000);
   }
 
-  function fallbackCopyText(text) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      document.execCommand('copy');
-      showToast(`Скопійовано: «${text}»`);
-    } catch (e) {
-      showToast('Не вдалося скопіювати', 'error');
-    }
-    document.body.removeChild(ta);
-  }
-
-  /**
-   * Main Initialization
-   */
-  function init() {
-    if (isInitialized) return;
-    if (typeof document === 'undefined') return;
-
-    cacheDom();
-    setupEventListeners();
-    selectStandard(state.activeStandardId);
-
-    isInitialized = true;
-  }
-
-  // Auto-init on DOM readiness in browser environment
-  if (typeof document !== 'undefined') {
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', init);
-    } else {
-      init();
-    }
-  }
-
-  return {
-    state,
-    init,
-    selectStandard,
-    loadTableData,
-    renderDrawing,
-    showToast
-  };
-});
+  root.StandardsReference = {render,resolveRoute};
+})(globalThis);
