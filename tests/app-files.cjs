@@ -24,7 +24,7 @@ function app(options={}) {
     el.parentElement = el;
     return el;
   }
-  for (const name of ['#main','#edit-dialog','#material-dialog','#file-dialog','#file-error','#import-preview','#save-status','.header-status','#toast','#breadcrumbs','#desktop-content','#results','.settings','.torque-value','.torque-comparison','#storage-warning-banner']) elements.set(name,element());
+  for (const name of ['#main','#edit-dialog','#material-dialog','#file-dialog','#file-error','#import-preview','#save-status','.header-status','#toast','#breadcrumbs','#desktop-content','#results','.settings','.torque-value','.torque-comparison','#storage-warning-banner','[data-calc="limits"]']) elements.set(name,element());
   const dialog=elements.get('#file-dialog');let dialogHtml='';
   Object.defineProperty(dialog,'innerHTML',{get:()=>dialogHtml,set:html=>{
     dialogHtml=html;
@@ -285,6 +285,99 @@ const importJson=()=>P.serialize({version:1,equipment:[C.createEquipment('Імп
   const exportDialogHtml = exportApp.dialog.innerHTML;
   assert(exportDialogHtml.includes('data-excel-node-select="1" checked'), 'Valid node has checked checkbox');
   assert(exportDialogHtml.includes('data-excel-node-select="0" disabled'), 'Invalid node has disabled checkbox');
+
+  // AUD-012: Incompatible tightening limits diagnostic and recommendations rendering in UI
+  const diagEquip = structuredClone(sample.equipment);
+  const conflictNode = diagEquip[0].nodes[1];
+  // Set operating pressures to produce M_min (131.3 Nm) > M_max (103.3 Nm)
+  conflictNode.operating.normal.pressure = '2.0';
+  conflictNode.operating.hydro.pressure = '2.5';
+
+  let diagCalls = [];
+  const calculations = require('../calculations.js');
+  const spiedCalculations = {
+    ...calculations,
+    tighteningLimitsDiagnostic(...args) {
+      diagCalls.push(args);
+      return calculations.tighteningLimitsDiagnostic(...args);
+    }
+  };
+
+  const conflictApp = app({
+    equipment: [{ ...diagEquip[0], nodes: [conflictNode] }],
+    materials: vm.runInNewContext(readAppFile('data.js') + ';materialsDB'),
+    window: {
+      FlangeStandardsDB: vm.runInNewContext(readAppFile('standards.bundle.js') + ';FlangeStandardsDB'),
+      FlangeCalculations: spiedCalculations,
+      FlangeExcel: require('../excel-export.js')
+    }
+  });
+
+  conflictApp.navigateNode(0, 0);
+  conflictApp.click('editor-step', { step: 'results' });
+
+  // 1. Verify tighteningLimitsDiagnostic is called during results rendering
+  assert.ok(diagCalls.length > 0, 'tighteningLimitsDiagnostic must be called when rendering results with conflicting limits');
+  const [calledLimits, calledNode, calledCatalog] = diagCalls[0];
+  assert.equal(calledLimits.rawOverlap, false, 'Limits must reflect raw conflict (M_min > M_max)');
+  assert.equal(calledLimits.roundedOverlap, false, 'Limits must reflect rounded conflict');
+  assert.equal(calledNode.id, conflictNode.id, 'Node passed to diagnostic matches current node');
+  assert.ok(calledCatalog, 'Catalog passed to diagnostic');
+
+  // 2. Verify limitsBlock HTML renders status, causes, bottleneck, and recommendations
+  const conflictHtml = conflictApp.elements.get('[data-calc="limits"]').outerHTML;
+  assert(conflictHtml.includes('Межі несумісні'), 'Status badge must indicate incompatible limits');
+  assert(conflictHtml.includes('thread shear') || conflictHtml.includes('зріз різьби') || conflictHtml.includes('різьб'), 'Diagnostic renders bottleneck component in DOM');
+  assert(conflictHtml.includes('Збільшити номінальний діаметр') || conflictHtml.includes('матеріал кріплення'), 'Diagnostic renders fastener recommendations');
+  assert(conflictHtml.includes('Зменшити розрахункову ширину прокладки') || conflictHtml.includes('коефіцієнтом m'), 'Diagnostic renders gasket recommendations');
+  assert(conflictHtml.includes('необхідне зусилля герметизації більше за несучу здатність'), 'Diagnostic cause/reason rendered in DOM');
+
+  // 3. Rounding conflict: rawOverlap === true, roundedOverlap === false
+  const roundingEquip = structuredClone(sample.equipment);
+  const roundingNode = roundingEquip[0].nodes[1];
+  roundingNode.operating.normal.pressure = '1.897';
+  roundingNode.operating.hydro.pressure = '2.3713';
+
+  diagCalls = [];
+  const roundingApp = app({
+    equipment: [{ ...roundingEquip[0], nodes: [roundingNode] }],
+    materials: vm.runInNewContext(readAppFile('data.js') + ';materialsDB'),
+    window: {
+      FlangeStandardsDB: vm.runInNewContext(readAppFile('standards.bundle.js') + ';FlangeStandardsDB'),
+      FlangeCalculations: spiedCalculations,
+      FlangeExcel: require('../excel-export.js')
+    }
+  });
+
+  roundingApp.navigateNode(0, 0);
+  roundingApp.click('editor-step', { step: 'results' });
+
+  assert.ok(diagCalls.length > 0, 'tighteningLimitsDiagnostic must be called for rounding conflict');
+  assert.equal(diagCalls[0][0].rawOverlap, true, 'Limits rawOverlap is true before rounding');
+  assert.equal(diagCalls[0][0].roundedOverlap, false, 'Limits roundedOverlap is false after rounding');
+
+  const roundingHtml = roundingApp.elements.get('[data-calc="limits"]').outerHTML;
+  assert(roundingHtml.includes('Після цілочисельного округлення діапазон порожній') || roundingHtml.includes('немає цілого значення'), 'Rounding conflict reason rendered in DOM');
+  assert(roundingHtml.includes('менший за 1 Н·м') || roundingHtml.includes('124,5'), 'Specific rounding diagnostic interval rendered');
+  assert(roundingHtml.includes('Збільшити клас міцності') || roundingHtml.includes('номінальний діаметр'), 'Fastener adjustment recommended for rounding conflict');
+
+  // 4. Compatible limits: diagnostic recommendations should not be shown
+  const normalApp = app({
+    equipment: sample.equipment,
+    materials: vm.runInNewContext(readAppFile('data.js') + ';materialsDB'),
+    window: {
+      FlangeStandardsDB: vm.runInNewContext(readAppFile('standards.bundle.js') + ';FlangeStandardsDB'),
+      FlangeCalculations: spiedCalculations,
+      FlangeExcel: require('../excel-export.js')
+    }
+  });
+  normalApp.navigateNode(0, 1);
+  normalApp.click('editor-step', { step: 'results' });
+
+  const normalLimitsHtml = normalApp.elements.get('[data-calc="limits"]').outerHTML;
+  assert(!normalLimitsHtml.includes('Рекомендовані інженерні дії'), 'No recommendations shown when limits are compatible');
+  assert(!normalLimitsHtml.includes('Рекомендації щодо усунення несумісності'), 'No recommendations shown when limits are compatible');
+  assert(!normalLimitsHtml.includes('необхідне зусилля герметизації більше за несучу здатність'), 'No conflict reason shown when limits are compatible');
 
   console.log('App files: storage denial/quota, import atomicity, stale reads and background export passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

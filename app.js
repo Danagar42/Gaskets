@@ -1155,7 +1155,7 @@
     const strength = limits.strength;
     target.querySelector('[data-calc="parameters"]').outerHTML = forcesBlock(forces,open.includes('parameters'));
     target.querySelector('[data-calc="tightness"]').outerHTML = tightnessBlock(forces,open.includes('tightness'));
-    target.querySelector('[data-calc="limits"]').outerHTML = limitsBlock(limits,open.includes('limits'));
+    target.querySelector('[data-calc="limits"]').outerHTML = limitsBlock(limits,open.includes('limits'),node,standardsDb);
     target.querySelector('[data-calc="stud"]').outerHTML = strengthBlock(strength,open.includes('stud'));
     target.querySelector('[data-calc="thread"]').outerHTML = threadStrengthBlock(strength,open.includes('thread'));
     target.querySelector('[data-calc="flanges"]').outerHTML = flangeBlock(limits.flanges,open.includes('flanges'));
@@ -1206,7 +1206,7 @@
       return `<td><strong class="check-result ${check.passed === null ? 'pending' : check.passed ? 'passed' : 'failed'}">${check.passed === null ? 'Потрібні дані' : check.passed ? 'Виконано' : 'Не виконано'}</strong><small>${displayNumber(check.actual)} ${key === 'maximumPressure' ? '≤' : '≥'} ${displayNumber(check.required)}</small></td>`;
     }).join('')}</tr>`).join('')}</tbody></table><p class="calc-footer">Перевіряється заданий момент із блока «Кріплення». q = Fqпр/Aпр. Знак +Ft в умові герметичності збережено за I43 початкового Excel. Виконання цих умов не підтверджує міцність вузла.</p></details>`;
   }
-  function limitsBlock(calculated,open) {
+  function limitsBlock(calculated,open,node = currentNode,catalog = standardsDb) {
     const names = {seating:'Початкове обтиснення',sealingRequired:'Герметичність під тиском',pressureRequired:'Мінімальний питомий тиск'};
     const label = item => `${names[item.key]} · ${item.mode === 'normal' ? 'НУЕ' : 'ГВ'}`;
     const result = calculated.minimum;
@@ -1217,6 +1217,37 @@
     const boundsFailed = Object.values(calculated.verification).some(checked=>checked?.failed.length);
     const status = calculated.roundedOverlap === null ? 'Потрібні дані' : !calculated.roundedOverlap ? 'Межі несумісні' : boundsFailed ? 'Є невиконані умови на межах' : upper.omitted.length ? 'Межі за Excel; є пропуски' : calculated.rangePassed ? 'Межі перевірено' : 'Попередні межі';
     const overlap = calculated.rawOverlap === false ? 'Нижня межа перевищує верхню: діапазон за цими обмеженнями порожній.' : calculated.roundedOverlap === false ? 'Після округлення діапазон порожній: немає цілого значення Н·м між межами.' : calculated.roundedOverlap === null ? 'Для порівняння меж потрібні всі активні обмеження НУЕ та ГВ.' : 'Межі за обчисленими обмеженнями сумісні. ' + (calculated.flanges.configured ? 'Результати контролю наведені нижче.' : 'Потрібно визначити застосовність фланців.');
+
+    const diag = (window.FlangeCalculations?.tighteningLimitsDiagnostic && node && calculated.roundedOverlap === false)
+      ? window.FlangeCalculations.tighteningLimitsDiagnostic(calculated, node, catalog)
+      : null;
+    const bottleneckLabels = {
+      'thread shear': 'Міцність різьби на зріз',
+      'stud tensile strength': 'Міцність кріплення на розтяг (шпильки/болти)',
+      'flange bending': 'Опір тарілки/втулки фланця вигину',
+      'gasket dimensions/material': 'Параметри / площа контакту прокладки',
+      'rounding': 'Крок цілочисельного округлення (інтервал < 1 Н·м)',
+      'none': 'Не визначено'
+    };
+    let diagnosticMarkup = '';
+    if (diag && (diag.status === 'conflict' || diag.status === 'rounding_conflict')) {
+      const isSevere = diag.status === 'conflict';
+      const badgeIcon = isSevere ? 'close' : 'info';
+      const badgeText = isSevere ? 'Конфлікт меж затягування (Mmin > Mmax)' : 'Конфлікт цілочисельного округлення меж';
+      const bottleneckText = bottleneckLabels[diag.bottleneck] || diag.bottleneck;
+      diagnosticMarkup = `<div class="limits-diagnostic ${isSevere ? 'conflict' : 'warning'}" role="alert" data-diagnostic-status="${esc(diag.status)}">`
+        + `<div class="limits-diagnostic-header">`
+        + `<span class="limits-diagnostic-badge ${isSevere ? 'conflict' : 'warning'}">${icon(badgeIcon)}<span>${badgeText}</span></span>`
+        + (diag.bottleneck && diag.bottleneck !== 'none' ? `<span class="limits-diagnostic-bottleneck" data-bottleneck="${esc(diag.bottleneck)}">Вузьке місце: <strong>${esc(bottleneckText)}</strong></span>` : '')
+        + `</div>`
+        + `<p class="limits-diagnostic-reason">${esc(diag.reason)}</p>`
+        + (diag.recommendations.length ? `<div class="limits-diagnostic-recs">`
+          + `<span class="limits-diagnostic-recs-title">Рекомендовані інженерні дії для коригування:</span>`
+          + `<ul class="limits-diagnostic-list">${diag.recommendations.map(r => `<li>${esc(r)}</li>`).join('')}</ul>`
+          + `</div>` : '')
+        + `</div>`;
+    }
+
     const checkNames = {gasket:{seating:'Обтиснення прокладки',sealing:'Герметичність під тиском',minimumPressure:'Мінімальний питомий тиск',maximumPressure:'Максимальний питомий тиск'},checks:{axial:'Розтяг σ₁',thermalAxial:'Розтяг σ₃',equivalent:'Приведені напруження σ₄',torsion:'Кручення'},threads:upperNames,flanges:{pressureA:'Фланець: σ₂ у А–А',pressureB:'Фланець: σ₂ у B–B',bendingA:'Фланець: σrv у A–A',bendingB:'Фланець: σrv у B–B',bendingC:'Фланець: σrv у C–C'}};
     const verification = ['minimum','maximum'].map(bound=>{
       const checked = calculated.verification[bound];
@@ -1225,7 +1256,7 @@
       const state = checked.failed.length ? 'Є невиконані умови' : checked.pending.length ? 'Потрібні дані' : checked.omitted.length ? 'Є пропущені перевірки' : 'Наявні перевірки пройдено';
       return `<details><summary>${title}: ${displayNumber(checked.torqueNm)} Н·м — ${state}</summary><p>Виконано ${checked.checks.length-checked.failed.length-checked.pending.length-checked.omitted.length} із ${checked.checks.length} наявних перевірок. ${calculated.flanges.configured ? 'Враховані задані фланцеві перевірки.' : 'Застосовність фланців ще не визначена повністю.'}</p>${[...checked.failed,...checked.pending,...checked.omitted].map(check=>`<p>${check.omitted ? 'Пропущено як в Excel' : check.passed === false ? 'Не виконано' : 'Потрібні дані'}: ${esc(checkNames[check.group][check.key])} · ${check.mode === 'normal' ? 'НУЕ' : 'ГВ'}.</p>`).join('')}</details>`;
     }).join('');
-    return `<details class="calc-block" data-calc="limits" ${open ? 'open' : ''}><summary>${icon('chevron')}Межі затягування<small>${status}</small></summary><table class="result-table compliance-table"><thead><tr><th scope="col">Параметр</th><th scope="col">Мінімум</th><th scope="col">${maxLabel}</th></tr></thead><tbody><tr><td>Сумарне початкове зусилля, Н</td><td>${displayNumber(result.force)}</td><td>${displayNumber(upper.force)}</td></tr><tr><td>Розрахунковий момент, Н·м</td><td>${displayNumber(result.torqueNm)}</td><td>${displayNumber(upper.torqueNm)}</td></tr><tr><td>Округлений момент, Н·м</td><td>${displayNumber(result.roundedTorqueNm)}</td><td>${displayNumber(upper.roundedTorqueNm)}</td></tr></tbody></table><div class="calc-footer"><p><strong>${overlap}</strong></p><p>Визначає мінімум: ${result.governing.length ? result.governing.map(label).join('; ') : 'потрібні дані'}.</p><p>Визначає ${maxLabel.toLocaleLowerCase('uk-UA')}: ${upper.governing.length ? upper.governing.map(upperLabel).join('; ') : 'потрібні дані'}.</p><details><summary>Умови нижньої межі</summary>${result.candidates.map(item=>`<p>${label(item)}: ${displayNumber(item.force)} Н.</p>`).join('')}</details><details><summary>Обмеження верхньої межі</summary>${upper.candidates.map(item=>`<p>${upperLabel(item)}: ${item.omittedFromMaximum ? 'пропущено як в Excel: відсутній Rp чавунного корпусу' : item.active ? `${displayNumber(item.force)} Н` : 'не застосовується'}.</p>`).join('')}${upper.issues.map(issue=>`<p>${esc(issue)}</p>`).join('')}</details><p>Контроль округлених меж незалежний від заданого моменту анкети:</p>${verification}<details><summary>Формули та округлення</summary><p>Fmin = max п’яти умов прокладки; Fmax = min активних обмежень кріплення, різьби та підключених фланців. M = F·ζ₁·d/(z·1000). Мінімум округлюється вгору, максимум униз до цілого Н·м, як P88/P89 Excel.</p><p>Збережено N67: [σ]·Aгладк·z − χ·Fp + Ft та O67: [σ]·Aгладк·z − χ·Fp − Ft. Ці формули не замінено оберненням перевірки σ₃. Окремі обмеження для σ₄, кручення й qmax у переліку Excel відсутні — їх контролює перевірка округлених меж.</p></details><p>${calculated.rangePassed ? 'Усі задані перевірки округлених меж виконані за перенесеною методикою Excel.' : upper.omitted.length ? 'Межі за Excel містять пропущену перевірку внутрішньої різьби чавунного корпусу. Її міцність не підтверджена.' : calculated.flanges.configured ? 'Є неповні або невиконані умови. Повний діапазон не підтверджено.' : 'Застосовність фланців визначена не повністю: максимум попередній.'}</p></div></details>`;
+    return `<details class="calc-block" data-calc="limits" ${open ? 'open' : ''}><summary>${icon('chevron')}Межі затягування<small class="${calculated.roundedOverlap === false ? 'error' : ''}">${status}</small></summary><table class="result-table compliance-table"><thead><tr><th scope="col">Параметр</th><th scope="col">Мінімум</th><th scope="col">${maxLabel}</th></tr></thead><tbody><tr><td>Сумарне початкове зусилля, Н</td><td>${displayNumber(result.force)}</td><td>${displayNumber(upper.force)}</td></tr><tr><td>Розрахунковий момент, Н·м</td><td>${displayNumber(result.torqueNm)}</td><td>${displayNumber(upper.torqueNm)}</td></tr><tr><td>Округлений момент, Н·м</td><td>${displayNumber(result.roundedTorqueNm)}</td><td>${displayNumber(upper.roundedTorqueNm)}</td></tr></tbody></table><div class="calc-footer">${diagnosticMarkup}${!diagnosticMarkup ? `<p><strong>${overlap}</strong></p>` : ''}<p>Визначає мінімум: ${result.governing.length ? result.governing.map(label).join('; ') : 'потрібні дані'}.</p><p>Визначає ${maxLabel.toLocaleLowerCase('uk-UA')}: ${upper.governing.length ? upper.governing.map(upperLabel).join('; ') : 'потрібні дані'}.</p><details><summary>Умови нижньої межі</summary>${result.candidates.map(item=>`<p>${label(item)}: ${displayNumber(item.force)} Н.</p>`).join('')}</details><details><summary>Обмеження верхньої межі</summary>${upper.candidates.map(item=>`<p>${upperLabel(item)}: ${item.omittedFromMaximum ? 'пропущено як в Excel: відсутній Rp чавунного корпусу' : item.active ? `${displayNumber(item.force)} Н` : 'не застосовується'}.</p>`).join('')}${upper.issues.map(issue=>`<p>${esc(issue)}</p>`).join('')}</details><p>Контроль округлених меж незалежний від заданого моменту анкети:</p>${verification}<details><summary>Формули та округлення</summary><p>Fmin = max п’яти умов прокладки; Fmax = min активних обмежень кріплення, різьби та підключених фланців. M = F·ζ₁·d/(z·1000). Мінімум округлюється вгору, максимум униз до цілого Н·м, як P88/P89 Excel.</p><p>Збережено N67: [σ]·Aгладк·z − χ·Fp + Ft та O67: [σ]·Aгладк·z − χ·Fp − Ft. Ці формули не замінено оберненням перевірки σ₃. Окремі обмеження для σ₄, кручення й qmax у переліку Excel відсутні — їх контролює перевірка округлених меж.</p></details><p>${calculated.rangePassed ? 'Усі задані перевірки округлених меж виконані за перенесеною методикою Excel.' : upper.omitted.length ? 'Межі за Excel містять пропущену перевірку внутрішньої різьби чавунного корпусу. Її міцність не підтверджена.' : calculated.flanges.configured ? 'Є неповні або невиконані умови. Повний діапазон не підтверджено.' : 'Застосовність фланців визначена не повністю: максимум попередній.'}</p></div></details>`;
   }
   function strengthStatus(checks) {
     const active = checks.filter(check=>check.active && !check.omittedFromMaximum);
