@@ -27,6 +27,7 @@
   'use strict';
 
   const format = new Intl.NumberFormat('uk-UA',{maximumFractionDigits:2}).format;
+  const standardFont = "'Segoe UI', system-ui, sans-serif";
 
   // Безпечне округлення чисел для SVG
   function n(val, fallback = 0) {
@@ -48,6 +49,7 @@
     const patternId = getUniqueId('hatch');
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" class="standards-drawing standards-drawing--${themeColors.name}" role="img" aria-label="${title}">
   <defs>
+    ${themeColors.dimensionMarkerId ? themeColors.dimensionMarker(themeColors.dimensionMarkerId) : ''}
     <pattern id="${patternId}" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <line x1="0" y1="0" x2="0" y2="8" stroke="${themeColors.hatchStroke}" stroke-width="1" />
     </pattern>
@@ -71,18 +73,20 @@
     const yExtEnd = yDim > y ? yDim + extensionOffset : yDim - extensionOffset;
     const arrowL = 7;
     const arrowW = 2.5;
+    const marker = colors.dimensionMarkerId ? `marker-start="url(#${colors.dimensionMarkerId})" marker-end="url(#${colors.dimensionMarkerId})"` : '';
 
     return `
       <!-- Horizontal Dimension: ${text} -->
       <line x1="${n(left)}" y1="${n(yExtStart)}" x2="${n(left)}" y2="${n(yExtEnd)}" stroke="${colors.dim}" stroke-width="0.8" />
       <line x1="${n(right)}" y1="${n(yExtStart)}" x2="${n(right)}" y2="${n(yExtEnd)}" stroke="${colors.dim}" stroke-width="0.8" />
-      <line x1="${n(left)}" y1="${n(yDim)}" x2="${n(right)}" y2="${n(yDim)}" stroke="${colors.dim}" stroke-width="0.9" />
+      <line x1="${n(left)}" y1="${n(yDim)}" x2="${n(right)}" y2="${n(yDim)}" stroke="${colors.dim}" stroke-width="${marker ? 1.3 : 0.9}" ${marker}/>
+      ${marker ? '' : `
       <!-- Left Arrow -->
       <polygon points="${n(left)},${n(yDim)} ${n(left + arrowL)},${n(yDim - arrowW)} ${n(left + arrowL)},${n(yDim + arrowW)}" fill="${colors.dim}" />
       <!-- Right Arrow -->
-      <polygon points="${n(right)},${n(yDim)} ${n(right - arrowL)},${n(yDim - arrowW)} ${n(right - arrowL)},${n(yDim + arrowW)}" fill="${colors.dim}" />
+      <polygon points="${n(right)},${n(yDim)} ${n(right - arrowL)},${n(yDim - arrowW)} ${n(right - arrowL)},${n(yDim + arrowW)}" fill="${colors.dim}" />`}
       <!-- Dimension Text -->
-      <text x="${n((left + right) / 2)}" y="${n(yDim - 4)}" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.dimText}" stroke="${colors.dimHalo}" stroke-width="3.5" paint-order="stroke fill">${text}</text>
+      <text x="${n((left + right) / 2)}" y="${n(yDim - 4)}" text-anchor="middle" font-family="${colors.font || standardFont}" font-size="11" font-weight="600" fill="${colors.dimText}" stroke="${colors.dimHalo}" stroke-width="3.5" paint-order="stroke fill">${text}</text>
     `;
   }
 
@@ -235,31 +239,6 @@
    * 2. ШАБЛОН: Плоска шайба (ГОСТ 11371-78, 9065-75)
    * Піврозріз/розріз + вигляд зверху
    */
-  function renderCappedNut({ d, m, s, pitch, capProfile, colors, profiles }) {
-    const cx = 246;
-    const baseY = 268;
-    const metric = profiles.buildHexNutMetrics(cx,baseY,d,'B',{nutCapH:m,nutS:s,pitch,capProfile});
-    const {topY,scale} = metric;
-    const radius = capProfile.bodyDiameterMm * scale / 2;
-    const shoulder = topY + capProfile.headHeightMm * scale;
-    const blindEnd = baseY - capProfile.boreDepthMm * scale;
-    const steel = getUniqueId('steel');
-    const guides = [
-      drawLinearHorizontal({x1:cx-radius,x2:cx+radius,y:baseY,yDim:301,text:`D₁ = ${format(capProfile.bodyDiameterMm)} мм`,colors}),
-      drawLinearVertical({y1:topY,y2:shoulder,x:cx+s*scale/2,xDim:cx+radius+92,text:`l₀ = ${format(capProfile.headHeightMm)} мм`,colors}),
-      drawLinearVertical({y1:blindEnd,y2:baseY,x:cx+radius,xDim:cx+radius+92,text:`l = ${format(capProfile.boreDepthMm)} мм`,colors}),
-      drawLinearVertical({y1:topY,y2:baseY,x:cx-radius,xDim:cx-radius-24,text:`l₁ = ${format(m)} мм`,colors})
-    ];
-    return wrapSvg({themeColors:colors,title:`Гайка М${format(d)} типу Б, піврозріз`,content:`
-      <desc>Діаметр корпусу D₁ ${format(capProfile.bodyDiameterMm)} мм. Висота головки l₀ ${format(capProfile.headHeightMm)} мм. Глибина глухого отвору l ${format(capProfile.boreDepthMm)} мм.</desc>
-      <defs>${profiles.steelGradient(steel)}</defs>
-      <text x="246" y="34" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="700" fill="${colors.line}">Піврозріз гайки</text>
-      ${profiles.nutSide(metric,steel,'__HATCH_ID__')}
-      ${drawCenterline(cx,topY-14,cx,baseY+14,colors)}
-      ${guides.join('')}
-    `});
-  }
-
   function renderWasher({ d, d1, d2, s, colors, execution }) {
     const nomD = n(d, 24);
     const innerD = n(d1, 25);
@@ -477,6 +456,8 @@
     const nomD = n(d, 24);
     const pitch = n(selectedPitchMm ?? coarsePitchMm, 3);
     const pitches = Array.isArray(pitchesMm) && pitchesMm.length ? pitchesMm : [pitch];
+    const dimensions = colors.dimensionMarker ? {...colors,dimensionMarkerId:getUniqueId('passport-arrow')} : colors;
+    const font = colors.font || standardFont;
 
     const viewW = 560;
     const viewH = 340;
@@ -509,7 +490,7 @@
 
     const content = `
       <!-- Title -->
-      <text x="280" y="36" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="13" font-weight="700" fill="${colors.lineThin}" letter-spacing="0.5">ТЕОРЕТИЧНИЙ ПРОФІЛЬ МЕТРИЧНОЇ РІЗЬБИ 60° (ДСТУ / ГОСТ 24705)</text>
+      <text x="280" y="36" text-anchor="middle" font-family="${font}" font-size="13" font-weight="700" fill="${colors.lineThin}" letter-spacing="0.5">ТЕОРЕТИЧНИЙ ПРОФІЛЬ МЕТРИЧНОЇ РІЗЬБИ 60° (ДСТУ / ГОСТ 24705)</text>
 
       <!-- Hatched Solid Body of Thread -->
       <path d="${profilePath}" fill="url(#__HATCH_ID__)" stroke="${colors.line}" stroke-width="2" />
@@ -525,7 +506,7 @@
         y: yCrest,
         yDim: yCrest - 25,
         text: `P = ${format(pitch)} мм`,
-        colors
+        colors:dimensions
       })}
 
       <!-- Flank Angle 60° Arc & Label -->
@@ -537,19 +518,19 @@
       <text x="${n(startX + 3 * pitchPx + 30)}" y="${n(yRoot + 64)}" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="600" fill="${colors.axis}">Вісь різьби</text>
 
       <!-- Side Data Card -->
-      <g transform="translate(340, 75)">
+      <g transform="translate(340, 75)" font-family="${font}">
         <rect width="195" height="185" rx="6" fill="${colors.cardBg || 'rgba(0,0,0,0.1)'}" stroke="${colors.cardBorder || colors.dim}" stroke-width="0.8" />
-        <text x="14" y="24" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" font-weight="700" fill="${colors.dimText}">Параметри різьби М${format(nomD)}:</text>
+        <text x="14" y="24" font-size="12" font-weight="700" fill="${colors.dimText}">Параметри різьби М${format(nomD)}:</text>
         
-        <text x="14" y="52" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• Номінальний d: <tspan font-weight="700" fill="${colors.dimText}">${format(nomD)} мм</tspan></text>
-        <text x="14" y="74" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• ${selectedPitchMm == null ? 'Великий' : 'Обраний'} крок P: <tspan font-weight="700" fill="${colors.dimText}">${format(pitch)} мм</tspan></text>
-        <text x="14" y="96" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="600" fill="${colors.line}">• Дрібні кроки:</text>
-        <text x="24" y="116" font-family="'Segoe UI', system-ui, sans-serif" font-size="11" font-weight="700" fill="${colors.dimText}">${pitches.map(format).join(' · ')} мм</text>
+        <text x="14" y="52" font-size="11" font-weight="600" fill="${colors.line}">• Номінальний d: <tspan font-weight="700" fill="${colors.dimText}">${format(nomD)} мм</tspan></text>
+        <text x="14" y="74" font-size="11" font-weight="600" fill="${colors.line}">• ${selectedPitchMm == null ? 'Великий' : 'Обраний'} крок P: <tspan font-weight="700" fill="${colors.dimText}">${format(pitch)} мм</tspan></text>
+        <text x="14" y="96" font-size="11" font-weight="600" fill="${colors.line}">• Дрібні кроки:</text>
+        <text x="24" y="116" font-size="11" font-weight="700" fill="${colors.dimText}">${pitches.map(format).join(' · ')} мм</text>
 
         <line x1="14" y1="132" x2="181" y2="132" stroke="${colors.lineThin}" stroke-width="0.5" stroke-dasharray="2,2" />
 
-        <text x="14" y="152" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="500" fill="${colors.lineThin}">${theoreticalHeightMm == null ? 'Теоретична висота:' : 'Теоретична висота · Розраховано'}</text>
-        <text x="14" y="168" font-family="'Segoe UI', system-ui, sans-serif" font-size="10" font-weight="700" fill="${colors.dimText}">H = (√3 / 2) · P = ${format(theoreticalHeightMm ?? Math.sqrt(3) * pitch / 2)} мм</text>
+        <text x="14" y="152" font-size="10" font-weight="500" fill="${colors.lineThin}">${theoreticalHeightMm == null ? 'Теоретична висота:' : 'Теоретична висота · Розраховано'}</text>
+        <text x="14" y="168" font-size="10" font-weight="700" fill="${colors.dimText}">H = (√3 / 2) · P = ${format(theoreticalHeightMm ?? Math.sqrt(3) * pitch / 2)} мм</text>
       </g>
     `;
 
@@ -557,7 +538,7 @@
       width: viewW,
       height: viewH,
       content,
-      themeColors: colors,
+      themeColors: dimensions,
       title: `Профіль різьби М${format(nomD)} (P=${format(pitch)} мм)`
     });
   }
@@ -657,7 +638,6 @@
 
   return {
     renderHexNut,
-    renderCappedNut,
     renderWasher,
     renderSpringWasher,
     renderThread,

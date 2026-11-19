@@ -6,7 +6,20 @@ const path = require('node:path');
 const vm = require('node:vm');
 const {StandardsCatalogAdapter: adapter} = require('../standards-base/src/catalog-adapter.js');
 require('../standards.bundle.js');
+require('../component-imported-styles.js');
+require('../component-visuals.js');
 const db = globalThis.FlangeStandardsDB;
+
+const svgDocument = {
+  createElementNS(namespace,tag) {
+    const attributes = new Map();
+    return {setAttribute(key,value){attributes.set(key,value);}, querySelectorAll:()=>[],
+      get outerHTML() {
+        return `<${tag}${[...attributes].map(([key,value])=>` ${key}="${value}"`).join('')}>${this.innerHTML}</${tag}>`;
+      }};
+  }
+};
+globalThis.document = svgDocument;
 
 const card = (id, filters) => adapter.getReferenceCard(db, id, filters);
 const size = (id, diameter, filters) => card(id, filters).tables[0].rows.find(row => row.diameter === diameter);
@@ -100,7 +113,6 @@ test('flange surface values, conflicting sources and incompatible filters follow
 });
 
 test('the drawing uses the three selected type Б cap dimensions and a blind bore', () => {
-  require('../component-imported-styles.js');
   const {StandardsDrawingEngine: engine} = require('../standards-base/src/drawing-engine.js');
   assert.equal(typeof engine.renderReference, 'function');
   const standardId = 'gost-9064-75';
@@ -111,9 +123,14 @@ test('the drawing uses the three selected type Б cap dimensions and a blind bor
   assert.match(drawing.svg, /Глибина глухого отвору/);
   assert.match(drawing.svg, /l\s*=\s*40\s*мм/);
   assert.doesNotMatch(drawing.svg, /NaN|undefined/);
-  assert.match(drawing.svg, /V\s+\d+(?:\.\d+)?\s+H\s+\d+" fill="url\(#hatch_/);
+  assert.match(drawing.svg, /V\s+\d+(?:\.\d+)?\s+H\s+215" fill="url\(#v5-hatch/);
+  assert.match(drawing.svg, /class="nut-axis"/);
+  const appPreview = globalThis.FlangeComponentVisuals.create('passport','nut',
+    {name:'Гайка',spec:'М24',diameter:24,h:65,acrossFlats:27,capped:true},3).innerHTML;
+  const section = svg => svg.match(/<path d="([^"]+)" fill="url\(#v5-hatch/)[1];
+  assert.equal(section(drawing.svg),section(appPreview));
   const typeA = engine.renderReference({standardId,type:'hex_nut',row:size(standardId,24,{type:'A'})});
-  assert.match(typeA.svg, />24\s*мм<\/text>/);
+  assert.match(typeA.svg, />H = 24\s*мм<\/text>/);
   assert.doesNotMatch(typeA.svg, /Глибина глухого отвору/);
   assert.equal(engine.renderReference({standardId,type:'capped_nut',row:{...row,capProfile:null}}),null);
 });
@@ -131,6 +148,8 @@ test('missing geometry is suppressed and the chosen pitch drives the thread prof
   assert.notEqual(path(fine),path(coarse));
   assert.match(fine.callout,/М24×1,5/);
   assert.match(fine.svg,/P = 1,5 мм/);
+  assert.match(fine.svg,/<marker id="passport-arrow_[^"]+" viewBox="0 0 8 6"/);
+  assert.match(fine.svg,/marker-start="url\(#passport-arrow_/);
   assert.match(fine.svg,/Розраховано/);
   assert.equal(fine.calculated.value, 1.299038105676658);
   const fineOnlyRow = size(standardId,15);
@@ -143,10 +162,18 @@ test('ГОСТ 11371-78 execution 2 adds an outside chamfer to the selected wash
   const {StandardsDrawingEngine: engine} = require('../standards-base/src/drawing-engine.js');
   const standardId = 'gost-11371-78';
   const draw = execution => engine.renderReference({standardId,type:'washer',row:size(standardId,24,{execution})}).svg;
-  assert.doesNotMatch(draw('1'),/data-washer-chamfer/);
+  assert.doesNotMatch(draw('1'),/>45°</);
   const second = draw('2');
-  assert.match(second,/<path[^>]+data-washer-chamfer=""/);
-  assert.match(second,/>Ø 44 мм<\/text>/);
+  const appPreview = globalThis.FlangeComponentVisuals.create('passport','washer',
+    {name:'Шайба',spec:'М24',diameter:24,inner:25,outer:44,h:4,execution:'2'},3).innerHTML;
+  const section = svg => svg.match(/<path d="([^"]+)" fill="url\(#v5-hatch/)[1];
+  assert.match(second,/>45°</);
+  assert.equal(section(second),section(appPreview));
+  assert.match(second,/> 44 мм<\/text>/);
+  assert.match(second,/Розраховано/);
+  const spring = 'gost-6402-70';
+  const springDrawing = engine.renderReference({standardId:spring,type:'spring_washer',row:size(spring,24)});
+  assert.match(springDrawing.svg,/Вільний стан/);
 });
 
 test('flange drawing flags only dimensions with recorded calculated provenance', () => {
@@ -160,8 +187,8 @@ test('flange drawing flags only dimensions with recorded calculated provenance',
 });
 
 function browserReference() {
-  const context = vm.createContext({});
-  for (const file of ['standards.bundle.js','flange-catalog.bundle.js','core.js','component-imported-styles.js',
+  const context = vm.createContext({document:svgDocument});
+  for (const file of ['standards.bundle.js','flange-catalog.bundle.js','core.js','component-imported-styles.js','component-visuals.js',
     'flange-picker-drawing.js','standards-base/src/catalog-adapter.js','standards-base/src/flange-reference.js',
     'standards-base/src/drawing-templates.js','standards-base/src/drawing-engine.js','standards-base/src/app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),context,{filename:file});

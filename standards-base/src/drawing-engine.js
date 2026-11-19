@@ -259,36 +259,44 @@
   function renderReference({standardId,type,row,pitchMm,execution,accuracyClass}) {
     const positive = value => Number.isFinite(value) && value > 0;
     if (!row || !positive(row.diameter)) return null;
-    const templates = getTemplates();
-    const colors = getThemeColors('light');
     const {diameter:d, heightMm:m, acrossFlatsMm:s, capProfile} = row;
     let svg;
     let calculated;
     let designationRow = row;
 
-    if (type === 'capped_nut') {
-      if (!capProfile || ![m,s,capProfile.bodyDiameterMm,capProfile.headHeightMm,capProfile.boreDepthMm].every(positive)) return null;
-      const profiles = globalThis.PassportProfiles;
-      if (!profiles) return null;
-      svg = templates.renderCappedNut({d,m,s,pitch:row.pitchMm,capProfile,colors,profiles});
-    } else if (type === 'thread') {
+    if (type === 'thread') {
       const pitches = (row.pitchesMm || []).filter(positive);
       const pitch = pitches.includes(pitchMm) ? pitchMm : row.coarsePitchMm ?? pitches[0];
       if (!positive(pitch)) return null;
       const theoreticalHeightMm = Math.sqrt(3) * pitch / 2;
       calculated = {label:'Теоретична висота профілю H',value:theoreticalHeightMm,unit:'мм'};
       designationRow = {...row,pitch:new Intl.NumberFormat('uk-UA').format(pitch)};
-      svg = templates.renderThread({d,coarsePitchMm:row.coarsePitchMm,pitchesMm:row.finePitchesMm,
+      const profiles = globalThis.PassportProfiles;
+      const colors = {...getThemeColors('light'), ...profiles?.drafting, dimensionMarker:profiles?.dimensionMarker};
+      svg = getTemplates().renderThread({d,coarsePitchMm:row.coarsePitchMm,pitchesMm:row.finePitchesMm,
         referencePitchMm:row.coarsePitchMm ?? Math.max(...pitches),
         selectedPitchMm:pitch,theoreticalHeightMm,colors});
     } else {
-      const required = {
-        hex_nut:[m,s],
-        washer:[row.innerDiameterMm,row.outerDiameterMm,row.thicknessMm],
-        spring_washer:[row.innerDiameterMm,row.outerDiameterMm,row.thicknessMm]
-      }[type];
-      if (!required?.every(positive)) return null;
-      svg = render({standardId,type,row,theme:'light',execution,showApproximateHeight:false});
+      const isNut = type === 'hex_nut' || type === 'capped_nut';
+      const capped = type === 'capped_nut';
+      const spring = type === 'spring_washer';
+      const {innerDiameterMm:inner,outerDiameterMm:outer,thicknessMm:h} = row;
+      if (!isNut && !spring && type !== 'washer') return null;
+      if (!(isNut ? [m,s] : [inner,outer,h]).every(positive)) return null;
+      if (capped && ![capProfile?.bodyDiameterMm,capProfile?.headHeightMm,capProfile?.boreDepthMm].every(positive)) return null;
+
+      const typicalPitch = globalThis.FlangeStandardsDB?.threads?.['gost-24705-2004']?.sizes?.[d];
+      const pitch = row.pitchMm ?? typicalPitch?.coarsePitchMm ?? typicalPitch?.pitchesMm?.[0] ?? 1;
+      const part = isNut ? {name:'Гайка',h:m,acrossFlats:s,capped,capProfile,
+        heightSymbol:standardId === 'gost-9064-75' && !capped ? 'H' : undefined} :
+        {name:spring ? 'Пружинна шайба' : 'Шайба',spring,execution:execution ?? row.execution,outer,inner,h};
+      const visual = globalThis.FlangeComponentVisuals;
+      if (!visual) return null;
+      const drawing = visual.create('passport',isNut ? 'nut' : 'washer',
+        {...part,diameter:d,spec:`М${d}`,showCatalogDimensions:true},pitch);
+      drawing.setAttribute('xmlns','http://www.w3.org/2000/svg');
+      drawing.setAttribute('font-family',globalThis.PassportProfiles.drafting.font);
+      svg = drawing.outerHTML;
     }
 
     return {svg,callout:getStandardCallout(standardId,designationRow,execution,accuracyClass),calculated};

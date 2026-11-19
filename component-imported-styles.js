@@ -1,6 +1,12 @@
 // Visual renderers adapted from the user-provided code_artifact (1).html.
 // Dimensions supplied by the gallery. Additional length and wrench sizes are demo values.
 (function(root) {
+    const drafting = Object.freeze({bg:'#f7faf9', line:'#2b434f', lineThin:'#526872', axis:'#c56b1a',
+      dim:'#006d73', dimText:'#005f66', hatchStroke:'#415b66', threadThin:'#006d73',
+      font:'Segoe UI Variable, Segoe UI, Arial, sans-serif'});
+    const dimensionMarker = id => `<marker id="${id}" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L8 3 L0 6 Z" fill="${drafting.dim}"/>
+    </marker>`;
     function buildFastenerGeometry(cx, topY, botY, halfW, pitchPx, threadLenPx, threadAtTop = true) {
       const chamfer = Math.min(5.5, halfW * 0.24);
       const toothDepth = Math.min(3.8, Math.max(2.0, pitchPx * 0.34));
@@ -199,12 +205,13 @@
         <path d="M-2 2 l4 -4 M0 7 l7 -7 M5 9 l4 -4" stroke="#415b66" stroke-width="1"/>
       </pattern>`;
     }
-    root.PassportProfiles = {boltMetrics, boltHead, nutSide, buildHexNutMetrics, buildFastenerGeometry, steelGradient, steelHatch};
+    root.PassportProfiles = {boltMetrics, boltHead, nutSide, buildHexNutMetrics, buildFastenerGeometry, steelGradient, steelHatch, drafting, dimensionMarker};
 
 root.ImportedComponentStyles = function(style,key,part,pitch) {
  const fmt = n => Number(n).toLocaleString('uk-UA',{maximumFractionDigits:2});
+ const dimension = n => fmt(n) + (part.showCatalogDimensions ? ' мм' : '');
  const diameter = part.diameter || part.outer;
- const GOST_DB = {[diameter]:{studLength:part.length ?? '—',threadEnd:'—',nutS:part.acrossFlats ?? '—',nutM:part.h,nutCapH:part.h,pitch,washerD1:part.inner,washerD2:part.outer,washerS:part.h}};
+ const GOST_DB = {[diameter]:{studLength:part.length ?? '—',threadEnd:'—',nutS:part.acrossFlats ?? '—',nutM:part.h,nutCapH:part.h,capProfile:part.capProfile,pitch,washerD1:part.inner,washerD2:part.outer,washerS:part.h}};
      const RenderV1 = {
       stud(d, p, count) {
         const spec = GOST_DB[d];
@@ -555,9 +562,7 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
               <rect width="6" height="6" fill="#526269"/>
               <path d="M-1 1 l2 -2 M0 6 l6 -6 M5 7 l2 -2" stroke="#c4d0d4" stroke-width=".8"/>
             </pattern>
-            <marker id="v5-arr" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
-              <path d="M0 0 L8 3 L0 6 Z" fill="#006d73"/>
-            </marker>
+            ${dimensionMarker('v5-arr')}
           </defs>
         `;
       },
@@ -661,6 +666,26 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
         const bodyRadius = isCapped ? m.cap.bodyDiameterMm * m.scale / 2 : 0;
         const flatHalf = rOuter * Math.cos(Math.PI/6);
         const dimensionY = rcy + Math.max(rOuter,bodyRadius) + 24;
+        const capDimensions = isCapped && part.showCatalogDimensions ? (() => {
+          const {bodyDiameterMm,headHeightMm,boreDepthMm} = m.cap;
+          const edge = cx + bodyRadius;
+          const measureX = edge + 16;
+          const diameterY = baseY + 27;
+          const arrows = 'marker-start="url(#v5-arr)" marker-end="url(#v5-arr)"';
+          const labelStyle = `fill="${drafting.dimText}" stroke="none"`;
+          const vertical = (from,to,label) => `
+            <path d="M ${edge+2} ${from} H ${measureX+4} M ${edge+2} ${to} H ${measureX+4}" stroke-width=".8"/>
+            <path d="M ${measureX} ${from} V ${to}" ${arrows}/>
+            <text x="${measureX+6}" y="${(from+to)/2+4}" ${labelStyle}>${label}</text>`;
+          return `<desc>Діаметр корпусу ${dimension(bodyDiameterMm)}. Висота головки ${dimension(headHeightMm)}. Глибина глухого отвору ${dimension(boreDepthMm)}.</desc>
+            <g fill="none" stroke="${drafting.dim}" stroke-width="1.2" font-size="13" font-weight="650" class="cap-dimensions">
+              <path d="M ${cx-bodyRadius} ${baseY+4} V ${diameterY+4} M ${edge} ${baseY+4} V ${diameterY+4}" stroke-width=".8"/>
+              <path d="M ${cx-bodyRadius} ${diameterY} H ${edge}" ${arrows}/>
+              <text x="${cx}" y="${diameterY+16}" text-anchor="middle" ${labelStyle}>D₁ = ${dimension(bodyDiameterMm)}</text>
+              ${vertical(topY,topY+headHeightMm*m.scale,`l₀ = ${dimension(headHeightMm)}`)}
+              ${vertical(baseY-boreDepthMm*m.scale,baseY,`l = ${dimension(boreDepthMm)}`)}
+            </g>`;
+        })() : '';
         return `
           ${this.defs()}
           ${nutSide(m)}
@@ -676,15 +701,16 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
           <g class="nut-wrench-dimension" fill="none" stroke="#006d73">
             <path d="M ${rcx-flatHalf} ${rcy+3} V ${dimensionY+6} M ${rcx+flatHalf} ${rcy+3} V ${dimensionY+6}" stroke-width="0.85"/>
             <line x1="${rcx-flatHalf}" y1="${dimensionY}" x2="${rcx+flatHalf}" y2="${dimensionY}" stroke-width="1.3" marker-start="url(#v5-arr)" marker-end="url(#v5-arr)"/>
-            <text class="dim-text" x="${rcx}" y="${dimensionY+20}" text-anchor="middle" fill="#005f66" stroke="none" font-size="15.5" font-weight="700">S = ${fmt(part.acrossFlats)}</text>
+            <text class="dim-text" x="${rcx}" y="${dimensionY+20}" text-anchor="middle" fill="#005f66" stroke="none" font-size="15.5" font-weight="700">S = ${dimension(part.acrossFlats)}</text>
           </g>` : ''}
 
           <g class="svg-interactive" data-tip-title="Поєднання вигляду і розрізу гайки М${fmt(d)}" data-tip-body="${isCapped ? 'Тип Б, виконання 1 · l₁=' + fmt(spec.nutCapH) : 'm=' + fmt(spec.nutM)} мм · Під ключ S=${fmt(spec.nutS)} мм">
             <line class="dim-line" x1="${isCapped ? cx-flatHalf+m.scale : cx-halfE+10}" y1="${topY}" x2="94" y2="${topY}" stroke="#006d73" stroke-width="1"/>
             <line class="dim-line" x1="${isCapped ? cx-bodyRadius+m.scale : cx-halfE+7}" y1="${baseY}" x2="94" y2="${baseY}" stroke="#006d73" stroke-width="1"/>
             <line class="dim-line" x1="104" y1="${topY}" x2="104" y2="${baseY}" stroke="#006d73" stroke-width="1.4" marker-start="url(#v5-arr)" marker-end="url(#v5-arr)"/>
-            <text class="dim-text" transform="translate(92 ${(topY + baseY) / 2}) rotate(-90)" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">${part.heightSymbol || (isCapped ? 'l₁' : 'm')} = ${fmt(m.heightMm)}</text>
+            <text class="dim-text" transform="translate(92 ${(topY + baseY) / 2}) rotate(-90)" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">${part.heightSymbol || (isCapped ? 'l₁' : 'm')} = ${dimension(m.heightMm)}</text>
           </g>
+          ${capDimensions}
         `;
       },
 
@@ -753,7 +779,7 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
         }
         function diameterMark(r, x, y, endX, index, value) {
           const length = Math.hypot(x,y), tx = r*x/length, ty = r*y/length;
-          const label = `Ø<tspan baseline-shift="-2.5" font-size="9.5">${index}</tspan> ${fmt(value)}`;
+          const label = `Ø<tspan baseline-shift="-2.5" font-size="9.5">${index}</tspan> ${dimension(value)}`;
           return `<path d="M ${-tx} ${-ty} L ${tx} ${ty}" fill="none" stroke="#006d73" stroke-width=".9" ${arrow}/>
             <path d="M ${tx} ${ty} L ${x} ${y}" fill="none" stroke="#006d73" stroke-width=".8"/>
             ${shelf(x,y,endX,label)}`;
@@ -796,7 +822,7 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
             ${diameterMark(inner,103,-68,194,'мін',id)}
             ${hasHoles && part.pitchCircle ? diameterMark(pitchRadius,94,145,190,'кола',part.pitchCircle) : ''}
             <path d="M ${bandRadius*Math.cos(bandAngle)} ${bandRadius*Math.sin(bandAngle)} L -112 -140" fill="none" stroke="#006d73" stroke-width=".85" marker-start="url(#v5-arr)"/>
-            ${shelf(-112,-140,-173,'s = '+fmt(thick))}
+            ${shelf(-112,-140,-173,'s = '+dimension(thick))}
             ${hasHoles ? `<path d="M ${holeX + hole*(77-holeX)/holeLead} ${holeY + hole*(-140-holeY)/holeLead} L 77 -140" fill="none" stroke="#006d73" stroke-width=".85" marker-start="url(#v5-arr)"/>
               ${shelf(77,-140,172,fmt(count)+' × Ø '+fmt(part.holeDiameter))}` : ''}
             ${half > 0 ? `<path d="M ${stripX} ${stripY} L 126 ${stripShelfY}" fill="none" stroke="#006d73" stroke-width=".85" marker-start="url(#v5-arr)"/>
@@ -824,8 +850,9 @@ root.ImportedComponentStyles = function(style,key,part,pitch) {
                    <path d="M ${thicknessLineX} ${bottom+15} V ${bottom}" stroke-width="1.2" ${endArrow}/>`}
             </g>
             <g fill="#005f66" font-size="15" font-weight="700">
-              <text y="${widthLineY+20}" text-anchor="middle">${washer ? 'b' : 'b₀'} = ${fmt(band)}</text>
-              <text x="${ex+49}" y="${sectionHeight >= 24 ? 5 : top-6}" text-anchor="middle">s = ${fmt(thick)}</text>
+              <text y="${widthLineY+20}" text-anchor="middle">${washer ? 'b' : 'b₀'} = ${dimension(band)}</text>
+              ${part.showCatalogDimensions ? `<text y="${widthLineY+36}" text-anchor="middle" font-size="11">Розраховано</text>` : ''}
+              <text x="${ex+49}" y="${sectionHeight >= 24 ? 5 : top-6}" text-anchor="middle">s = ${dimension(thick)}</text>
             </g>
           </g>`;
       },
