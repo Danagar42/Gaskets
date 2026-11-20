@@ -59,8 +59,9 @@ def validate_nut(record, filename):
             raise ValueError(f"{filename}: invalid nominal diameter {designation}")
         if record.get("types"):
             kinds = record["types"]
-            if set(row) != {"heightsByTypeMm"}:
-                raise ValueError(f"{filename}: typed nut rows must hold only heightsByTypeMm at M{designation}")
+            cap = row.get("capProfile")
+            if set(row) - {"capProfile"} != {"heightsByTypeMm", "acrossFlatsByTypeMm"}:
+                raise ValueError(f"{filename}: typed nut rows require heights and wrench sizes at M{designation}")
             heights = row.get("heightsByTypeMm", {})
             if set(heights) != set(kinds):
                 raise ValueError(f"{filename}: expected exact nut types {list(kinds)} at M{designation}")
@@ -69,12 +70,27 @@ def validate_nut(record, filename):
             for type_id, height in heights.items():
                 if height is not None and (type(height) not in (float, int) or not math.isfinite(height) or height <= 0):
                     raise ValueError(f"{filename}: invalid nut height for type {type_id} at M{designation}")
+            wrench_sizes = row["acrossFlatsByTypeMm"]
+            if set(wrench_sizes) != set(kinds):
+                raise ValueError(f"{filename}: wrench sizes must cover the exact nut types at M{designation}")
+            if any((value is None) != (heights[kind] is None) for kind, value in wrench_sizes.items()):
+                raise ValueError(f"{filename}: wrench-size availability differs from nut-height availability at M{designation}")
+            if heights.get("B") is not None:
+                if not isinstance(cap, dict) or set(cap) != {"bodyDiameterMm", "headHeightMm", "boreDepthMm"}:
+                    raise ValueError(f"{filename}: incomplete capped-nut profile at M{designation}")
+                if not (cap["bodyDiameterMm"] > max(nominal, 2 * wrench_sizes["B"] / math.sqrt(3))
+                        and 0 < cap["boreDepthMm"] <= heights["B"] - cap["headHeightMm"] < heights["B"]):
+                    raise ValueError(f"{filename}: invalid capped-nut profile at M{designation}")
         else:
             height = row.get("heightMm")
             if type(height) not in (float, int) or not math.isfinite(height) or height <= 0:
                 raise ValueError(f"{filename}: invalid nut height at M{designation}")
-            if set(row) != {"heightMm"}:
-                raise ValueError(f"{filename}: nut catalog stores only heightMm at M{designation}")
+            if set(row) != {"heightMm", "acrossFlatsMm"}:
+                raise ValueError(f"{filename}: nut row requires height and wrench size at M{designation}")
+            wrench_sizes = {"A": row["acrossFlatsMm"]}
+        for value in wrench_sizes.values():
+            if value is not None and (type(value) not in (float, int) or not math.isfinite(value) or value <= 0):
+                raise ValueError(f"{filename}: invalid wrench size at M{designation}")
         diameters.add(nominal)
     nonpreferred = record.get("nonPreferredDiametersMm", [])
     if any(d not in diameters for d in nonpreferred) or len(set(nonpreferred)) != len(nonpreferred):
@@ -108,9 +124,76 @@ def validate_thread(record, filename):
             raise ValueError(f"{filename}: invalid nonpreferred pitch for M{nominal}")
 
 
+
+def validate_gasket(record, filename):
+    if record.get("id") != filename.stem or not record.get("name"):
+        raise ValueError(f"{filename}: missing gasket identifier/name")
+    source = record.get("source", {})
+    if source.get("verificationStatus") == "screenshot_only":
+        if source.get("documentId") is not None or record.get("document") is not None:
+            raise ValueError(f"{filename}: unidentified TU must not claim an official number")
+    elif not source.get("documentId"):
+        raise ValueError(f"{filename}: confirmed TU must have a document identifier")
+    for field in ("elasticModulusMPa", "seatingPressureMPa", "minimumPressureMPa", "maximumPressureMPa"):
+        value = record.get(field)
+        if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
+            raise ValueError(f"{filename}: invalid {field}")
+    if not (record["minimumPressureMPa"] <= record["seatingPressureMPa"] <= record["maximumPressureMPa"]):
+        raise ValueError(f"{filename}: inconsistent pressures")
+    width = record.get("effectiveWidth", {})
+    if width.get("symbol") != "b" or width.get("rule") != "equalsSealingBandWidth":
+        raise ValueError(f"{filename}: expected sealing-band width rule, not a constant")
+    groups = record.get("mediumGroups", {})
+    coefficients = record.get("mediumCoefficients", {})
+    if not groups or set(groups) != set(coefficients):
+        raise ValueError(f"{filename}: medium group mappings must match coefficients")
+    labels = []
+    for group, names in groups.items():
+        coefficient = coefficients[group]
+        if type(coefficient) not in (int, float) or not math.isfinite(coefficient) or coefficient <= 0:
+            raise ValueError(f"{filename}: bad medium coefficient for {group}")
+        if not names or any(not isinstance(name, str) or not name for name in names):
+            raise ValueError(f"{filename}: invalid medium labels for {group}")
+        labels.extend(names)
+    if len(set(labels)) != len(labels):
+        raise ValueError(f"{filename}: duplicate medium categories")
+    values = record.get("expansionMicroPerCByTemperatureC", {})
+    if not values or record.get("expansionTemperatureSelection") != "ceiling_available":
+        raise ValueError(f"{filename}: alpha must use the approved nearest-higher table selection")
+    for temp, alpha in values.items():
+        t = float(temp)
+        if not math.isfinite(t) or type(alpha) not in (int, float) or not math.isfinite(alpha) or alpha <= 0:
+            raise ValueError(f"{filename}: invalid expansion data at {temp}")
+    if record.get("units", {}).get("expansion") != "10^-6/°C":
+        raise ValueError(f"{filename}: expansion unit mismatch")
+
+
+def validate_torque(record, filename):
+    if record.get("id") != filename.stem or not record.get("title"):
+        raise ValueError(f"{filename}: missing torque table identifier/title")
+    if record.get("unit") != "N*m":
+        raise ValueError(f"{filename}: torque unit must be N*m")
+    sizes = record.get("sizes", {})
+    if not sizes:
+        raise ValueError(f"{filename}: empty sizes map")
+    for d, row in sizes.items():
+        nominal = float(d)
+        if not math.isfinite(nominal) or nominal <= 0:
+            raise ValueError(f"{filename}: invalid nominal diameter {d}")
+        min_nm, max_nm = row.get("minNm"), row.get("maxNm")
+        if type(min_nm) not in (int, float) or type(max_nm) not in (int, float) or min_nm <= 0 or max_nm <= 0 or min_nm > max_nm:
+            raise ValueError(f"{filename}: invalid minNm/maxNm for M{d}")
+
+
 def main():
-    catalog = {"version": 1, "washers": {}, "nuts": {}, "threads": {}}
-    for category, validate in (("washers", validate_washer), ("nuts", validate_nut), ("threads", validate_thread)):
+    catalog = {"version": 1, "washers": {}, "nuts": {}, "threads": {}, "gaskets": {}, "torques": {}}
+    for category, validate in (
+        ("washers", validate_washer),
+        ("nuts", validate_nut),
+        ("threads", validate_thread),
+        ("gaskets", validate_gasket),
+        ("torques", validate_torque),
+    ):
         for filename in sorted((SOURCE / category).glob("*.json")):
             record = json.loads(filename.read_text(encoding="utf-8"))
             validate(record, filename)
@@ -123,7 +206,7 @@ def main():
         + "globalThis.FlangeStandardsDB = " + body + ";\n",
         encoding="utf-8",
     )
-    print(f"Built {OUTPUT.name}: {len(catalog['washers'])} washers, {len(catalog['nuts'])} nuts, {len(catalog['threads'])} threads")
+    print(f"Built {OUTPUT.name}: {len(catalog['washers'])} washers, {len(catalog['nuts'])} nuts, {len(catalog['threads'])} threads, {len(catalog['gaskets'])} gaskets, {len(catalog['torques'])} torque tables")
 
 
 if __name__ == "__main__":

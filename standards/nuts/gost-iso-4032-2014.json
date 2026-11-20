@@ -1,0 +1,101 @@
+{
+  "id": "gost-iso-4032-2014",
+  "document": "ГОСТ ISO 4032-2014",
+  "title": "Гайки шестигранні нормальні (тип 1). Класи точності А і В",
+  "type": "hex_nut",
+  "unit": "mm",
+  "fields": {
+    "heightMm": {
+      "symbol": "m",
+      "description": "Максимальна висота гайки",
+      "unit": "mm"
+    }
+  },
+  "source": {
+    "url": "https://meganorm.ru/mega_doc/norm/gost_gosudarstvennyj-standart/2/gost_ISO_4032-2014_mezhgosudarstvennyy_standart_gayki.html",
+    "section": "Таблиці 1 і 2 розмірів m та s",
+    "verification": "Звірено з ГОСТ ISO 4032-2014.",
+    "notes": "У картці наведено максимальну висоту m та номінальний (максимальний) розмір s під ключ для оцифрованих типорозмірів. Зірочкою позначено типорозміри з таблиці 2 для обмеженого застосування."
+  },
+  "nonPreferredDiametersMm": [
+    14,
+    18,
+    22,
+    27,
+    33
+  ],
+  "sizes": {
+    "2": {
+      "heightMm": 1.6,
+      "acrossFlatsMm": 4.0
+    },
+    "2.5": {
+      "heightMm": 2.0,
+      "acrossFlatsMm": 5.0
+    },
+    "3": {
+      "heightMm": 2.4,
+      "acrossFlatsMm": 5.5
+    },
+    "4": {
+      "heightMm": 3.2,
+      "acrossFlatsMm": 7.0
+    },
+    "5": {
+      "heightMm": 4.7,
+      "acrossFlatsMm": 8.0
+    },
+    "6": {
+      "heightMm": 5.2,
+      "acrossFlatsMm": 10.0
+    },
+    "8": {
+      "heightMm": 6.8,
+      "acrossFlatsMm": 13.0
+    },
+    "10": {
+      "heightMm": 8.4,
+      "acrossFlatsMm": 16.0
+    },
+    "12": {
+      "heightMm": 10.8,
+      "acrossFlatsMm": 18.0
+    },
+    "14": {
+      "heightMm": 12.8,
+      "acrossFlatsMm": 21.0
+    },
+    "16": {
+      "heightMm": 14.8,
+      "acrossFlatsMm": 24.0
+    },
+    "18": {
+      "heightMm": 15.8,
+      "acrossFlatsMm": 27.0
+    },
+    "20": {
+      "heightMm": 18.0,
+      "acrossFlatsMm": 30.0
+    },
+    "22": {
+      "heightMm": 19.4,
+      "acrossFlatsMm": 34.0
+    },
+    "24": {
+      "heightMm": 21.5,
+      "acrossFlatsMm": 36.0
+    },
+    "27": {
+      "heightMm": 23.8,
+      "acrossFlatsMm": 41.0
+    },
+    "30": {
+      "heightMm": 25.6,
+      "acrossFlatsMm": 46.0
+    },
+    "33": {
+      "heightMm": 28.7,
+      "acrossFlatsMm": 50.0
+    }
+  }
+}

@@ -1,0 +1,354 @@
+'use strict';
+const assert = require('node:assert/strict');
+const {test} = require('node:test');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const core = require('../core.js');
+const picker = require('../flange-picker.js');
+const {StandardsCatalogAdapter: adapter} = require('../standards-base/src/catalog-adapter.js');
+require('../standards.bundle.js');
+require('../component-imported-styles.js');
+require('../component-visuals.js');
+const db = globalThis.FlangeStandardsDB;
+
+const svgDocument = {
+  createElementNS(namespace,tag) {
+    const attributes = new Map();
+    return {setAttribute(key,value){attributes.set(key,value);}, querySelectorAll:()=>[],
+      get outerHTML() {
+        return `<${tag}${[...attributes].map(([key,value])=>` ${key}="${value}"`).join('')}>${this.innerHTML}</${tag}>`;
+      }};
+  }
+};
+globalThis.document = svgDocument;
+
+const card = (id, filters) => adapter.getReferenceCard(db, id, filters);
+const size = (id, diameter, filters) => card(id, filters).tables[0].rows.find(row => row.diameter === diameter);
+
+test('six reference categories include five nut standards and searchable document names', () => {
+  assert.equal(typeof adapter.listReferenceCategories, 'function');
+  assert.deepEqual(adapter.listReferenceCategories().map(category => category.id),
+    ['nuts', 'washers', 'threads', 'flanges', 'gaskets', 'torques']);
+  const entries = adapter.listReferenceEntries(db);
+  assert.equal(entries.filter(entry => entry.categoryId === 'nuts').length, 5);
+  for (const query of ['9064–75', '  ГОСТ 9064-75  ']) {
+    assert.equal(adapter.searchReferenceEntries(entries, query)[0].id, 'gost-9064-75');
+  }
+  assert.equal(adapter.searchReferenceEntries(entries, 'графітові')[0].id, 'graphite-annex-b1-b2-unidentified');
+  assert.equal(card('unknown'), null);
+});
+
+test('nut, washer and pitch options preserve available and missing catalog data', () => {
+  assert.equal(typeof adapter.getReferenceCard, 'function');
+  const nut = size('gost-9064-75', 24, {type:'B', diameter:'М24'});
+  assert.deepEqual([nut.bodyDiameterMm, nut.headHeightMm, nut.boreDepthMm], [40, 16, 40]);
+  assert.equal(card('gost-9064-75',{type:'B'}).tables[0].rows[0].diameter,12);
+  assert.equal(card('gost-9064-75',{type:'B',diameter:'М10'}).tables[0].rows.length,0);
+  assert.ok(card('gost-9064-75').sources.some(source => source.url?.includes('docload.ru') && /Розмір під ключ/.test(source.label)));
+  const washer = 'gost-11371-78';
+  assert.ok(card(washer).sources.some(source => /2006/.test(source.edition)));
+  assert.equal(size(washer, 24, {accuracyClass:'A'}).innerDiameterMm, 25);
+  assert.equal(size(washer, 24, {accuracyClass:'C'}).innerDiameterMm, 26);
+  assert.equal(size(washer, 33, {accuracyClass:'C'}).innerDiameterMm, null);
+  const execution = card(washer, {execution:'2', accuracyClass:'C'}).filters.find(filter => filter.key === 'accuracyClass');
+  assert.deepEqual(execution.options.map(option => option.value), ['A']);
+  assert.equal(execution.value, 'A');
+  assert.deepEqual(size('gost-24705-2004', 24).pitchesMm, [3, 2, 1.5, 1, 0.75]);
+});
+
+test('ГОСТ 9064-75 card matches the published dimensions for the digitized range', () => {
+  const id = 'gost-9064-75';
+  const typeA = card(id,{type:'A'}).tables[0].rows;
+  assert.deepEqual(typeA.map(row => [row.diameter,row.heightMm,row.acrossFlatsMm]),[
+    [10,10,17], [12,12,19], [16,16,24], [20,20,30], [22,22,32], [24,24,36], [27,27,41],
+    [30,30,46], [36,36,55], [42,42,65], [48,48,75], [52,52,80], [56,56,85], [60,60,90]
+  ]);
+  const typeB = card(id,{type:'B'}).tables[0].rows;
+  assert.deepEqual(typeB.map(row => [row.diameter,row.heightMm,row.acrossFlatsMm,row.bodyDiameterMm,row.headHeightMm,row.boreDepthMm]),[
+    [12,35,13,24,10,21], [16,40,17,28,12,26], [20,50,22,32,12,32], [22,55,27,36,12,36],
+    [24,65,27,40,16,40], [27,70,32,48,18,40], [30,75,32,48,20,43], [36,80,36,55,20,49],
+    [42,95,41,65,25,56], [48,105,46,75,25,64], [52,112,55,85,30,70], [56,130,55,85,35,76], [60,135,60,90,35,81]
+  ]);
+});
+
+test('gasket and torque tables show numeric values and recorded source status', () => {
+  assert.equal(typeof adapter.getReferenceCard, 'function');
+  const torque = card('universal-table-1');
+  const torque24 = torque.tables[0].rows.find(row => row.diameter === 24);
+  assert.deepEqual([torque24.minNm, torque24.maxNm, torque24.minKgfM, torque24.maxKgfM], [320, 360, 32, 36]);
+  assert.ok(torque.sources.some(source => source.kind === 'user_supplied_table'));
+  assert.equal(torque.drawingKind, null);
+  const gasket = card('graphite-annex-b1-b2-unidentified');
+  assert.ok(gasket.sources.some(source => source.documentId === null));
+  assert.equal(gasket.tables.find(table => table.id === 'expansion').rows.find(row => row.temperature === 400).value, 1.61);
+  assert.equal(gasket.drawingKind, null);
+});
+
+test('all catalog fastener sizes and options agree between reference and calculation', () => {
+  for (const standard of Object.values(db.nuts)) {
+    for (const type of Object.keys(standard.types || {A:null})) {
+      const rows = new Map(card(standard.id,{type}).tables[0].rows.map(row => [row.diameter,row]));
+      for (const diameter of Object.keys(standard.sizes).map(Number)) {
+        const shown = rows.get(diameter);
+        const used = core.nutDimensions(db,standard.id,diameter,type);
+        assert.equal(!!shown,!!used,`${standard.document} M${diameter} ${type}`);
+        if (!shown) continue;
+        assert.deepEqual([shown.heightMm,shown.acrossFlatsMm,shown.isNonPreferred],
+          [used.heightMm,used.acrossFlatsMm,used.nonPreferred]);
+        if (type === 'B') assert.equal(used.maxThreadedHeightMm,shown.boreDepthMm);
+      }
+    }
+  }
+  for (const standard of Object.values(db.washers)) {
+    for (const [execution,classes] of Object.entries(standard.executions)) {
+      for (const accuracyClass of classes) {
+        const rows = new Map(card(standard.id,{execution,accuracyClass}).tables[0].rows.map(row => [row.diameter,row]));
+        for (const diameter of Object.keys(standard.sizes).map(Number)) {
+          const shown = rows.get(diameter);
+          const used = core.washerDimensions(db,standard.id,diameter,accuracyClass,execution);
+          assert.equal(shown?.innerDiameterMm ?? null,used?.innerDiameterMm ?? null);
+          if (!used) continue;
+          assert.deepEqual([shown.outerDiameterMm,shown.thicknessMm],[used.outerDiameterMm,used.thicknessMm]);
+        }
+      }
+    }
+  }
+  for (const standard of Object.values(db.threads)) {
+    for (const row of card(standard.id).tables[0].rows) {
+      assert.equal(core.threadPitch(db,standard.id,row.diameter)?.pitchMm ?? null,row.coarsePitchMm);
+      for (const pitch of row.pitchesMm) {
+        assert.equal(core.threadPitch(db,standard.id,row.diameter,pitch)?.pitchMm,pitch);
+      }
+    }
+  }
+  for (const table of Object.values(db.torques)) {
+    for (const row of card(table.id).tables[0].rows) {
+      const used = core.standardTorque(db,row.diameter,table.id);
+      assert.deepEqual([row.minNm,row.maxNm],[used.minNm,used.maxNm]);
+    }
+  }
+});
+
+test('flange cards expose the original 925 rows and both supporting documents', () => {
+  require('../flange-catalog.bundle.js');
+  const catalog = globalThis.GostFlangeCatalog;
+  const flange = require('../standards-base/src/flange-reference.js');
+  const entries = adapter.listReferenceEntries(db, flange.listEntries(catalog));
+  const ids = ['12820', '12821'].flatMap(standard =>
+    flange.getCard(catalog, `gost-${standard}-80`).tables[0].rows.map(row => row.id));
+  assert.equal(ids.length, 925);
+  assert.equal(new Set(ids).size, 925);
+  assert.deepEqual(new Set(ids), new Set(catalog.rows.map(row => row.id)));
+  for (const standard of ['12815', '12816']) {
+    const entry = adapter.searchReferenceEntries(entries, `${standard}-80`)[0];
+    assert.equal(entry.id, `gost-${standard}-80`);
+    assert.ok(flange.getCard(catalog, entry.id).sources[0].edition.includes('2003'));
+  }
+  assert.ok(flange.getCard(catalog, 'gost-12816-80').notes.some(note => note.includes('1.9')));
+});
+
+test('flange surface values, conflicting sources and incompatible filters follow the selected row', () => {
+  require('../flange-catalog.bundle.js');
+  const catalog = globalThis.GostFlangeCatalog;
+  const flange = require('../standards-base/src/flange-reference.js');
+  const id = '12820:0.1:600:-:1';
+  const flat = flange.getCard(catalog, 'gost-12820-80', {dn:600, pressure:0.1, face:'4'}, id);
+  assert.equal(flat.selectedRow, catalog.rows.find(row => row.id === id));
+  assert.equal(flat.face, '4');
+  const d3 = flat.tables[1].rows.find(row => row.id === 'D3');
+  assert.equal(d3.value, 631);
+  assert.match(d3.origin, /ГОСТ 12815-80/);
+  assert.ok(flat.notes.some(note => /КОМПАС 531.*ГОСТ 631/.test(note)));
+  assert.ok(flat.sources.some(source => source.label.includes('12816-80')));
+  const ptfe = flange.getCard(catalog,'gost-12820-80',{dn:600,pressure:0.1,face:'8'},id);
+  assert.equal(ptfe.tables[1].rows.find(row => row.id === 'D3').value,630);
+  assert.ok(!ptfe.notes.some(note => /КОМПАС 531.*ГОСТ 631/.test(note)));
+  const ptfeD5 = flange.getCard(catalog,'gost-12820-80',{dn:25,pressure:0.6,face:'9'},'12820:0.6:25:-:2');
+  assert.equal(ptfeD5.tables[1].rows.find(row => row.id === 'D5').origin,'ГОСТ 12815-80');
+
+  const neck = flange.getCard(catalog, 'gost-12821-80', {dn:50, pressure:0.1, face:'999'}, id);
+  assert.equal(neck.selectedRow.dn, 50);
+  assert.equal(neck.selectedRow.pressure, 0.1);
+  assert.ok(Object.hasOwn(neck.selectedRow.faces, neck.face));
+  assert.notEqual(neck.face, '999');
+});
+
+test('all flange rows keep the selected figures and fill only matching questionnaire fields', () => {
+  require('../flange-catalog.bundle.js');
+  const catalog = globalThis.GostFlangeCatalog;
+  const flange = require('../standards-base/src/flange-reference.js');
+  const rejected = [];
+  for (const row of catalog.rows) {
+    const dimensions = row.dimensions;
+    const id = `gost-${row.standard}-80`;
+    const filters = {dn:row.dn,pressure:row.pressure,series:row.series,pipe:row.pipe};
+    for (const [face,surface] of Object.entries(row.faces)) {
+      const card = flange.getCard(catalog,id,{...filters,face},row.id);
+      assert.equal(card.selectedRow,row);
+      assert.equal(card.face,face);
+      const shown = Object.fromEntries(card.tables[1].rows.map(item => [item.id,item.value]));
+      for (const [key,value] of Object.entries({...dimensions,...surface})) {
+        assert.equal(shown[key],key === 'bolt' ? `М${value}` : value,`${row.id} / ${face}`);
+      }
+    }
+    const part = {mode:'pending',height:'18',wallCylinder:'7',wallCone:'10'};
+    const node = {connection:{kind:'flange-flange'},gasket:{mode:'area'},
+      fastener:{nominalDiameter:String(dimensions.bolt),count:String(dimensions.n)},
+      flanges:{sideA:{...part},sideB:{...part}}};
+    const result = picker.applyCandidate(node,row,'both');
+    if (!result.applied) {
+      rejected.push(row.id);
+      assert.ok(dimensions.d < dimensions.bolt);
+      assert.deepEqual(node.flanges,{sideA:part,sideB:part});
+      continue;
+    }
+    const expected = {...part,mode:'flange',innerDiameter:String(dimensions.bore),outerDiameter:String(dimensions.D),
+      boltCircle:String(dimensions.D1),holeDiameter:String(dimensions.d)};
+    assert.deepEqual(node.flanges,{sideA:expected,sideB:expected},row.id);
+    assert.deepEqual(node.fastener,{nominalDiameter:String(dimensions.bolt),count:String(dimensions.n)});
+  }
+  assert.deepEqual(rejected,['12820:2.5:200:-:1','12820:2.5:200:-:2','12821:2.5:200:-:1','12821:2.5:200:-:2']);
+});
+
+test('the drawing uses the three selected type Б cap dimensions and a blind bore', () => {
+  const {StandardsDrawingEngine: engine} = require('../standards-base/src/drawing-engine.js');
+  assert.equal(typeof engine.renderReference, 'function');
+  const standardId = 'gost-9064-75';
+  const row = size(standardId, 24, {type:'B'});
+  const drawing = engine.renderReference({standardId,type:'capped_nut',row});
+  assert.match(drawing.svg, /D₁.*40\s*мм/);
+  assert.match(drawing.svg, /l₀.*16\s*мм/);
+  assert.match(drawing.svg, /Глибина глухого отвору/);
+  assert.match(drawing.svg, /l\s*=\s*40\s*мм/);
+  assert.doesNotMatch(drawing.svg, /NaN|undefined/);
+  assert.match(drawing.svg, /V\s+\d+(?:\.\d+)?\s+H\s+215" fill="url\(#v5-hatch/);
+  assert.match(drawing.svg, /class="nut-axis"/);
+  const appPreview = globalThis.FlangeComponentVisuals.create('passport','nut',
+    {name:'Гайка',spec:'М24',diameter:24,h:65,acrossFlats:27,capped:true},3).innerHTML;
+  const section = svg => svg.match(/<path d="([^"]+)" fill="url\(#v5-hatch/)[1];
+  assert.equal(section(drawing.svg),section(appPreview));
+  const typeA = engine.renderReference({standardId,type:'hex_nut',row:size(standardId,24,{type:'A'})});
+  assert.match(typeA.svg, />H = 24\s*мм<\/text>/);
+  assert.doesNotMatch(typeA.svg, /Глибина глухого отвору/);
+  assert.equal(engine.renderReference({standardId,type:'capped_nut',row:{...row,capProfile:null}}),null);
+});
+
+test('missing geometry is suppressed and the chosen pitch drives the thread profile', () => {
+  const {StandardsDrawingEngine: engine} = require('../standards-base/src/drawing-engine.js');
+  assert.equal(typeof engine.renderReference, 'function');
+  const washer = 'gost-11371-78';
+  assert.equal(engine.renderReference({standardId:washer,type:'washer',row:size(washer,33,{accuracyClass:'C'})}),null);
+  const standardId = 'gost-24705-2004';
+  const row = size(standardId,24);
+  const fine = engine.renderReference({standardId,type:'thread',row,pitchMm:1.5});
+  const coarse = engine.renderReference({standardId,type:'thread',row,pitchMm:3});
+  const path = value => value.svg.match(/<path d="([^"]+)" fill="url\(#hatch_/)[1];
+  assert.notEqual(path(fine),path(coarse));
+  assert.match(fine.callout,/М24×1,5/);
+  assert.match(fine.svg,/P = 1,5 мм/);
+  assert.match(fine.svg,/<marker id="passport-arrow_[^"]+" viewBox="0 0 8 6"/);
+  assert.match(fine.svg,/marker-start="url\(#passport-arrow_/);
+  assert.match(fine.svg,/Розраховано/);
+  assert.equal(fine.calculated.value, 1.299038105676658);
+  const fineOnlyRow = size(standardId,15);
+  assert.equal(fineOnlyRow.coarsePitchMm,null);
+  const profile15 = pitchMm => engine.renderReference({standardId,type:'thread',row:fineOnlyRow,pitchMm});
+  assert.notEqual(path(profile15(1)),path(profile15(1.5)));
+});
+
+test('ГОСТ 11371-78 execution 2 adds an outside chamfer to the selected washer geometry', () => {
+  const {StandardsDrawingEngine: engine} = require('../standards-base/src/drawing-engine.js');
+  const standardId = 'gost-11371-78';
+  const draw = execution => engine.renderReference({standardId,type:'washer',row:size(standardId,24,{execution})}).svg;
+  assert.doesNotMatch(draw('1'),/>45°</);
+  const second = draw('2');
+  const appPreview = globalThis.FlangeComponentVisuals.create('passport','washer',
+    {name:'Шайба',spec:'М24',diameter:24,inner:25,outer:44,h:4,execution:'2'},3).innerHTML;
+  const section = svg => svg.match(/<path d="([^"]+)" fill="url\(#v5-hatch/)[1];
+  assert.match(second,/>45°</);
+  assert.equal(section(second),section(appPreview));
+  assert.match(second,/> 44 мм<\/text>/);
+  assert.match(second,/Розраховано/);
+  const spring = 'gost-6402-70';
+  const springDrawing = engine.renderReference({standardId:spring,type:'spring_washer',row:size(spring,24)});
+  assert.match(springDrawing.svg,/Вільний стан/);
+});
+
+test('flange drawing flags only dimensions with recorded calculated provenance', () => {
+  const {drawCandidate} = require('../flange-picker-drawing.js');
+  require('../flange-catalog.bundle.js');
+  const row = globalThis.GostFlangeCatalog.rows[0];
+  const flagged = drawCandidate(row,'1',null,{b:{calculated:true}});
+  assert.match(flagged, /b 8 мм · Розраховано/);
+  assert.equal((flagged.match(/Розраховано/g) || []).length,1);
+  assert.doesNotMatch(drawCandidate(row,'1'), /Розраховано/);
+});
+
+function browserReference() {
+  const context = vm.createContext({document:svgDocument});
+  for (const file of ['standards.bundle.js','flange-catalog.bundle.js','core.js','component-imported-styles.js','component-visuals.js',
+    'flange-picker-drawing.js','standards-base/src/catalog-adapter.js','standards-base/src/flange-reference.js',
+    'standards-base/src/drawing-templates.js','standards-base/src/drawing-engine.js','standards-base/src/app.js']) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file),'utf8'),context,{filename:file});
+  }
+  return context;
+}
+
+test('unknown, category and card routes resolve without looking up unrelated workspace records', () => {
+  const browser = browserReference();
+  assert.equal(typeof browser.StandardsReference?.resolveRoute,'function');
+  const entries = adapter.listReferenceEntries(db);
+  const route = parts => JSON.parse(JSON.stringify(browser.StandardsReference.resolveRoute(parts,entries)));
+  assert.deepEqual(route(['unknown']),{categoryId:null,entryId:null});
+  assert.deepEqual(route(['nuts','gost-9064-75']),{categoryId:'nuts',entryId:'gost-9064-75'});
+  assert.deepEqual(route(['washers','gost-9064-75']),{categoryId:null,entryId:null});
+});
+
+test('filter and row selection render the corresponding dimensions and drawing together', () => {
+  const browser = browserReference();
+  assert.equal(typeof browser.StandardsReference?.render,'function');
+  const events = {};
+  const panel = {innerHTML:'',querySelector:()=>null,querySelectorAll:()=>[]};
+  const root = {querySelector:()=>panel,addEventListener(type,handler){events[type]=handler;}};
+  const main = {firstElementChild:root,innerHTML:''};
+  const filter = (key,value) => events.change({target:{dataset:{referenceFilter:key},value,tagName:'SELECT'}});
+  const diameter = value => events.input({target:{dataset:{referenceFilter:'diameter'},value,tagName:'INPUT'}});
+  const action = dataset => events.click({target:{closest:()=>({dataset})},preventDefault(){}});
+  browser.StandardsReference.render(main,['nuts','gost-5915-70'],{navigate(){},toast(){}});
+  diameter('М14');
+  assert.doesNotMatch(panel.innerHTML,/<th[^>]*>Ряд<\/th>/);
+  assert.match(panel.innerHTML,/aria-label="14, нерекомендований діаметр">14<sup aria-hidden="true">\*<\/sup>/);
+  assert.match(panel.innerHTML,/\* Нерекомендований діаметр/);
+  browser.StandardsReference.render(main,['nuts','gost-9064-75'],{navigate(){},toast(){}});
+  filter('type','B');
+  diameter('М27');
+  assert.match(panel.innerHTML,/>27<sup aria-hidden="true">\*<\/sup>/);
+  diameter('М24');
+  assert.doesNotMatch(panel.innerHTML,/<sup|\* Нерекомендований діаметр/);
+  assert.match(panel.innerHTML,/М24\.Б ГОСТ 9064-75/);
+  assert.match(panel.innerHTML,/D₁.*40\s*мм/);
+  assert.match(panel.innerHTML,/l₀.*16\s*мм/);
+  assert.match(panel.innerHTML,/<td[^>]*>40<\/td><td[^>]*>16<\/td><td[^>]*>40<\/td>/);
+  diameter('999');
+  assert.match(panel.innerHTML,/Типорозмірів не знайдено/);
+  action({referenceReset:''});
+  assert.doesNotMatch(panel.innerHTML,/Типорозмірів не знайдено/);
+  browser.StandardsReference.render(main,['washers','gost-11371-78'],{navigate(){},toast(){}});
+  filter('accuracyClass','C');
+  diameter('М33');
+  assert.match(panel.innerHTML,/<td[^>]*>—<\/td>/);
+  assert.match(panel.innerHTML,/Недостатньо розмірів для ескізу/);
+  assert.match(panel.innerHTML,/Шайба 33\.C ГОСТ 11371-78/);
+  assert.match(panel.innerHTML,/data-reference-copy/);
+  assert.doesNotMatch(panel.innerHTML,/data-reference-export/);
+  browser.StandardsReference.render(main,['flanges','gost-12820-80'],{navigate(){},toast(){}});
+  filter('dn','600');
+  filter('pressure','0.1');
+  filter('series','1');
+  filter('face','4');
+  assert.match(panel.innerHTML,/КОМПАС 531, ГОСТ 631/);
+  assert.match(panel.innerHTML,/D₃ 631 мм/);
+  filter('dn','10');
+  assert.doesNotMatch(panel.innerHTML,/D₃ 631 мм/);
+});

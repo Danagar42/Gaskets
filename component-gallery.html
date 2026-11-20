@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="uk">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Галерея деталей · Фланцеве з’єднання</title>
+<style>
+  *{box-sizing:border-box} :root{color-scheme:light;font:16px/1.4 "Segoe UI",Arial,sans-serif;color:#253a3e;background:#f5f6f3}
+  body{margin:0} main{max-width:1740px;margin:auto;padding:24px clamp(22px,3vw,56px) 32px}
+  header, .view-head, .card-foot, .subnav{display:flex;align-items:center;justify-content:space-between;gap:14px}
+  header{padding-bottom:15px;border-bottom:1px solid #b9c7c4}
+  a{color:#294e4b;text-underline-offset:4px} h1,h2,h3,p{margin:0}
+  h1{font-size:clamp(26px,2.2vw,38px);letter-spacing:-.045em;font-weight:640}
+  h2{font-size:clamp(30px,2.6vw,44px);font-weight:620;letter-spacing:-.045em;line-height:1.06}
+  h3{font-size:21px;letter-spacing:-.025em;font-weight:610}
+  button,select{font:inherit;color:inherit;cursor:pointer} button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #067b75;outline-offset:3px}
+  .subnav{margin:18px 0 20px} label{font-size:14px;color:#405955}
+  select{margin-left:6px;border:1px solid #aabbb6;padding:6px 9px;background:#fff;border-radius:5px}
+  .style-control{display:flex;align-items:center;gap:6px}.style-control select{max-width:390px;font-size:14px}
+  .view-head{align-items:flex-end;margin:12px 0 18px}.view-head p{color:#50615b;font-size:15px;max-width:58ch}
+  .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.grid.compare{grid-template-columns:repeat(5,minmax(0,1fr))}
+  article{min-width:0;background:#fff;border:1px solid #c4cec7;border-radius:8px;overflow:hidden}
+  .scene{position:relative;border-bottom:1px solid #c9d0ca;aspect-ratio:320/360;display:flex;align-items:stretch}
+  canvas,svg{display:block;width:100%;height:100%}
+  .plate{position:absolute;inset:0;--ink:#125d56;--halo:#f6f6ef}
+  .blue .plate{--ink:#cdf8fa;--halo:#163a4d}
+  .dimensions{position:absolute;inset:0;pointer-events:none;color:var(--ink)}
+  .dimensions path{fill:none;stroke:currentColor;stroke-width:1.65;stroke-linejoin:round}
+  .dimensions .extension{stroke-width:1.15}
+  .dimensions .tips,.dimensions circle{fill:currentColor;stroke:none}
+  .dimensions text{fill:currentColor;stroke:var(--halo);stroke-width:5;stroke-linejoin:round;paint-order:stroke fill;font:600 24px "Segoe UI",sans-serif}
+  .studio{background:radial-gradient(ellipse at 40% 24%,#fffffc,#efeee9 72%,#dfdfd9)}
+  .paper,.blue{background-size:18px 18px;background-image:linear-gradient(#9babad1b 1px,transparent 1px),linear-gradient(90deg,#9babad1b 1px,transparent 1px);background-color:#f4f6f0}
+  .blue{background-color:#13364b;background-image:linear-gradient(#afdaef0f 1px,transparent 1px),linear-gradient(90deg,#afdaef0f 1px,transparent 1px)}
+  .section{background:linear-gradient(145deg,#fffdf7,#eee8db)}.macro{background:linear-gradient(155deg,#ecf2ef,#d7e2df)}
+  .cad,.passport{background:#f7faf9;aspect-ratio:640/350}
+  .grid:has(.cad),.grid:has(.passport){grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid.compare{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .card-foot{align-items:flex-start;padding:13px 15px 15px;flex-wrap:wrap;gap:4px}.card-foot small{display:block;margin-top:4px;color:#536661;font-size:14px}
+  .card-foot button{margin-left:auto;color:#235c54;font-size:13px;border:0;background:transparent;padding:4px 0}.card-foot button:hover,a:hover{text-decoration:underline}
+  footer{margin:15px 0 0;color:#61706a;font-size:13px}
+  @media(max-width:1150px){.card-foot{padding:10px}}
+</style>
+<main>
+  <header><h1>Галерея деталей</h1><a href="fastener-demo.html">Повернутися до анкети</a></header>
+  <div class="subnav"><label class="style-control">Стиль <select id="styles"></select></label><label>Порівняти <select id="part"><option value="all">Весь комплект</option></select></label></div>
+  <div class="view-head"><h2 id="heading"></h2><p id="description"></p></div>
+  <div id="grid" class="grid"></div>
+  <footer>Розміри в мм. Деталі показано в окремих масштабах. Геометрія різьби та фасок схематична. L = 112 і S = 36 у нових стилях — демонстраційні значення. Прокладка з обкантовкою показана як приклад виконання.</footer>
+</main>
+<script src="standards.bundle.js"></script><script src="core.js"></script>
+<script src="component-imported-styles.js"></script><script src="component-visuals.js"></script><script src="component-gallery.js"></script>
+</html>

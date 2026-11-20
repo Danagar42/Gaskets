@@ -1,0 +1,201 @@
+{
+  "id": "gost-6402-70",
+  "document": "ГОСТ 6402-70",
+  "title": "Шайби пружинні. Технічні умови",
+  "scope": "Шайби пружинні (гровери) нормального ряду (виконання 1)",
+  "unit": "mm",
+  "accuracyClasses": [
+    "A"
+  ],
+  "executions": {
+    "1": [
+      "A"
+    ]
+  },
+  "minDiameterByExecutionMm": {
+    "1": 2
+  },
+  "source": {
+    "url": "https://opm.ru/GOSTI_PDF/gost_6402-70.pdf",
+    "section": "Таблиця 1, виконання 1 (нормальні)",
+    "verification": "Звірено з ГОСТ 6402-70 та базою КОМПАС-3D v25 (ПОЛИНОМ)",
+    "notes": "Зовнішній діаметр d₂ — розрахунковий габарит за номінальними розмірами нормальної шайби (тип Н): d₁ + 2s. У таблиці ГОСТ окремого d₂ немає."
+  },
+  "sizes": {
+    "2": {
+      "innerDiameterByClassMm": {
+        "A": 2.1
+      },
+      "outerDiameterMm": 3.1,
+      "thicknessMm": 0.5
+    },
+    "2.5": {
+      "innerDiameterByClassMm": {
+        "A": 2.6
+      },
+      "outerDiameterMm": 3.8,
+      "thicknessMm": 0.6
+    },
+    "3": {
+      "innerDiameterByClassMm": {
+        "A": 3.1
+      },
+      "outerDiameterMm": 4.7,
+      "thicknessMm": 0.8
+    },
+    "3.5": {
+      "innerDiameterByClassMm": {
+        "A": 3.6
+      },
+      "outerDiameterMm": 5.6,
+      "thicknessMm": 1.0
+    },
+    "4": {
+      "innerDiameterByClassMm": {
+        "A": 4.1
+      },
+      "outerDiameterMm": 6.1,
+      "thicknessMm": 1.0
+    },
+    "5": {
+      "innerDiameterByClassMm": {
+        "A": 5.1
+      },
+      "outerDiameterMm": 7.5,
+      "thicknessMm": 1.2
+    },
+    "6": {
+      "innerDiameterByClassMm": {
+        "A": 6.1
+      },
+      "outerDiameterMm": 8.9,
+      "thicknessMm": 1.4
+    },
+    "7": {
+      "innerDiameterByClassMm": {
+        "A": 7.2
+      },
+      "outerDiameterMm": 11.2,
+      "thicknessMm": 2.0
+    },
+    "8": {
+      "innerDiameterByClassMm": {
+        "A": 8.2
+      },
+      "outerDiameterMm": 12.2,
+      "thicknessMm": 2.0
+    },
+    "10": {
+      "innerDiameterByClassMm": {
+        "A": 10.2
+      },
+      "outerDiameterMm": 15.2,
+      "thicknessMm": 2.5
+    },
+    "12": {
+      "innerDiameterByClassMm": {
+        "A": 12.2
+      },
+      "outerDiameterMm": 18.2,
+      "thicknessMm": 3.0
+    },
+    "14": {
+      "innerDiameterByClassMm": {
+        "A": 14.2
+      },
+      "outerDiameterMm": 20.6,
+      "thicknessMm": 3.2
+    },
+    "16": {
+      "innerDiameterByClassMm": {
+        "A": 16.3
+      },
+      "outerDiameterMm": 23.3,
+      "thicknessMm": 3.5
+    },
+    "18": {
+      "innerDiameterByClassMm": {
+        "A": 18.3
+      },
+      "outerDiameterMm": 26.3,
+      "thicknessMm": 4.0
+    },
+    "20": {
+      "innerDiameterByClassMm": {
+        "A": 20.5
+      },
+      "outerDiameterMm": 29.5,
+      "thicknessMm": 4.5
+    },
+    "22": {
+      "innerDiameterByClassMm": {
+        "A": 22.5
+      },
+      "outerDiameterMm": 32.5,
+      "thicknessMm": 5.0
+    },
+    "24": {
+      "innerDiameterByClassMm": {
+        "A": 24.5
+      },
+      "outerDiameterMm": 35.5,
+      "thicknessMm": 5.5
+    },
+    "27": {
+      "innerDiameterByClassMm": {
+        "A": 27.5
+      },
+      "outerDiameterMm": 39.5,
+      "thicknessMm": 6.0
+    },
+    "30": {
+      "innerDiameterByClassMm": {
+        "A": 30.5
+      },
+      "outerDiameterMm": 43.5,
+      "thicknessMm": 6.5
+    },
+    "33": {
+      "innerDiameterByClassMm": {
+        "A": 33.5
+      },
+      "outerDiameterMm": 47.5,
+      "thicknessMm": 7.0
+    },
+    "36": {
+      "innerDiameterByClassMm": {
+        "A": 36.5
+      },
+      "outerDiameterMm": 52.5,
+      "thicknessMm": 8.0
+    },
+    "39": {
+      "innerDiameterByClassMm": {
+        "A": 39.5
+      },
+      "outerDiameterMm": 56.5,
+      "thicknessMm": 8.5
+    },
+    "42": {
+      "innerDiameterByClassMm": {
+        "A": 42.5
+      },
+      "outerDiameterMm": 60.5,
+      "thicknessMm": 9.0
+    },
+    "45": {
+      "innerDiameterByClassMm": {
+        "A": 45.5
+      },
+      "outerDiameterMm": 64.5,
+      "thicknessMm": 9.5
+    },
+    "48": {
+      "innerDiameterByClassMm": {
+        "A": 48.5
+      },
+      "outerDiameterMm": 68.5,
+      "thicknessMm": 10.0
+    }
+  }
+}

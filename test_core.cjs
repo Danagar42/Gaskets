@@ -13,6 +13,8 @@ assert.equal(C.number('0,85'), 0.85);
 assert.equal(C.number(''), null);
 assert.equal(C.number('—'), null);
 assert.equal(C.number('1e3'), null);
+assert.equal(C.number(1e-10), 1e-10);
+assert.equal(C.number('1e-10'), null);
 assert.equal(C.number('Infinity'), null);
 
 // Межі температур: пропуск у таблиці, точне значення, нижча та вища за діапазон.
@@ -60,6 +62,11 @@ node.gasket = {...node.gasket,mode:'area',thickness:'2',effectiveArea:'1000',pre
 node.fastener = {...node.fastener,nominalDiameter:'24',count:'32',material:ref};
 node.connection.sideA.material = ref;
 node.connection.sideB.material = ref;
+node.connection.sideA.height = '55';
+node.connection.sideB.height = '36';
+node.connection.sideA.area = '2000';
+node.connection.sideB.area = '2000';
+node.flanges.sideA.mode = 'none'; node.flanges.sideB.mode = 'none';
 node.nut.material = ref;
 assert.equal(C.progress(node,db).done,7);
 node.washers.placement = 'both';
@@ -75,7 +82,7 @@ node.gasket.innerDiameter = '80';
 assert.equal(C.sectionStatus(node,db).gasket,true);
 node.gasket.hasHoles = true;
 assert.equal(C.sectionStatus(node,db).gasket,false);
-node.gasket.holeDiameter = '26';
+node.gasket.holeDiameter = '6';
 assert.equal(C.sectionStatus(node,db).gasket,true);
 node.extras.push({id:C.id(),name:'Проставка',thickness:'5',area:'2000',material:ref});
 assert.equal(C.sectionStatus(node,db).extras,true);
@@ -123,6 +130,8 @@ assert.equal(nuts.sizes['48'].heightMm, 38);
 assert.deepEqual(Array.from(nuts.nonPreferredDiametersMm), [3.5,14,18,22,27]);
 const nut24 = C.nutDimensions(catalog, 'gost-5915-70', '24');
 assert.equal(nut24.heightMm, 21.5);
+assert.equal(nut24.acrossFlatsMm, 36);
+assert.equal(C.nutDimensions(catalog, 'gost-5915-70', '22').acrossFlatsMm, 34);
 assert.equal(nut24.nonPreferred, false);
 assert.equal(C.nutDimensions(catalog, 'gost-5915-70', '14').nonPreferred, true);
 assert.equal(C.nutDimensions(catalog, 'gost-5915-70', '26'), null);
@@ -130,6 +139,7 @@ assert.equal(C.nutDimensions(catalog, 'gost-5915-70', ''), null);
 assert.equal(Object.hasOwn(nut24, 'threadEngagementMm'), false, 'Nut height is not thread engagement length');
 node.nut.standardId = 'gost-5915-70';
 node.fastener.nominalDiameter = '24';
+node.nut.threadedHeight = '20';
 assert.equal(C.sectionStatus(node, db, catalog).nut, true);
 node.fastener.nominalDiameter = '26';
 assert.equal(C.sectionStatus(node, db, catalog).nut, false);
@@ -172,6 +182,8 @@ assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '24', 'A').heightMm, 24);
 assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '24', 'A').heightSymbol, 'H');
 const cap24 = C.nutDimensions(catalog, 'gost-9064-75', '24', 'B');
 assert.equal(cap24.heightMm, 65);
+assert.equal(cap24.acrossFlatsMm, 27);
+assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '24', 'A').acrossFlatsMm, 36);
 assert.equal(cap24.heightSymbol, 'l₁');
 assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '60', 'A').heightMm, 60);
 assert.equal(C.nutDimensions(catalog, 'gost-9064-75', '60', 'B').heightMm, 135);
@@ -190,4 +202,81 @@ assert.equal(C.sectionStatus(node, db, catalog).nut, false);
 node.fastener.nominalDiameter = '24';
 assert.equal(C.sectionStatus(node, db, catalog).nut, true);
 assert.equal(C.validateWorkspace(JSON.parse(JSON.stringify(state))), true);
-console.log('OK: матеріали, анкети, шайби, гайки ГОСТ 5915-70/9064-75 і кроки різьби до М60.');
+
+// Додаток Б (джерело без номера ТУ): graphite gasket parameters from screenshot.
+const graphite = catalog.gaskets['graphite-annex-b1-b2-unidentified'];
+assert.equal(graphite.document,null);
+assert.equal(graphite.source.verificationStatus,'screenshot_only');
+assert.equal(graphite.elasticModulusMPa,100);
+assert.equal(graphite.effectiveWidth.rule,'equalsSealingBandWidth');
+assert.equal(graphite.seatingPressureMPa,5);
+assert.equal(graphite.minimumPressureMPa,3.5);
+assert.equal(graphite.maximumPressureMPa,200);
+assert.equal(Object.keys(graphite.expansionMicroPerCByTemperatureC).length,8);
+assert.equal(graphite.expansionMicroPerCByTemperatureC['50'],0.21);
+assert.equal(graphite.expansionMicroPerCByTemperatureC['400'],1.61);
+assert.equal(C.gasketMediumCoefficient(catalog,graphite.id,'Вода').value,1.6);
+assert.equal(C.gasketMediumCoefficient(catalog,graphite.id,'Пар').value,2.5);
+assert.equal(C.gasketMediumCoefficient(catalog,graphite.id,'Повітря').value,2.5);
+assert.equal(C.gasketMediumCoefficient(catalog,graphite.id,'Водень').value,3.2);
+assert.equal(C.gasketMediumCoefficient(catalog,graphite.id,'Гелій').value,3.2);
+assert.equal(C.gasketMediumCoefficient(catalog,graphite.id,'Відсутнє'),null);
+assert.equal(C.gasketExpansionAt(catalog,graphite.id,'200').value,0.69);
+assert.equal(C.gasketExpansionAt(catalog,graphite.id,'300').value,1.33);
+assert.equal(C.gasketExpansionAt(catalog,graphite.id,'20').value,0.21);
+assert.equal(C.gasketExpansionAt(catalog,graphite.id,'45').temperatureC,50);
+assert.equal(C.gasketExpansionAt(catalog,graphite.id,'75').value,0.43);
+assert.equal(C.gasketExpansionAt(catalog,graphite.id,'90').temperatureC,100);
+assert.equal(C.gasketExpansionAt(catalog,graphite.id,'100').temperatureC,100);
+assert.equal(C.gasketExpansionAt(catalog,graphite.id,'-300'),null);
+assert.equal(C.gasketExpansionAt(catalog,graphite.id,'450'),null,'Do not extrapolate above 400°C');
+assert.equal(C.DEFAULT_GASKET_REFERENCE_ID,graphite.id);
+assert.equal(C.createNode('Нова прокладка').gasket.referenceId,graphite.id);
+node.gasket.referenceId = graphite.id;
+assert.equal(C.sectionStatus(node,db,catalog).gasket,true);
+node.gasket.referenceId = 'unknown-tu';
+assert.equal(C.sectionStatus(node,db,catalog).gasket,false);
+node.gasket.referenceId = '';
+assert.equal(C.sectionStatus(node,db,catalog).gasket,true,'Old workspaces with empty gasket source use the only available reference');
+
+// Нормативні моменти за ТУ (Таблиця 1) та порівняння діапазонів
+const m24Torque = C.standardTorque(catalog, '24');
+assert.deepEqual(m24Torque, { tableId: 'universal-table-1', title: 'Таблиця 1 — Допустимі моменти затягування кріпильних виробів', nominalDiameterMm: 24, minNm: 320, maxNm: 360 });
+assert.equal(C.standardTorque(catalog, '99'), null);
+assert.equal(C.standardTorque(catalog, ''), null);
+
+node.fastener.nominalDiameter = '24';
+node.fastener.targetTorqueMinNm = '';
+node.fastener.targetTorqueMaxNm = '';
+assert.equal(C.effectiveTargetTorque(node, catalog)?.source, 'standard');
+assert.equal(C.effectiveTargetTorque(node, catalog)?.minNm, 320);
+assert.equal(C.effectiveTargetTorque(node, catalog)?.maxNm, 360);
+
+node.fastener.targetTorqueMinNm = '250';
+node.fastener.targetTorqueMaxNm = '350';
+assert.equal(C.effectiveTargetTorque(node, catalog)?.source, 'custom');
+assert.equal(C.effectiveTargetTorque(node, catalog)?.minNm, 250);
+assert.equal(C.effectiveTargetTorque(node, catalog)?.maxNm, 350);
+
+// Повне перекриття: розрахунок 126..374 покриває ТУ 320..360
+const compFull = C.compareTorqueRanges({ calculatedMin: 126, calculatedMax: 374, targetMin: 320, targetMax: 360 });
+assert.equal(compFull.status, 'full');
+assert.equal(compFull.overlapMin, 320);
+assert.equal(compFull.overlapMax, 360);
+
+// Часткове перекриття: розрахунок 50..250 проти ТУ 200..300 (коридор 200..250)
+const compPartial = C.compareTorqueRanges({ calculatedMin: 50, calculatedMax: 250, targetMin: 200, targetMax: 300 });
+assert.equal(compPartial.status, 'partial');
+assert.equal(compPartial.overlapMin, 200);
+assert.equal(compPartial.overlapMax, 250);
+assert(compPartial.description.includes('250'));
+
+// Не перекриває: розрахунок 50..150 проти ТУ 200..300
+const compNone = C.compareTorqueRanges({ calculatedMin: 50, calculatedMax: 150, targetMin: 200, targetMax: 300 });
+assert.equal(compNone.status, 'none');
+
+// Неповні дані
+assert.equal(C.compareTorqueRanges({ calculatedMin: null, calculatedMax: 250, targetMin: 200, targetMax: 300 }).status, 'pending');
+
+assert.equal(C.validateWorkspace(JSON.parse(JSON.stringify(state))),true);
+console.log('OK: матеріали, шайби, гайки, різьба до М60, ТУ затягування та графітові прокладки Б.1–Б.2.');

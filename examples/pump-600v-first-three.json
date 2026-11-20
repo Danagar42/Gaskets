@@ -1,0 +1,365 @@
+{
+  "version": 1,
+  "equipment": [
+    {
+      "id": "pump-600v-first-three",
+      "name": "Насос 600В-1,6/100",
+      "designation": "Перші 3 вузли з Excel",
+      "createdAt": "2026-11-14T20:10:23.624Z",
+      "updatedAt": "2026-11-14T20:10:23.631Z",
+      "nodes": [
+        {
+          "id": "471e0846-ccfb-4146-b965-260d29bc738e",
+          "name": "Вузол №1",
+          "createdAt": "2026-11-14T16:46:30.483Z",
+          "updatedAt": "2026-11-14T16:46:30.483Z",
+          "operating": {
+            "normal": {
+              "pressure": "0.6",
+              "temperature": "45",
+              "medium": "Рідина"
+            },
+            "hydro": {
+              "pressure": "0.85",
+              "temperature": "20",
+              "medium": "Рідина"
+            }
+          },
+          "gasket": {
+            "mode": "ring",
+            "thickness": "2",
+            "outerDiameter": "1300",
+            "innerDiameter": "1150",
+            "hasHoles": true,
+            "holeDiameter": "24",
+            "effectiveArea": "",
+            "pressureArea": "",
+            "referenceId": "graphite-annex-b1-b2-unidentified"
+          },
+          "fastener": {
+            "type": "stud",
+            "nominalDiameter": "24",
+            "count": "32",
+            "lubricated": true,
+            "material": {
+              "name": "Cталь 35Х",
+              "kp": "590",
+              "description": "Cталь 35Х. Заготовки  кріпильних деталей товщиною до 300 мм, (КП 590)"
+            },
+            "threadStandardId": "gost-24705-2004",
+            "pitch": "3",
+            "axialHoleDiameter": "0",
+            "torqueNm": "374.5680669028753",
+            "targetTorqueMinNm": "",
+            "targetTorqueMaxNm": ""
+          },
+          "connection": {
+            "kind": "body-cover",
+            "sideA": {
+              "name": "Кришка",
+              "material": {
+                "name": "Чавун СЧ25",
+                "kp": "",
+                "description": ""
+              },
+              "height": "55",
+              "area": "274157.3661008205"
+            },
+            "sideB": {
+              "name": "Корпус",
+              "material": {
+                "name": "Сталь 25Л",
+                "kp": "235",
+                "description": "25Л. Виливки з товщиною стінки до 100 мм, (КП 235)"
+              },
+              "height": "36",
+              "area": "274157.3661008205"
+            }
+          },
+          "nut": {
+            "material": {
+              "name": "Cталь 35Х",
+              "kp": "590",
+              "description": "Cталь 35Х. Заготовки  кріпильних деталей товщиною до 300 мм, (КП 590)"
+            },
+            "standardId": "gost-5915-70",
+            "typeId": "A"
+          },
+          "washers": {
+            "placement": "a",
+            "material": {
+              "name": "Cталь 35Х",
+              "kp": "590",
+              "description": "Cталь 35Х. Заготовки  кріпильних деталей товщиною до 300 мм, (КП 590)"
+            },
+            "standardId": "gost-11371-78",
+            "accuracyClass": "A",
+            "execution": "1"
+          },
+          "extras": [],
+          "flanges": {
+            "sideA": {
+              "mode": "flange",
+              "innerDiameter": "1050",
+              "boltCircle": "1200",
+              "outerDiameter": "1300",
+              "holeDiameter": "24",
+              "height": "55",
+              "coneHeight": "23",
+              "wallCylinder": "35",
+              "wallCone": "50",
+              "gasketDiameter": ""
+            },
+            "sideB": {
+              "mode": "none",
+              "innerDiameter": "",
+              "boltCircle": "",
+              "outerDiameter": "",
+              "holeDiameter": "",
+              "height": "",
+              "coneHeight": "0",
+              "wallCylinder": "",
+              "wallCone": "",
+              "gasketDiameter": ""
+            }
+          }
+        },
+        {
+          "id": "bdfad465-0bad-44e1-8a9e-f532a2905086",
+          "name": "Вузол №2",
+          "createdAt": "2026-11-14T16:46:30.498Z",
+          "updatedAt": "2026-11-14T16:46:30.498Z",
+          "operating": {
+            "normal": {
+              "pressure": "0.6",
+              "temperature": "45",
+              "medium": "Рідина"
+            },
+            "hydro": {
+              "pressure": "0.85",
+              "temperature": "20",
+              "medium": "Рідина"
+            }
+          },
+          "gasket": {
+            "mode": "ring",
+            "thickness": "2",
+            "outerDiameter": "1100",
+            "innerDiameter": "990",
+            "hasHoles": true,
+            "holeDiameter": "24",
+            "effectiveArea": "",
+            "pressureArea": "",
+            "referenceId": "graphite-annex-b1-b2-unidentified"
+          },
+          "fastener": {
+            "type": "bolt",
+            "nominalDiameter": "24",
+            "count": "28",
+            "lubricated": true,
+            "material": {
+              "name": "Cталь 35Х",
+              "kp": "590",
+              "description": "Cталь 35Х. Заготовки  кріпильних деталей товщиною до 300 мм, (КП 590)"
+            },
+            "threadStandardId": "gost-24705-2004",
+            "pitch": "3",
+            "axialHoleDiameter": "0",
+            "torqueNm": "88.97809394689328",
+            "targetTorqueMinNm": "",
+            "targetTorqueMaxNm": ""
+          },
+          "connection": {
+            "kind": "flange-flange",
+            "sideA": {
+              "name": "Фланець 1",
+              "material": {
+                "name": "08Х18Н10Т, 12Х18Н10Т",
+                "kp": "196",
+                "description": "08Х18Н10Т, 12Х18Н10Т. Сортовий прокат та поковки з нього товщиною або діаметром до 200 мм, (КП 196)"
+              },
+              "height": "15",
+              "area": "167896.13618579932"
+            },
+            "sideB": {
+              "name": "Фланець 2",
+              "material": {
+                "name": "08Х18Н10Т, 12Х18Н10Т",
+                "kp": "196",
+                "description": "08Х18Н10Т, 12Х18Н10Т. Сортовий прокат та поковки з нього товщиною або діаметром до 200 мм, (КП 196)"
+              },
+              "height": "15",
+              "area": "167896.13618579932"
+            }
+          },
+          "nut": {
+            "material": {
+              "name": "Cталь 35Х",
+              "kp": "590",
+              "description": "Cталь 35Х. Заготовки  кріпильних деталей товщиною до 300 мм, (КП 590)"
+            },
+            "standardId": "gost-5915-70",
+            "typeId": "A"
+          },
+          "washers": {
+            "placement": "none",
+            "material": null,
+            "standardId": "gost-11371-78",
+            "accuracyClass": "A",
+            "execution": "1"
+          },
+          "extras": [],
+          "flanges": {
+            "sideA": {
+              "mode": "flange",
+              "innerDiameter": "990",
+              "boltCircle": "1060",
+              "outerDiameter": "1100",
+              "holeDiameter": "26",
+              "height": "15",
+              "coneHeight": "0",
+              "wallCylinder": "12",
+              "wallCone": "12",
+              "gasketDiameter": ""
+            },
+            "sideB": {
+              "mode": "flange",
+              "innerDiameter": "990",
+              "boltCircle": "1060",
+              "outerDiameter": "1100",
+              "holeDiameter": "26",
+              "height": "15",
+              "coneHeight": "0",
+              "wallCylinder": "12",
+              "wallCone": "12",
+              "gasketDiameter": ""
+            }
+          }
+        },
+        {
+          "id": "40fb14c4-3bc6-4bae-93a2-8f43dbb69a0a",
+          "name": "Вузол №3",
+          "createdAt": "2026-11-14T16:46:30.510Z",
+          "updatedAt": "2026-11-14T16:46:30.510Z",
+          "operating": {
+            "normal": {
+              "pressure": "0.6",
+              "temperature": "45",
+              "medium": "Рідина"
+            },
+            "hydro": {
+              "pressure": "0.85",
+              "temperature": "20",
+              "medium": "Рідина"
+            }
+          },
+          "gasket": {
+            "mode": "ring",
+            "thickness": "2",
+            "outerDiameter": "800",
+            "innerDiameter": "680",
+            "hasHoles": true,
+            "holeDiameter": "24",
+            "effectiveArea": "",
+            "pressureArea": "",
+            "referenceId": "graphite-annex-b1-b2-unidentified"
+          },
+          "fastener": {
+            "type": "stud",
+            "nominalDiameter": "24",
+            "count": "28",
+            "lubricated": true,
+            "material": {
+              "name": "Cталь 35Х",
+              "kp": "590",
+              "description": "Cталь 35Х. Заготовки  кріпильних деталей товщиною до 300 мм, (КП 590)"
+            },
+            "threadStandardId": "gost-24705-2004",
+            "pitch": "3",
+            "axialHoleDiameter": "0",
+            "torqueNm": "406.2805448234121",
+            "targetTorqueMinNm": "",
+            "targetTorqueMaxNm": ""
+          },
+          "connection": {
+            "kind": "body-cover",
+            "sideA": {
+              "name": "Кришка",
+              "material": {
+                "name": "08Х18Н10Т, 12Х18Н10Т",
+                "kp": "196",
+                "description": "08Х18Н10Т, 12Х18Н10Т. Сортовий прокат та поковки з нього товщиною або діаметром до 200 мм, (КП 196)"
+              },
+              "height": "20",
+              "area": "195768.2373"
+            },
+            "sideB": {
+              "name": "Корпус",
+              "material": {
+                "name": "Сталь 25Л",
+                "kp": "235",
+                "description": "25Л. Виливки з товщиною стінки до 100 мм, (КП 235)"
+              },
+              "height": "24",
+              "area": "126819.81224011276"
+            }
+          },
+          "nut": {
+            "material": {
+              "name": "Cталь 35Х",
+              "kp": "590",
+              "description": "Cталь 35Х. Заготовки  кріпильних деталей товщиною до 300 мм, (КП 590)"
+            },
+            "standardId": "gost-5915-70",
+            "typeId": "A"
+          },
+          "washers": {
+            "placement": "none",
+            "material": null,
+            "standardId": "gost-11371-78",
+            "accuracyClass": "A",
+            "execution": "1"
+          },
+          "extras": [],
+          "flanges": {
+            "sideA": {
+              "mode": "flange",
+              "innerDiameter": "590",
+              "boltCircle": "750",
+              "outerDiameter": "800",
+              "holeDiameter": "26",
+              "height": "20",
+              "coneHeight": "0",
+              "wallCylinder": "12",
+              "wallCone": "12",
+              "gasketDiameter": ""
+            },
+            "sideB": {
+              "mode": "none",
+              "innerDiameter": "",
+              "boltCircle": "",
+              "outerDiameter": "",
+              "holeDiameter": "",
+              "height": "",
+              "coneHeight": "0",
+              "wallCylinder": "",
+              "wallCone": "",
+              "gasketDiameter": ""
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "preferences": {
+    "recent": [],
+    "favorites": []
+  },
+  "source": {
+    "file": "Насос 600В-1,6_100.xlsx",
+    "sha256": "935da68691f6be6a3263340be97af5b499d41383b8f1ec3b636d6c47e6336bab",
+    "note": "Вхідні параметри вузлів №1–3. Характеристики матеріалів читаються з поточної бази; E/α 25Л не підставляються з контрольного набору."
+  },
+  "format": "flange-workspace",
+  "exportedAt": "2026-11-14T20:10:23.633Z"
+}

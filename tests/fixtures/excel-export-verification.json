@@ -1,0 +1,51 @@
+{
+  "engine": "Microsoft Excel desktop",
+  "file": "export-recalculated.xlsx",
+  "sha256": "f3f62fd74839b3a68766b4692ea4d6b0031b4c7f98bcb222a3306f1042107fdf",
+  "comparisons": 1088,
+  "differences": [],
+  "bounds": [
+    {
+      "node": "Вузол №1",
+      "minimum": 126,
+      "maximum": 374
+    },
+    {
+      "node": "Вузол №2",
+      "minimum": 89,
+      "maximum": 379
+    },
+    {
+      "node": "Вузол №3",
+      "minimum": 63,
+      "maximum": 406
+    },
+    {
+      "node": "Вузол №4",
+      "minimum": 112,
+      "maximum": 248
+    },
+    {
+      "node": "Дві шайби + 2 проставки",
+      "minimum": 128,
+      "maximum": 376
+    },
+    {
+      "node": "Ручні площі",
+      "minimum": 126,
+      "maximum": 374
+    },
+    {
+      "node": "Болт без шайб",
+      "minimum": 122,
+      "maximum": 370
+    },
+    {
+      "node": "Нульовий тиск ГВ",
+      "minimum": 110,
+      "maximum": 521
+    }
+  ],
+  "sourceSha256": "935da68691f6be6a3263340be97af5b499d41383b8f1ec3b636d6c47e6336bab",
+  "note": "25Л: verification-only E/Alpha from Excel; node 4 cast-iron body thread omitted with explicit warning."
+}

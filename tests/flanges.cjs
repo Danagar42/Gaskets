@@ -1,0 +1,107 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const C = require('../core.js');
+const G = require('../calculations.js');
+const fixture = require('./fixtures/control-node-1.json');
+const close = (a,b) => assert.ok(a !== null && Math.abs(a-b) <= Math.max(1e-9,Math.abs(b)*1e-10),`${a} != ${b}`);
+let comparisons = 0, bounds = 0;
+for (const example of fixture.flangeCases) {
+  const result = G.flange(example.input);
+  const rows = {13:result.values.e1,14:result.values.e2,15:result.values.e3,18:result.values.s0,19:result.values.allowable,22:result.values.y,23:result.values.WA,24:result.values.WB,25:result.values.WC,27:result.values.moment};
+  for (const [key,row] of [['pressureA',31],['bendingA',34],['pressureB',38],['bendingB',41],['bendingC',45]]) {
+    const check = result.checks[key]; rows[row] = check.actual; rows[row+1] = check.allowable; rows[row+2] = check.margin;
+  }
+  for (const check of example.checks) { close(rows[Number(check.cell.slice(1))],check.value); comparisons++; }
+  for (let i=0;i<3;i++) if (typeof example.upperChecks[i].value === 'number') { close(result.bounds[i].force,example.upperChecks[i].value); bounds++; }
+  assert.ok(Object.values(result.checks).filter(check=>check.active).every(check=>check.passed));
+  if (example.mode === 'hydro') assert.equal(result.checks.bendingA.active,false);
+}
+assert.equal(comparisons,200);
+const base = fixture.flangeCases.find(item=>item.sheet === 'Вузол №4' && item.side === 'sideA' && item.mode === 'normal').input;
+assert.equal(G.flange(base).checks.bendingC.active,true,'hf=s2 remains an active C-C check');
+assert.equal(G.flange({...base,height:base.wallCone+1}).checks.bendingC.active,false);
+assert.equal(G.flange({...base,boltCircle:base.gasketDiameter}).bounds[0].unbounded,true);
+assert.equal(G.flange({...base,boltCircle:base.gasketDiameter}).checks.bendingA.actual,0);
+assert.equal(G.flange({...base,outerDiameter:base.innerDiameter}).validGeometry,false);
+assert.equal(G.flange({...base,wallCylinder:0}).bounds[0].force,null);
+assert.equal(G.flange({...base,yieldMPa:null}).checks.bendingA.passed,null);
+assert.notEqual(G.flange({...base,yieldMPa:null}).values.allowable,null,'Explicit Rm/2.6 fallback from Excel');
+assert.notEqual(G.flange({...base,ultimateMPa:null}).checks.bendingA.allowable,null,'Explicit 2Rp fallback from Excel');
+assert.equal(G.flange({...base,mode:'unknown'}).checks.pressureA.passed,null);
+const cast = fixture.flangeCases.find(item=>item.input.castIron && item.mode === 'normal').input;
+close(G.flange({...cast,yieldMPa:null}).checks.bendingA.allowable,cast.ultimateMPa/2.2);
+const castC = {...cast,height:cast.wallCone,castIronC:false};
+close(G.flange(castC).checks.bendingC.allowable,Math.min((2.5-cast.yieldMPa/cast.ultimateMPa)*cast.yieldMPa,2*cast.yieldMPa),'Literal W46: side A keeps Rp/Rm for C-C');
+assert.equal(G.flange({...castC,yieldMPa:null}).checks.bendingC.passed,null);
+close(G.flange({...castC,castIronC:true,yieldMPa:null}).checks.bendingC.allowable,cast.ultimateMPa/2.2,'R46 cast-iron branch');
+const context = vm.createContext({});
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../standards.bundle.js'),'utf8'),context);
+const catalog = context.FlangeStandardsDB;
+const material = {name:'Тестова сталь',grades:[{kp:'',description:'Тест',data:{E:{20:215,50:212},Alpha:{20:11.5,50:11.5},RTp:{20:590,50:579},RTm:{20:736,50:726}}}]};
+const node = C.createNode('Фланець');
+node.operating = {normal:{pressure:'0.6',temperature:'45',medium:'Рідина'},hydro:{pressure:'0.85',temperature:'20',medium:'Вода'}};
+Object.assign(node.gasket,{thickness:'2',outerDiameter:'1300',innerDiameter:'1150',hasHoles:true,holeDiameter:'24'});
+Object.assign(node.fastener,{nominalDiameter:'24',count:'32',torqueNm:'200'});
+for (const part of [node.fastener,node.nut,node.connection.sideA,node.connection.sideB]) part.material = C.materialRef(material,material.grades[0]);
+node.connection.sideA.height = '55'; node.connection.sideB.height = '36';
+const baseline = G.nodeLimits(node,[material],catalog);
+assert.equal(baseline.complete,false,'Old questionnaires do not silently skip unknown flange applicability');
+node.flanges.sideB.mode = 'none';
+Object.assign(node.flanges.sideA,{mode:'flange',innerDiameter:'1050',boltCircle:'1200',outerDiameter:'1300',holeDiameter:'24',height:'55',coneHeight:'23',wallCylinder:'35',wallCone:'50'});
+const before = JSON.stringify(node);
+let result = G.nodeLimits(node,[material],catalog);
+assert.equal(JSON.stringify(node),before);
+assert.equal(result.flanges.configured,true);
+assert.equal(result.complete,true); assert.equal(result.rangePassed,true);
+assert.equal(result.maximum.scope,'all-configured-parts');
+close(result.maximum.torqueNm,baseline.maximum.torqueNm);
+assert.ok(result.verification.maximum.checks.some(item=>item.group === 'flanges'));
+node.flanges.sideA.height = '2'; node.flanges.sideA.wallCylinder = '2'; node.flanges.sideA.wallCone = '2';
+result = G.nodeLimits(node,[material],catalog);
+assert.ok(result.maximum.torqueNm < baseline.maximum.torqueNm,'A weak active flange constrains the maximum');
+assert.ok(result.maximum.governing.some(item=>item.side === 'sideA'));
+node.flanges.sideA.innerDiameter = '';
+assert.equal(G.nodeLimits(node,[material],catalog).maximum.torqueNm,null,'Missing active flange input blocks maximum');
+node.flanges.sideA.mode = 'none';
+assert.equal(G.nodeLimits(node,[material],catalog).rangePassed,true,'Both sides explicitly excluded, all other criteria still checked');
+node.flanges.sideA.mode = 'flange'; node.flanges.sideA.innerDiameter = '1050';
+node.gasket.mode = 'area'; node.gasket.effectiveArea = '112172'; node.gasket.pressureArea = '1178588';
+node.connection.sideA.area = '274157'; node.connection.sideB.area = '274157';
+assert.equal(G.nodeFlanges(node,[material],catalog).sides.sideA.states.normal.validGeometry,false);
+node.flanges.sideA.gasketDiameter = '1225';
+assert.equal(G.nodeFlanges(node,[material],catalog).sides.sideA.states.normal.validGeometry,true);
+assert.equal(C.validateWorkspace({version:1,equipment:[{...C.createEquipment('Тест'),nodes:[node]}]}),true);
+const bad = structuredClone(node); bad.flanges.sideA.height = 123;
+assert.equal(C.validateWorkspace({version:1,equipment:[{...C.createEquipment('Тест'),nodes:[bad]}]}),false);
+assert.equal(C.automaticHoleDiameter(10), 11);
+assert.equal(C.automaticHoleDiameter('10'), 11);
+assert.equal(C.automaticHoleDiameter(16), 18);
+assert.equal(C.automaticHoleDiameter(24), 26);
+assert.equal(C.automaticHoleDiameter(27), 30);
+assert.equal(C.automaticHoleDiameter(30), 33);
+assert.equal(C.automaticHoleDiameter(0), null);
+assert.equal(C.automaticHoleDiameter(-5), null);
+assert.equal(C.automaticHoleDiameter(''), null);
+assert.equal(G.automaticHoleDiameter(24), 26);
+
+// Test manual override vs automatic hole diameter
+const autoNode = structuredClone(node);
+autoNode.fastener.nominalDiameter = '24';
+autoNode.flanges.sideA.holeDiameter = '';
+const autoFlanges = G.nodeFlanges(autoNode,[material],catalog);
+assert.ok(autoFlanges.sides.sideA.states.normal.values.WA > 0);
+autoNode.flanges.sideA.holeDiameter = '28';
+const manualFlanges = G.nodeFlanges(autoNode,[material],catalog);
+assert.notEqual(autoFlanges.sides.sideA.states.normal.values.WA, manualFlanges.sides.sideA.states.normal.values.WA);
+
+// Test undefined and null holeDiameter fallback to automatic
+delete autoNode.flanges.sideA.holeDiameter;
+const undefinedFlanges = G.nodeFlanges(autoNode,[material],catalog);
+assert.equal(undefinedFlanges.sides.sideA.states.normal.values.WA, autoFlanges.sides.sideA.states.normal.values.WA);
+autoNode.flanges.sideA.holeDiameter = null;
+const nullFlanges = G.nodeFlanges(autoNode,[material],catalog);
+assert.equal(nullFlanges.sides.sideA.states.normal.values.WA, autoFlanges.sides.sideA.states.normal.values.WA);
+
+console.log(`OK: ${comparisons} величин фланців усіх 4 вузлів, ${bounds} верхніх обмежень, чавун, h2=0, hf=s2, нульове плече, ручний Dm і повний контроль меж.`);

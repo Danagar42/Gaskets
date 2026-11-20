@@ -1,0 +1,18 @@
+# Dependencies and caches
+node_modules/
+__pycache__/
+*.pyc
+
+# Operating system / IDE artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Office temporary files and test workbooks
+~$*
+*.xlsx
+!Насос 600В-1,6_100.xlsx
+
+# Scratch verification artifacts
+inspection_scratch/verification/

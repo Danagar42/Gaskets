@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="uk">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Графіка деталей · Файл для редагування</title>
+<style>
+  *{box-sizing:border-box} :root{color-scheme:light;font:16px/1.4 "Segoe UI",Arial,sans-serif;color:#253a3e;background:#f5f6f3}
+  body{margin:0} main{max-width:1740px;margin:auto;padding:24px clamp(22px,3vw,56px) 32px}
+  header, .view-head, .card-foot, .subnav{display:flex;align-items:center;justify-content:space-between;gap:14px}
+  header{padding-bottom:15px;border-bottom:1px solid #b9c7c4}
+  a{color:#294e4b;text-underline-offset:4px} h1,h2,h3,p{margin:0}
+  h1{font-size:clamp(26px,2.2vw,38px);letter-spacing:-.045em;font-weight:640}
+  h2{font-size:clamp(30px,2.6vw,44px);font-weight:620;letter-spacing:-.045em;line-height:1.06}
+  h3{font-size:21px;letter-spacing:-.025em;font-weight:610}
+  button,select{font:inherit;color:inherit;cursor:pointer} button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #067b75;outline-offset:3px}
+  .subnav{margin:18px 0 20px} label{font-size:14px;color:#405955}
+  select{margin-left:6px;border:1px solid #aabbb6;padding:6px 9px;background:#fff;border-radius:5px}
+  .style-control{display:flex;align-items:center;gap:6px}.style-control select{max-width:390px;font-size:14px}
+  .view-head{align-items:flex-end;margin:12px 0 18px}.view-head p{color:#50615b;font-size:15px;max-width:58ch}
+  .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.grid.compare{grid-template-columns:repeat(5,minmax(0,1fr))}
+  article{min-width:0;background:#fff;border:1px solid #c4cec7;border-radius:8px;overflow:hidden}
+  .scene{position:relative;border-bottom:1px solid #c9d0ca;aspect-ratio:320/360;display:flex;align-items:stretch}
+  canvas,svg{display:block;width:100%;height:100%}
+  .plate{position:absolute;inset:0;--ink:#125d56;--halo:#f6f6ef}
+  .blue .plate{--ink:#cdf8fa;--halo:#163a4d}
+  .dimensions{position:absolute;inset:0;pointer-events:none;color:var(--ink)}
+  .dimensions path{fill:none;stroke:currentColor;stroke-width:1.65;stroke-linejoin:round}
+  .dimensions .extension{stroke-width:1.15}
+  .dimensions .tips,.dimensions circle{fill:currentColor;stroke:none}
+  .dimensions text{fill:currentColor;stroke:var(--halo);stroke-width:5;stroke-linejoin:round;paint-order:stroke fill;font:600 24px "Segoe UI",sans-serif}
+  .studio{background:radial-gradient(ellipse at 40% 24%,#fffffc,#efeee9 72%,#dfdfd9)}
+  .paper,.blue{background-size:18px 18px;background-image:linear-gradient(#9babad1b 1px,transparent 1px),linear-gradient(90deg,#9babad1b 1px,transparent 1px);background-color:#f4f6f0}
+  .blue{background-color:#13364b;background-image:linear-gradient(#afdaef0f 1px,transparent 1px),linear-gradient(90deg,#afdaef0f 1px,transparent 1px)}
+  .section{background:linear-gradient(145deg,#fffdf7,#eee8db)}.macro{background:linear-gradient(155deg,#ecf2ef,#d7e2df)}
+  .cad,.passport{background:#f7faf9;aspect-ratio:640/350}
+  .grid:has(.cad),.grid:has(.passport){grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid.compare{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .card-foot{align-items:flex-start;padding:13px 15px 15px;flex-wrap:wrap;gap:4px}.card-foot small{display:block;margin-top:4px;color:#536661;font-size:14px}
+  .card-foot button{margin-left:auto;color:#235c54;font-size:13px;border:0;background:transparent;padding:4px 0}.card-foot button:hover,a:hover{text-decoration:underline}
+  footer{margin:15px 0 0;color:#61706a;font-size:13px}
+  @media(max-width:1150px){.card-foot{padding:10px}}
+</style>
+<main>
+  <header><h1>Графіка деталей</h1><span>Файл для редагування</span></header>
+  <div class="subnav"><label class="style-control">Стиль <select id="styles"></select></label><label>Порівняти <select id="part"><option value="all">Весь комплект</option></select></label></div>
+  <div class="view-head"><h2 id="heading"></h2><p id="description"></p></div>
+  <div id="grid" class="grid"></div>
+  <footer>Розміри в мм. Деталі показано в окремих масштабах. Геометрія різьби та фасок схематична. L = 112 і S = 36 у нових стилях — демонстраційні значення. Прокладка з обкантовкою показана як приклад виконання.</footer>
+</main>
+<script>
+'use strict';
+// ================================================================
+// РЕДАГУВАННЯ ГРАФІКИ
+// 1. Палітра — PALETTE нижче.
+// 2. Приклади деталей і розміри — DEMO.
+// 3. Гібридний паспорт — RenderV5.stud / nut / gasket / washer.
+// 4. Креслення — paperDrawing.
+// Після збереження оновіть сторінку. Зміни в цьому файлі можна
+// перевірити на чотирьох деталях і в режимі порівняння.
+// ================================================================
+const PALETTE = {
+  dimensions:'#006d73',
+  dimensionText:'#005f66',
+  outline:'#2b434f',
+  paper:'#f7faf9',
+  steelLight:'#f2f7f8',
+  steelDark:'#788f99',
+  graphite:'#45555c'
+};
+const DEMO = {
+  diameter:24,
+  pitch:3,
+  studLength:112,
+  nutHeight:21.5,
+  nutAcrossFlats:36,
+  gasketOuter:320,
+  gasketInner:200,
+  gasketThickness:3,
+  washerOuter:44,
+  washerInner:25,
+  washerThickness:4
+};
+const FlangeComponentVisuals = {
+  styles:[
+  {
+    "id": "paper",
+    "name": "Креслення",
+    "desc": "Прямі проєкції, осьові лінії та розміри."
+  },
+  {
+    "id": "passport",
+    "name": "Гібридний паспорт",
+    "desc": "Головний вигляд, переріз і збільшений фрагмент."
+  }
+],
+  create(style,key,part,pitch) {
+    let svg;
+    if(style==='passport') svg=passportDrawing(key,part,pitch);
+    else svg=paperDrawing(key,part,pitch);
+    // Замінюємо базові кольори вибраною палітрою на всіх SVG-елементах.
+    const colors = {
+      '#006d73':PALETTE.dimensions, '#147165':PALETTE.dimensions,
+      '#005f66':PALETTE.dimensionText, '#2b434f':PALETTE.outline,
+      '#283e42':PALETTE.outline, '#f7faf9':PALETTE.paper,
+      '#f4f6f0':PALETTE.paper, '#f2f7f8':PALETTE.steelLight,
+      '#788f99':PALETTE.steelDark, '#45555c':PALETTE.graphite
+    };
+    for(const element of svg.querySelectorAll('*')) {
+      for(const name of ['fill','stroke','stop-color']) {
+        const value=element.getAttribute(name);
+        if(colors[value]) element.setAttribute(name,colors[value]);
+      }
+    }
+    return svg;
+  }
+};
+// ================================================================
+// ГІБРИДНИЙ ПАСПОРТ
+// ================================================================
+
+// Visual renderers adapted from the user-provided code_artifact (1).html.
+// Dimensions supplied by the gallery. Additional length and wrench sizes are demo values.
+function passportDrawing(key,part,pitch) {
+ const fmt = n => Number(n).toLocaleString('uk-UA',{maximumFractionDigits:2});
+ const diameter = part.diameter || part.outer;
+ const GOST_DB = {[diameter]:{studLength:part.length ?? '—',threadEnd:'—',nutS:part.acrossFlats ?? '—',nutM:part.h,nutCapH:part.h,washerD1:part.inner,washerD2:part.outer,washerS:part.h}};
+     function buildStudGeometry(cx, topY, botY, halfW, pitchPx, threadLenPx) {
+      const chamfer = Math.min(5.5, halfW * 0.24);
+      const toothDepth = Math.min(3.8, Math.max(2.0, pitchPx * 0.34));
+      const step = Math.max(5.5, Math.min(10.5, pitchPx * 2.4));
+
+      const t1End = topY + threadLenPx;
+      const t2Start = botY - threadLenPx;
+
+      let leftPath = `M ${cx - halfW + chamfer} ${topY} L ${cx + halfW - chamfer} ${topY} L ${cx + halfW} ${topY + chamfer}`;
+
+      // Правий бік — верхня різьба
+      let y = topY + chamfer;
+      while (y + step <= t1End) {
+        const yMid1 = y + step * 0.42;
+        const yMid2 = y + step * 0.58;
+        const yNext = y + step;
+        leftPath += ` L ${cx + halfW - toothDepth} ${yMid1.toFixed(1)} L ${cx + halfW - toothDepth} ${yMid2.toFixed(1)} L ${cx + halfW} ${yNext.toFixed(1)}`;
+        y = yNext;
+      }
+      // Збіг верхньої різьби (плавний вихід зуба)
+      leftPath += ` L ${cx + halfW - toothDepth * 0.45} ${(y + step * 0.45).toFixed(1)} L ${cx + halfW} ${(y + step * 0.9).toFixed(1)}`;
+
+      // Гладкий циліндричний стрижень по правому краю
+      const runoutBotY = t2Start - step * 0.9;
+      leftPath += ` L ${cx + halfW} ${runoutBotY.toFixed(1)}`;
+      leftPath += ` L ${cx + halfW - toothDepth * 0.45} ${(t2Start - step * 0.45).toFixed(1)} L ${cx + halfW} ${t2Start.toFixed(1)}`;
+
+      // Правий бік — нижня різьба
+      y = t2Start;
+      while (y + step <= botY - chamfer) {
+        const yMid1 = y + step * 0.42;
+        const yMid2 = y + step * 0.58;
+        const yNext = y + step;
+        leftPath += ` L ${cx + halfW - toothDepth} ${yMid1.toFixed(1)} L ${cx + halfW - toothDepth} ${yMid2.toFixed(1)} L ${cx + halfW} ${yNext.toFixed(1)}`;
+        y = yNext;
+      }
+
+      // Нижня фаска
+      leftPath += ` L ${cx + halfW} ${botY - chamfer} L ${cx + halfW - chamfer} ${botY} L ${cx - halfW + chamfer} ${botY} L ${cx - halfW} ${botY - chamfer}`;
+
+      // Лівий бік — нижня різьба (знизу вгору, зі зміщенням півкроку як у справжньої різьби)
+      y = botY - chamfer;
+      while (y - step >= t2Start) {
+        const yMid1 = y - step * 0.42;
+        const yMid2 = y - step * 0.58;
+        const yNext = y - step;
+        leftPath += ` L ${cx - halfW + toothDepth} ${yMid1.toFixed(1)} L ${cx - halfW + toothDepth} ${yMid2.toFixed(1)} L ${cx - halfW} ${yNext.toFixed(1)}`;
+        y = yNext;
+      }
+      leftPath += ` L ${cx - halfW + toothDepth * 0.45} ${(y - step * 0.45).toFixed(1)} L ${cx - halfW} ${(y - step * 0.9).toFixed(1)}`;
+
+      // Гладкий циліндричний стрижень по лівому краю
+      const runoutTopY = t1End + step * 0.9;
+      leftPath += ` L ${cx - halfW} ${runoutTopY.toFixed(1)}`;
+      leftPath += ` L ${cx - halfW + toothDepth * 0.45} ${(t1End + step * 0.45).toFixed(1)} L ${cx - halfW} ${t1End.toFixed(1)}`;
+
+      // Лівий бік — верхня різьба
+      y = t1End;
+      while (y - step >= topY + chamfer) {
+        const yMid1 = y - step * 0.42;
+        const yMid2 = y - step * 0.58;
+        const yNext = y - step;
+        leftPath += ` L ${cx - halfW + toothDepth} ${yMid1.toFixed(1)} L ${cx - halfW + toothDepth} ${yMid2.toFixed(1)} L ${cx - halfW} ${yNext.toFixed(1)}`;
+        y = yNext;
+      }
+
+      leftPath += ` L ${cx - halfW} ${topY + chamfer} Z`;
+
+      // Гвинтові лінії витків усередині контуру
+      let threadLines = '';
+      for (let yy = topY + chamfer + step * 0.5; yy < t1End; yy += step) {
+        threadLines += `M ${cx - halfW + 1} ${(yy + step * 0.35).toFixed(1)} L ${cx + halfW - 1} ${(yy - step * 0.15).toFixed(1)} `;
+      }
+      for (let yy = t2Start + step * 0.5; yy < botY - chamfer; yy += step) {
+        threadLines += `M ${cx - halfW + 1} ${(yy + step * 0.35).toFixed(1)} L ${cx + halfW - 1} ${(yy - step * 0.15).toFixed(1)} `;
+      }
+
+      return {
+        bodyPath: leftPath,
+        threadLines,
+        chamfer,
+        toothDepth,
+        step,
+        t1End,
+        t2Start,
+        runoutTopY,
+        runoutBotY
+      };
+    }
+
+    /**
+     * Генерує проекційні координати шестигранника (вид на 3 грані, пропорції E/4 : E/2 : E/4)
+     * та математично коректні дуги гіпербол перетину конуса фаски з гранями.
+     */
+    function buildHexNutMetrics(cx, baseY, d, nutType) {
+      const spec = GOST_DB[d];
+      const halfE = 56 + d * 0.68;      // E/2 описаного кола шестигранника
+      const edgeX = halfE * 0.5;        // E/4 — внутрішні вертикальні ребра граней
+      const heightMm = nutType === 'B' ? spec.nutCapH : spec.nutM;
+      const hPx = nutType === 'B' ? (68 + spec.nutCapH * 1.15) : (52 + spec.nutM * 1.45);
+      const topY = baseY - hPx;
+      const chamferDrop = Math.max(8, halfE * 0.14);
+      const centerArcDip = chamferDrop * 0.42;
+
+      return {
+        spec,
+        cx,
+        baseY,
+        topY,
+        hPx,
+        halfE,
+        edgeX,
+        chamferDrop,
+        centerArcDip,
+        heightMm,
+        isCapped: nutType === 'B'
+      };
+    }
+
+
+     const RenderV5 = {
+      defs() {
+        return `
+          <defs>
+            <linearGradient id="v5-steel" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#7c939d"/>
+              <stop offset="22%" stop-color="#c6d5da"/>
+              <stop offset="40%" stop-color="#f2f7f8"/>
+              <stop offset="70%" stop-color="#b4c5cb"/>
+              <stop offset="100%" stop-color="#788f99"/>
+            </linearGradient>
+            <pattern id="v5-hatch" width="7" height="7" patternUnits="userSpaceOnUse">
+              <rect width="7" height="7" fill="#dce6e8"/>
+              <path d="M-2 2 l4 -4 M0 7 l7 -7 M5 9 l4 -4" stroke="#415b66" stroke-width="1"/>
+            </pattern>
+            <pattern id="v5-hatch-gasket" width="8" height="8" patternUnits="userSpaceOnUse">
+              <rect width="8" height="8" fill="#526269"/>
+              <path d="M-2 2 l4 -4 M0 8 l8 -8 M6 10 l4 -4 M-2 6 l4 4 M0 0 l8 8 M6 -2 l4 4" stroke="#d5e0e3" stroke-width="0.9"/>
+            </pattern>
+            <marker id="v5-arr" viewBox="0 0 8 6" refX="8" refY="3" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
+              <path d="M0 0 L8 3 L0 6 Z" fill="#006d73"/>
+            </marker>
+          </defs>
+        `;
+      },
+
+      stud(d, p, count) {
+        const spec = GOST_DB[d];
+        const cx = 210, topY = 28, botY = 294;
+        const halfW = 15 + d * 0.62;
+        const g = buildStudGeometry(cx, topY, botY, halfW, p, 76);
+
+        // Кругла лупа збігу різьби (Detail View I 4:1)
+        const lx = 468, ly = 166, lr = 76;
+
+        return `
+          ${this.defs()}
+          <defs>
+            <clipPath id="v5-stud-loupe"><circle cx="${lx}" cy="${ly}" r="${lr}"/></clipPath>
+          </defs>
+
+          <line x1="${cx}" y1="14" x2="${cx}" y2="308" stroke="#67848e" stroke-width="1" stroke-dasharray="12 4 2 4"/>
+          <path d="${g.bodyPath}" fill="url(#v5-steel)" stroke="#2b434f" stroke-width="2" stroke-linejoin="round"/>
+          <path d="${g.threadLines}" fill="none" stroke="#3c5866" stroke-width="1"/>
+          <line x1="${cx - halfW}" y1="${topY + g.chamfer}" x2="${cx + halfW}" y2="${topY + g.chamfer}" stroke="#2b434f" stroke-width="1.1"/>
+          <line x1="${cx - halfW}" y1="${botY - g.chamfer}" x2="${cx + halfW}" y2="${botY - g.chamfer}" stroke="#2b434f" stroke-width="1.1"/>
+
+          <!-- Коло виділення на шпильці + лінія до лупи -->
+          <circle cx="${cx + halfW - 3}" cy="${g.t1End + 2}" r="14" fill="none" stroke="#006d73" stroke-width="1.3" stroke-dasharray="3 2"/>
+          <line x1="${cx + halfW + 11}" y1="${g.t1End + 2}" x2="${lx - lr}" y2="${ly}" stroke="#006d73" stroke-width="1.2"/>
+
+          <!-- Кругла виносна лупа (збіг різьби + профіль 60°) -->
+          <circle cx="${lx}" cy="${ly}" r="${lr}" fill="#ffffff" stroke="#006d73" stroke-width="2.2"/>
+          <g clip-path="url(#v5-stud-loupe)">
+            <path d="M ${lx - 90} ${ly - 90} H ${lx + 10} L ${lx - 8} ${ly - 65} L ${lx + 10} ${ly - 40} L ${lx - 8} ${ly - 15} L ${lx + 10} ${ly + 10} L ${lx + 3} ${ly + 32} L ${lx + 10} ${ly + 52} V ${ly + 90} H ${lx - 90} Z" fill="url(#v5-steel)" stroke="#2b434f" stroke-width="2"/>
+            <line x1="${lx - 80}" y1="${ly + 10}" x2="${lx + 65}" y2="${ly + 10}" stroke="#006d73" stroke-width="1" stroke-dasharray="5 3"/>
+            <text x="${lx + 16}" y="${ly + 6}" fill="#005f66" font-size="11.5" font-weight="700">Збіг різьби</text>
+            <text x="${lx + 16}" y="${ly - 36}" fill="#1b3440" font-size="12" font-weight="700">P=${fmt(p)}</text>
+          </g>
+          <text x="${lx}" y="${ly - lr - 10}" text-anchor="middle" fill="#1b3440" font-size="13.5" font-weight="700">Виносний елемент І (4:1)</text>
+
+          <!-- Розміри -->
+          <g class="svg-interactive" data-tip-title="Шпилька М${d} × ${fmt(p)}" data-tip-body="ГОСТ 24705-2004 · Кількість: ${count} шт. · Довжина L=${spec.studLength} мм">
+            <line class="dim-line" x1="${cx - halfW}" y1="294" x2="${cx - halfW}" y2="332" stroke="#006d73" stroke-width="1"/>
+            <line class="dim-line" x1="${cx + halfW}" y1="294" x2="${cx + halfW}" y2="332" stroke="#006d73" stroke-width="1"/>
+            <line class="dim-line" x1="${cx - halfW}" y1="324" x2="${cx + halfW}" y2="324" stroke="#006d73" stroke-width="1.4" marker-start="url(#v5-arr)" marker-end="url(#v5-arr)"/>
+            <text class="dim-text" x="${cx}" y="316" text-anchor="middle" fill="#005f66" font-size="16" font-weight="700">М${d} × ${fmt(p)}</text>
+          </g>
+        `;
+      },
+
+      nut(d, nutType) {
+        // Половинно-осьовий розріз гайки (зліва — вигляд шестигранника, справа від осі — розріз з внутрішньою різьбою!)
+        const m = buildHexNutMetrics(215, 252, d, nutType);
+        const { cx, baseY, topY, halfE, edgeX, chamferDrop, centerArcDip, spec, isCapped } = m;
+        const bodyTopY = isCapped ? topY + m.hPx * 0.44 : topY;
+        const rMinor = 13 + d * 0.56;
+        const rMajor = rMinor + 4;
+
+        // Зубчики внутрішньої різьби на правій половині розрізу
+        let innerTeeth = `M ${cx + rMajor} ${bodyTopY + 6}`;
+        for (let yy = bodyTopY + 6; yy < baseY - 10; yy += 7) {
+          innerTeeth += ` L ${cx + rMinor} ${(yy + 3.5).toFixed(1)} L ${cx + rMajor} ${(yy + 7).toFixed(1)}`;
+        }
+
+        const rcx = 468, rcy = 172, rOuter = halfE * 0.94;
+        const hexPts = Array.from({ length: 6 }, (_, i) => {
+          const a = (i * Math.PI) / 3;
+          return `${(rcx + rOuter * Math.cos(a)).toFixed(1)},${(rcy + rOuter * Math.sin(a)).toFixed(1)}`;
+        }).join(' ');
+
+        return `
+          ${this.defs()}
+          <!-- ЛІВА ПОЛОВИНА: зовнішній вигляд шестигранника -->
+          <path d="M ${cx} ${bodyTopY} H ${cx - halfE + 10} L ${cx - halfE} ${bodyTopY + chamferDrop} V ${baseY - 6} L ${cx - halfE + 7} ${baseY} H ${cx} Z" fill="url(#v5-steel)" stroke="#2b434f" stroke-width="2" stroke-linejoin="round"/>
+          <line x1="${cx - edgeX}" y1="${bodyTopY + chamferDrop}" x2="${cx - edgeX}" y2="${baseY}" stroke="#2b434f" stroke-width="1.3"/>
+          <path d="M ${cx - halfE} ${bodyTopY + chamferDrop} Q ${cx - (halfE + edgeX) / 2} ${bodyTopY + chamferDrop * 0.35} ${cx - edgeX} ${bodyTopY + chamferDrop} Q ${cx - edgeX * 0.5} ${bodyTopY + centerArcDip} ${cx} ${bodyTopY + centerArcDip}" fill="none" stroke="#2b434f" stroke-width="1.3"/>
+
+          <!-- ПРАВА ПОЛОВИНА: розріз гайки зі штрихуванням сталі під 45° -->
+          <path d="${innerTeeth} L ${cx + rMajor + 4} ${baseY} H ${cx + halfE - 7} L ${cx + halfE} ${baseY - 6} V ${bodyTopY + chamferDrop} L ${cx + halfE - 10} ${bodyTopY} H ${cx + rMajor + 4} Z" fill="url(#v5-hatch)" stroke="#2b434f" stroke-width="2" stroke-linejoin="round"/>
+          <!-- Лінія западин внутрішньої різьби (тонка суцільна за ЄСКД) -->
+          <line x1="${cx + rMajor}" y1="${bodyTopY + 5}" x2="${cx + rMajor}" y2="${baseY - 5}" stroke="#2b434f" stroke-width="1.1"/>
+
+          <!-- Ковпачок для Виконання Б (зліва вигляд, справа розріз глухого отвору) -->
+          ${isCapped ? `
+            <path d="M ${cx} ${topY} Q ${cx - halfE + 10} ${topY} ${cx - halfE + 10} ${bodyTopY} H ${cx} Z" fill="url(#v5-steel)" stroke="#2b434f" stroke-width="2"/>
+            <path d="M ${cx} ${topY} Q ${cx + halfE - 10} ${topY} ${cx + halfE - 10} ${bodyTopY} H ${cx + rMajor + 4} V ${bodyTopY - 12} H ${cx} Z" fill="url(#v5-hatch)" stroke="#2b434f" stroke-width="2"/>
+          ` : ''}
+
+          <!-- Осьова лінія розділу вигляду і розрізу -->
+          <line x1="${cx}" y1="${topY - 16}" x2="${cx}" y2="${baseY + 18}" stroke="#006d73" stroke-width="1.1" stroke-dasharray="14 3 2 3"/>
+
+          <!-- Вид зверху -->
+          <polygon points="${hexPts}" fill="url(#v5-steel)" stroke="#2b434f" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="${rcx}" cy="${rcy}" r="${(rOuter * 0.85).toFixed(1)}" fill="none" stroke="#2b434f" stroke-width="1.1"/>
+          <circle cx="${rcx}" cy="${rcy}" r="${(rOuter * 0.46).toFixed(1)}" fill="#f7faf9" stroke="#2b434f" stroke-width="1.9"/>
+
+          <g class="svg-interactive" data-tip-title="Поєднання вигляду і розрізу гайки М${d}" data-tip-body="Висота ${isCapped ? 'H=' + spec.nutCapH : 'm=' + spec.nutM} мм · Під ключ S=${spec.nutS} мм">
+            <line class="dim-line" x1="${cx - halfE + 10}" y1="${topY}" x2="94" y2="${topY}" stroke="#006d73" stroke-width="1"/>
+            <line class="dim-line" x1="${cx - halfE + 7}" y1="${baseY}" x2="94" y2="${baseY}" stroke="#006d73" stroke-width="1"/>
+            <line class="dim-line" x1="104" y1="${topY}" x2="104" y2="${baseY}" stroke="#006d73" stroke-width="1.4" marker-start="url(#v5-arr)" marker-end="url(#v5-arr)"/>
+            <text class="dim-text" transform="translate(92 ${(topY + baseY) / 2}) rotate(-90)" text-anchor="middle" fill="#005f66" font-size="15.5" font-weight="700">${isCapped ? 'H' : 'm'} = ${fmt(m.heightMm)}</text>
+            <text class="dim-text" x="${rcx}" y="304" text-anchor="middle" fill="#005f66" font-size="15" font-weight="700">М${d} · S=${spec.nutS}</text>
+          </g>
+        `;
+      },
+
+      gasket(od, id, thick, hasHoles, count, d) {
+        const cx = 178, cy = 165, rOut = 120, rIn = rOut * (id / od);
+        const holeD = part.holeDiameter || d + 3;
+        const pcd = (rOut + rIn) / 2;
+        const rHole = rOut * (holeD / od);
+
+        let holesPath = '';
+        if (hasHoles) {
+          for (let i = 0; i < count; i++) {
+            const a = (2 * Math.PI * i) / count - Math.PI / 2;
+            const hx = cx + pcd * Math.cos(a), hy = cy + pcd * Math.sin(a);
+            holesPath += `M ${hx - rHole} ${hy} a ${rHole} ${rHole} 0 1 0 ${2 * rHole} 0 a ${rHole} ${rHole} 0 1 0 ${-2 * rHole} 0 Z `;
+          }
+        }
+        const ringPath = r => `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
+
+        const secX = 378, secY = 148, secW = 112, secH = 18 + thick * 6;
+        const secTop = secY - secH;
+        const lx = 505, ly = 248, lr = 56;
+
+        return `
+          ${this.defs()}
+          <defs><clipPath id="v5-g-loupe"><circle cx="${lx}" cy="${ly}" r="${lr}"/></clipPath></defs>
+
+          <path d="${ringPath(rOut)} ${ringPath(rIn)} ${holesPath}" fill="#45555c" fill-rule="evenodd" stroke="#2b434f" stroke-width="1.9"/>
+          ${hasHoles ? `<circle cx="${cx}" cy="${cy}" r="${pcd.toFixed(1)}" fill="none" stroke="#006d73" stroke-width="0.9" stroke-dasharray="10 3 2 3"/>` : ''}
+
+          <!-- Переріз прокладки -->
+          <rect x="${secX}" y="${secTop}" width="${secW}" height="${secH}" fill="url(#v5-hatch-gasket)" stroke="#2b434f" stroke-width="1.9"/>
+          <circle cx="${secX + 6}" cy="${(secTop + secY) / 2}" r="11" fill="none" stroke="#006d73" stroke-width="1.2" stroke-dasharray="3 2"/>
+          <line x1="${secX + 12}" y1="${(secTop + secY) / 2 + 9}" x2="${lx - 34}" y2="${ly - 44}" stroke="#006d73" stroke-width="1.2"/>
+
+          <!-- Кругла лупа внутрішнього обтюратора -->
+          <circle cx="${lx}" cy="${ly}" r="${lr}" fill="#ffffff" stroke="#006d73" stroke-width="2.1"/>
+          <g clip-path="url(#v5-g-loupe)">
+            <rect x="${lx - 26}" y="${ly - 26}" width="90" height="52" fill="url(#v5-hatch-gasket)" stroke="#2b434f" stroke-width="2"/>
+            <path d="M ${lx + 6} ${ly - 26} H ${lx - 26} V ${ly + 26} H ${lx + 6}" fill="none" stroke="#cbd5e1" stroke-width="7"/>
+            <path d="M ${lx + 6} ${ly - 26} H ${lx - 26} V ${ly + 26} H ${lx + 6}" fill="none" stroke="#2b434f" stroke-width="1.6"/>
+            <text x="${lx + 14}" y="${ly + 4}" fill="#ffffff" font-size="11" font-weight="700">Обтюратор</text>
+          </g>
+
+          <g class="svg-interactive" data-tip-title="Паспорт прокладки Ø${od}×Ø${id}×${thick}" data-tip-body="Виносна лупа показує металеву обкантовку внутрішнього торця">
+            <text class="dim-text" x="${cx}" y="318" text-anchor="middle" fill="#005f66" font-size="15" font-weight="700">Ø${od} × Ø${id} мм</text>
+            <text class="dim-text" x="${secX + secW + 12}" y="${(secTop + secY) / 2 + 5}" fill="#005f66" font-size="15" font-weight="700">h=${thick}</text>
+          </g>
+        `;
+      },
+
+      washer(d, exec) {
+        // Половинно-осьовий розріз + кругла лупа фаски 45°!
+        const spec = GOST_DB[d];
+        const cx = 185, cy = 165, rOut = 114, rIn = rOut * (spec.washerD1 / spec.washerD2);
+        const hasChamfer = exec === '2';
+        const ringPath = r => `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
+
+        const secX = 374, secY = 148, secW = 108, secH = 18 + spec.washerS * 5;
+        const secTop = secY - secH;
+        const chPx = hasChamfer ? Math.min(12, secH * 0.35) : 0;
+        const secPoly = hasChamfer
+          ? `M ${secX} ${secTop} H ${secX + secW - chPx} L ${secX + secW} ${secTop + chPx} V ${secY} H ${secX} Z`
+          : `M ${secX} ${secTop} H ${secX + secW} V ${secY} H ${secX} Z`;
+
+        const lx = 505, ly = 248, lr = 56;
+
+        return `
+          ${this.defs()}
+          <defs><clipPath id="v5-w-loupe"><circle cx="${lx}" cy="${ly}" r="${lr}"/></clipPath></defs>
+
+          <path d="${ringPath(rOut)} ${ringPath(rIn)}" fill="url(#v5-steel)" fill-rule="evenodd" stroke="#2b434f" stroke-width="2"/>
+          ${hasChamfer ? `<circle cx="${cx}" cy="${cy}" r="${rOut - 9}" fill="none" stroke="#2b434f" stroke-width="1.2"/>` : ''}
+
+          <!-- Переріз -->
+          <path d="${secPoly}" fill="url(#v5-hatch)" stroke="#2b434f" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="${secX + secW - 3}" cy="${secTop + 3}" r="11" fill="none" stroke="#006d73" stroke-width="1.2" stroke-dasharray="3 2"/>
+          <line x1="${secX + secW}" y1="${secTop + 14}" x2="${lx + 8}" y2="${ly - 55}" stroke="#006d73" stroke-width="1.2"/>
+
+          <!-- Кругла лупа кромки шайби (Вик. 1 чи Вик. 2) -->
+          <circle cx="${lx}" cy="${ly}" r="${lr}" fill="#ffffff" stroke="#006d73" stroke-width="2.1"/>
+          <g clip-path="url(#v5-w-loupe)">
+            ${hasChamfer
+              ? `<path d="M ${lx - 65} ${ly - 24} H ${lx - 4} L ${lx + 26} ${ly + 6} V ${ly + 65} H ${lx - 65} Z" fill="url(#v5-hatch)" stroke="#2b434f" stroke-width="2.2"/>
+                 <text x="${lx - 32}" y="${ly + 24}" fill="#005f66" font-size="13" font-weight="700">45°</text>`
+              : `<path d="M ${lx - 65} ${ly - 24} H ${lx + 24} V ${ly + 65} H ${lx - 65} Z" fill="url(#v5-hatch)" stroke="#2b434f" stroke-width="2.2"/>
+                 <text x="${lx - 36}" y="${ly + 16}" fill="#435b66" font-size="12" font-weight="700">Без фаски</text>`
+            }
+          </g>
+
+          <g class="svg-interactive" data-tip-title="Шайба ГОСТ 11371-78 (Вик. ${exec})" data-tip-body="Виносна лупа демонструє геометрію зовнішньої кромки">
+            <text class="dim-text" x="${cx}" y="318" text-anchor="middle" fill="#005f66" font-size="15" font-weight="700">Ø${spec.washerD2} × Ø${spec.washerD1} мм</text>
+            <text class="dim-text" x="${secX + secW + 12}" y="${(secTop + secY) / 2 + 5}" fill="#005f66" font-size="15" font-weight="700">s=${fmt(spec.washerS)}</text>
+          </g>
+        `;
+      }
+    };
+
+
+ const renderer=RenderV5;
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+ svg.setAttribute('viewBox','55 5 560 340');
+ svg.setAttribute('role','img');
+ svg.setAttribute('aria-label',part.name+' · '+part.spec);
+ const render={stud:()=>renderer.stud(diameter,pitch,part.count || 0),nut:()=>renderer.nut(diameter,part.capped?'B':'A'),gasket:()=>renderer.gasket(part.outer,part.inner,part.h,Boolean(part.hasHoles),part.count || 0,diameter),washer:()=>renderer.washer(diameter,part.execution || '1')};
+ svg.innerHTML=render[key]();
+ if(key==='stud' && !part.length) svg.querySelector('[data-tip-title^="Довжина шпильки"]')?.remove();
+ if(key==='nut' && !part.acrossFlats) {
+   svg.querySelector('[data-tip-title^="Розмір під ключ"]')?.remove();
+   for(const text of svg.querySelectorAll('text')) text.textContent=text.textContent.replace(/ · S=—/g,'');
+ }
+ if(key==='nut' && part.capped) {
+   for(const text of svg.querySelectorAll('text')) text.textContent=text.textContent.replace(/^H =/,'l₁ =');
+ }
+ // Construction details in the supplied reference are illustrative.
+ for(const text of svg.querySelectorAll('text')) {
+   text.textContent=text.textContent.replace('Переріз А–А (армований)','Умовний переріз').replace('Профіль ГОСТ 24705 (М 4:1)','Профіль різьби, збільшено').replace('Виносний елемент І (4:1)','Виносний елемент І');
+ }
+ // Namespace definitions so comparison cards resolve their own gradients and clips.
+ const ids=new Map(Array.from(svg.querySelectorAll('[id]'),el=>[el.id,'passport-'+key+'-'+el.id]));
+ for(const element of svg.querySelectorAll('*'))for(const attr of Array.from(element.attributes)) {
+   let value=attr.value;
+   if(attr.name==='id')value=ids.get(value)||value;
+   value=value.replace(/url\(#([^)]+)\)/g,(match,id)=>ids.has(id)?'url(#'+ids.get(id)+')':match);
+   element.setAttribute(attr.name,value);
+ }
+ return svg;
+};
+
+
+// ================================================================
+// КРЕСЛЕННЯ
+// ================================================================
+function paperDrawing(key,part,threadPitch) {
+  const parts = {[key]:part};
+  const d=part.diameter || part.outer, pitch=threadPitch;
+  const number=n=>n.toLocaleString('uk-UA'),TAU=Math.PI*2;
+function drawing(key) {
+  const p=parts[key], ns='http://www.w3.org/2000/svg';
+  const svg=document.createElementNS(ns,'svg');
+  svg.setAttribute('viewBox','0 0 300 338');svg.setAttribute('role','img');svg.setAttribute('aria-label','Креслення · '+p.name);
+  const stroke='#283e42', accent='#147165';
+  const line=(x1,y1,x2,y2,color=stroke,dash='')=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-dasharray="${dash}"/>`;
+  const label=(x,y,text)=>`<text x="${x}" y="${y}" fill="${accent}" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="14" font-weight="600">${text}</text>`;
+  function horizontal(x1,x2,y,markY,text) {
+    return line(x1,markY,x1,y+5,accent)+line(x2,markY,x2,y+5,accent)+line(x1,y,x2,y,accent)
+      +`<path d="M${x1} ${y} l7 -2 v4 z M${x2} ${y} l-7 -2 v4 z" fill="${accent}"/>`+label((x1+x2)/2,y-7,text);
+  }
+  const axis=(x1,y1,x2,y2)=>line(x1,y1,x2,y2,'#73908b','10 3 2 3');
+  let art='';
+  if(key==='stud') {
+    art=p.bolt ? '<path d="M96 33 h80 l4 4 v26 h-16 v215 l-4 4 h-48 l-4 -4 V63 H92 V37 Z" fill="#e1e9e4" stroke="#283e42" stroke-width="2"/>' : '<path d="M112 33 h48 l4 4 v241 l-4 4 h-48 l-4 -4 V37 z" fill="#e1e9e4" stroke="#283e42" stroke-width="2"/>';
+    for(const [start,end] of (p.bolt ? [[205,277]] : [[40,109],[205,277]])) {
+      for(let y=start;y<end;y+=7) art+=line(109,y+4,163,y,'#526d68');
+    }
+    art+=axis(136,19,136,291)+horizontal(108,164,312,279,'Ø '+d);
+    const threadY=p.bolt?223:69;
+    art+=line(163,threadY,191,threadY-21,accent)+line(191,threadY-21,257,threadY-21,accent)+label(224,threadY-27,'М'+d+' × '+number(pitch));
+    if(p.axialHole>0) {
+      const half=28*p.axialHole/d;
+      art+=line(136-half,34,136-half,282,stroke,'4 3')+line(136+half,34,136+half,282,stroke,'4 3');
+      art+=line(136+half,155,195,139,accent)+label(229,135,'Ø '+number(p.axialHole));
+    }
+  } else {
+    const cx=150,cy=123,r=87,inside=r*p.inner/p.outer;
+    if(key==='nut') {
+      const points=Array.from({length:6},(_,i)=>[cx+r*Math.cos(TAU*i/6),cy+r*Math.sin(TAU*i/6)].join(',')).join(' ');
+      art+=`<polygon points="${points}" fill="#e1e9e4" stroke="${stroke}" stroke-width="2"/><circle cx="${cx}" cy="${cy}" r="${r*.86}" fill="none" stroke="${stroke}"/>`;
+    } else art+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${key==='gasket'?'#b7c5bf':'#e1e9e4'}" stroke="${stroke}" stroke-width="2"/>`;
+    art+=`<circle cx="${cx}" cy="${cy}" r="${inside}" fill="#f4f6f0" stroke="${stroke}" stroke-width="1.8"/>`;
+    if(key==='nut') art+=`<path d="M150 ${cy-inside-5} a${inside+5} ${inside+5} 0 1 1 ${-inside-5} ${inside+5}" fill="none" stroke="${stroke}"/>`;
+    if(p.hasHoles) {
+      const radius=(r+inside)/2,hr=r*p.holeDiameter/p.outer;
+      for(let i=0;i<p.count;i++) {
+        const a=TAU*i/p.count;
+        art+=`<circle cx="${cx+radius*Math.cos(a)}" cy="${cy+radius*Math.sin(a)}" r="${hr}" fill="#f4f6f0" stroke="${stroke}"/>`;
+      }
+    }
+    art+=axis(44,cy,256,cy)+axis(cx,20,cx,218);
+    art+=line(cx+inside*.7,cy-inside*.7,223,46,accent)+line(223,46,282,46,accent)+label(252,39,key==='nut'?'М'+d:'Ø '+p.inner);
+    if(key!=='nut')art+=horizontal(cx-r,cx+r,234,cy+7,'Ø '+p.outer);
+    const x=63,y=267,h=key==='nut'?37:key==='gasket'?5:14,width=r-inside;
+    for(const left of [x,cx+inside]) art+=`<rect x="${left}" y="${y}" width="${width}" height="${h}" fill="url(#hatch-${key})" stroke="${stroke}" stroke-width="1.5"/>`;
+    art+=line(239,y,259,y,accent)+line(239,y+h,259,y+h,accent)+line(254,y-11,254,y+h+12,accent);
+    art+=`<path d="M254 ${y} l-2 -6 h4 z M254 ${y+h} l-2 6 h4 z" fill="${accent}"/>`
+      +line(254,y+h+12,249,y+h+17,accent)+line(249,y+h+17,190,y+h+17,accent)
+      +label(220,y+h+13,(key==='nut'?'m':'s')+' = '+number(p.h));
+  }
+  svg.innerHTML=`<defs><pattern id="hatch-${key}" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M-1 1l2 -2 M0 7l7 -7 M6 8l2 -2" stroke="#81918a"/></pattern></defs>`+art;
+  return svg;
+}
+
+
+
+  return part.capped ? passportDrawing(key,part,pitch) : drawing(key);
+}
+
+// ================================================================
+// ПЕРЕГЛЯД ДЕТАЛЕЙ ТА ПЕРЕМИКАННЯ СТИЛІВ
+// ================================================================
+const d=DEMO.diameter,pitch=DEMO.pitch,nutHeight=DEMO.nutHeight;
+const w={outerDiameterMm:DEMO.washerOuter,innerDiameterMm:DEMO.washerInner,thicknessMm:DEMO.washerThickness};
+const number=n=>n.toLocaleString('uk-UA');
+const parts = {
+  stud:{length:DEMO.studLength,name:'Шпилька',spec:`М${d} × ${pitch}`,detail:'Витки різьби',outer:d,inner:0,h:DEMO.studLength},
+  nut:{diameter:d,acrossFlats:DEMO.nutAcrossFlats,name:'Гайка',spec:`М${d} · m = ${number(nutHeight)}`,detail:'Внутрішня різьба',outer:42,inner:d,h:nutHeight},
+  gasket:{name:'Прокладка',spec:`Ø ${DEMO.gasketOuter} × Ø ${DEMO.gasketInner} × ${DEMO.gasketThickness}`,detail:'Кромка графіту',outer:DEMO.gasketOuter,inner:DEMO.gasketInner,h:DEMO.gasketThickness},
+  washer:{diameter:d,name:'Шайба',spec:`Ø ${w.outerDiameterMm} × Ø ${w.innerDiameterMm} × ${w.thicknessMm}`,detail:'Кромка отвору',outer:w.outerDiameterMm,inner:w.innerDiameterMm,h:w.thicknessMm}
+};
+const styles=FlangeComponentVisuals.styles;
+const selector=document.querySelector('#part'), grid=document.querySelector('#grid');
+const styleSelector=document.querySelector('#styles');
+let activeStyle=0;
+const cache=new Map();
+function display() {
+  const selected=selector.value, comparison=selected!=='all';
+  grid.classList.toggle('compare',comparison);
+  document.querySelector('#heading').textContent=comparison?parts[selected].name:styles[activeStyle].name;
+  document.querySelector('#description').textContent=comparison?parts[selected].spec+' · Два способи відображення':styles[activeStyle].desc;
+  styleSelector.value=String(activeStyle);
+  const entries=comparison?styles.map((_,i)=>[selected,i]):Object.keys(parts).map(key=>[key,activeStyle]);
+  grid.replaceChildren(...entries.map(([key,index])=>{
+    const p=parts[key],s=styles[index],id=s.id+'-'+key;
+    if(!cache.has(id)) {
+      cache.set(id,FlangeComponentVisuals.create(s.id,key,p,pitch));
+    }
+    const card=document.createElement('article');
+    card.innerHTML=`<div class="scene ${s.id}"></div><div class="card-foot"><div><h3>${comparison?s.name:p.name}</h3><small>${p.spec}</small></div><button type="button">${comparison?'Комплект':'Порівняти'}</button></div>`;
+    card.firstElementChild.append(cache.get(id));
+    const button=card.querySelector('button');
+    button.setAttribute('aria-label',comparison?'Переглянути комплект · '+s.name:'Порівняти два варіанти · '+p.name);
+    button.onclick=()=>{activeStyle=index;selector.value=comparison?'all':key;display()};
+    return card;
+  }));
+}
+for(const [i,s] of styles.entries()) styleSelector.add(new Option(s.name,String(i)));
+styleSelector.onchange=()=>{activeStyle=Number(styleSelector.value);selector.value='all';display()};
+for(const [key,p] of Object.entries(parts))selector.add(new Option(p.name,key));
+selector.onchange=display;
+display();
+
+</script>
+</html>
+

@@ -1,0 +1,23 @@
+{
+  "id": "universal-table-1",
+  "title": "Таблиця 1 — Допустимі моменти затягування кріпильних виробів",
+  "document": "Таблиця 1",
+  "unit": "N*m",
+  "source": {
+    "kind": "user_supplied_table",
+    "section": "Таблиця 1 — Допускаемые моменты затяжки крепежных изделий"
+  },
+  "sizes": {
+    "6": { "minNm": 3.0, "maxNm": 5.0, "minKgfM": 0.3, "maxKgfM": 0.5 },
+    "8": { "minNm": 10.0, "maxNm": 15.0, "minKgfM": 1.0, "maxKgfM": 1.5 },
+    "10": { "minNm": 20.0, "maxNm": 30.0, "minKgfM": 2.0, "maxKgfM": 3.0 },
+    "12": { "minNm": 35.0, "maxNm": 50.0, "minKgfM": 3.5, "maxKgfM": 5.0 },
+    "16": { "minNm": 90.0, "maxNm": 120.0, "minKgfM": 9.0, "maxKgfM": 12.0 },
+    "20": { "minNm": 170.0, "maxNm": 200.0, "minKgfM": 17.0, "maxKgfM": 20.0 },
+    "24": { "minNm": 320.0, "maxNm": 360.0, "minKgfM": 32.0, "maxKgfM": 36.0 },
+    "30": { "minNm": 450.0, "maxNm": 500.0, "minKgfM": 45.0, "maxKgfM": 50.0 },
+    "36": { "minNm": 750.0, "maxNm": 900.0, "minKgfM": 75.0, "maxKgfM": 90.0 },
+    "42": { "minNm": 1800.0, "maxNm": 2000.0, "minKgfM": 180.0, "maxKgfM": 200.0 },
+    "48": { "minNm": 2000.0, "maxNm": 2300.0, "minKgfM": 200.0, "maxKgfM": 230.0 }
+  }
+}
